@@ -84,3 +84,7 @@ src/
 extension/public/  # manifest.json・読み込み用スクリプト・アイコン
 sample/            # 動作確認用の Markdown
 ```
+
+## ライセンス
+
+[MIT](LICENSE)
