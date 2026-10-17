@@ -1,0 +1,8 @@
+{
+  "extName": { "message": "MD Browser - Mermaid 対応・自動更新の Markdown ビューアー" },
+  "extShortName": { "message": "MD Browser" },
+  "extDescription": {
+    "message": "ローカルの Markdown ファイルを目次・Mermaid 図付きで表示。ファイルを保存すると自動で再描画します。"
+  },
+  "actionTitle": { "message": "MD Browser ビューアーを開く" }
+}

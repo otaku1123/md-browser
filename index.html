@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,25 +8,27 @@
   <body>
     <header class="toolbar">
       <strong class="brand">MD Browser</strong>
-      <button id="open-file" type="button">ファイルを開く</button>
-      <button id="open-dir" type="button">フォルダを開く</button>
+      <button id="open-file" type="button" data-i18n="openFile">Open file</button>
+      <button id="open-dir" type="button" data-i18n="openFolder">Open folder</button>
       <select id="file-select" hidden></select>
       <span id="status" class="status"></span>
     </header>
     <div class="layout">
-      <nav id="toc" class="toc" aria-label="目次"></nav>
+      <nav id="toc" class="toc empty" data-i18n-aria="toc"></nav>
       <main id="content" class="content markdown-body">
         <section class="welcome">
           <h1>MD Browser</h1>
-          <p>Markdown ファイルをここにドラッグ&amp;ドロップするか、上のボタンから開いてください。</p>
+          <div id="setup-banner-slot"></div>
+          <p data-i18n="welcomeLead"></p>
           <ul>
-            <li><b>ファイルを開く</b> / <b>フォルダを開く</b>: 更新を検知して自動で再描画します（Chrome / Edge）。</li>
-            <li>相対パスの画像を表示するには <b>フォルダを開く</b> を使ってください。</li>
+            <li data-i18n="welcomeAutoReload"></li>
+            <li data-i18n="welcomeImages"></li>
+            <li data-i18n="welcomePrivacy"></li>
           </ul>
         </section>
       </main>
     </div>
-    <div id="drop-overlay" class="drop-overlay" hidden>ここにドロップ</div>
+    <div id="drop-overlay" class="drop-overlay" data-i18n="dropHere" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

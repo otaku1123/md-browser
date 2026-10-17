@@ -55,6 +55,16 @@ npm run build:ext   # dist-extension/ に出力
 
 期待される結果: 目次付きで整形表示され、右上に「自動更新 ON」と表示される。
 
+### Chrome ウェブストア用パッケージ
+
+```sh
+npm run pack:ext    # release/md-browser-<version>.zip を作成
+```
+
+提出画面に入力する内容（説明文・権限が必要な理由・プライバシー）は [docs/store/listing.md](docs/store/listing.md) にまとめてある。プライバシーポリシーは https://otaku1123.github.io/md-browser/privacy.html で公開している。
+
+画面の文言は、ブラウザの言語設定に合わせて日本語と英語で切り替わる（`src/i18n.ts`）。
+
 ### トラブルシューティング
 
 | 症状 | 確認すること |

@@ -1,8 +1,15 @@
 import { MSG_READ_SELF, type ReadSelfResponse } from './messages';
 
+const VIEWER_URL = chrome.runtime.getURL('index.html');
+
 // Toolbar icon opens the bundled viewer (same app as the web version).
 chrome.action.onClicked.addListener(() => {
-  void chrome.tabs.create({ url: chrome.runtime.getURL('index.html') });
+  void chrome.tabs.create({ url: VIEWER_URL });
+});
+
+// On first install, open the viewer: it explains how to enable "Allow access to file URLs".
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === chrome.runtime.OnInstalledReason.INSTALL) void chrome.tabs.create({ url: VIEWER_URL });
 });
 
 const MD_URL = /^file:\/\/\/.+\.(md|markdown|mdown|mkd)$/i;

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy - MD Browser</title>
+    <style>
+      :root { --bg: #fff; --fg: #1f2328; --muted: #59636e; --border: #d1d9e0; --accent: #0969da; color-scheme: light; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d; --accent: #4493f8; color-scheme: dark; }
+      }
+      body {
+        margin: 0; background: var(--bg); color: var(--fg); line-height: 1.7;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+      }
+      main { max-width: 760px; margin: 0 auto; padding: 32px 16px 80px; }
+      h1 { font-size: 1.6em; margin: 0 0 4px; }
+      h2 { font-size: 1.2em; margin: 2em 0 0.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border); }
+      .meta { color: var(--muted); font-size: 0.9em; }
+      a { color: var(--accent); }
+      hr { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Privacy Policy</h1>
+      <p class="meta">MD Browser (web app and Chrome extension) · Last updated: 2026-10-17</p>
+
+      <h2>Summary</h2>
+      <p>MD Browser does not collect, store, transmit, sell, or share any personal data or file contents. All processing happens locally in your browser.</p>
+
+      <h2>What the extension accesses</h2>
+      <ul>
+        <li><strong>Markdown files you open in Chrome</strong> (<code>file:///…/*.md</code>): the extension reads the file you are viewing to render it, and re-reads only that same file to detect changes (auto-reload). File contents never leave your computer.</li>
+        <li><strong>Files or folders you pick in the viewer</strong>: read locally with the browser's File System Access API, only after you choose them.</li>
+      </ul>
+
+      <h2>What we do not do</h2>
+      <ul>
+        <li>No analytics, tracking, advertising, or telemetry.</li>
+        <li>No accounts, cookies, or remote servers operated by us.</li>
+        <li>No remote code: all code is bundled in the extension package.</li>
+      </ul>
+
+      <h2>Third-party content in your documents</h2>
+      <p>If a Markdown document embeds images from external URLs (for example <code>https://…/image.png</code>), your browser loads them directly from those servers, as with any web page. MD Browser does not add any requests of its own.</p>
+
+      <h2>Contact</h2>
+      <p>Questions or concerns: <a href="https://github.com/otaku1123/md-browser/issues">GitHub Issues</a></p>
+
+      <hr />
+
+      <h1 lang="ja">プライバシーポリシー</h1>
+      <div lang="ja">
+        <p class="meta">MD Browser（Web アプリおよび Chrome 拡張機能）· 最終更新日: 2026-10-17</p>
+
+        <h2>概要</h2>
+        <p>MD Browser は、個人データやファイルの内容を収集・保存・送信・販売・共有しません。すべての処理はお使いのブラウザ内で完結します。</p>
+
+        <h2>拡張機能がアクセスするもの</h2>
+        <ul>
+          <li><strong>Chrome で開いた Markdown ファイル</strong>（<code>file:///…/*.md</code>）: 表示のために閲覧中のファイルを読み込み、変更の検知（自動更新）のために同じファイルだけを再読み込みします。ファイルの内容がパソコンの外に出ることはありません。</li>
+          <li><strong>ビューアーで選択したファイル・フォルダ</strong>: ユーザーが選択した後に限り、ブラウザの File System Access API でローカルに読み込みます。</li>
+        </ul>
+
+        <h2>行わないこと</h2>
+        <ul>
+          <li>アクセス解析・トラッキング・広告・テレメトリは一切行いません。</li>
+          <li>アカウント・Cookie・当方が運営するサーバーはありません。</li>
+          <li>リモートコードは使用しません。すべてのコードは拡張機能のパッケージに含まれています。</li>
+        </ul>
+
+        <h2>ドキュメント内の外部コンテンツ</h2>
+        <p>Markdown に外部 URL の画像（例: <code>https://…/image.png</code>）が含まれている場合、通常の Web ページと同様に、ブラウザがその画像をそのサーバーから直接読み込みます。MD Browser が独自に通信を追加することはありません。</p>
+
+        <h2>お問い合わせ</h2>
+        <p><a href="https://github.com/otaku1123/md-browser/issues">GitHub Issues</a> までお寄せください。</p>
+      </div>
+    </main>
+  </body>
+</html>

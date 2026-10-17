@@ -1,0 +1,8 @@
+{
+  "extName": { "message": "MD Browser - Markdown Viewer with Mermaid & Live Reload" },
+  "extShortName": { "message": "MD Browser" },
+  "extDescription": {
+    "message": "View local Markdown files with a table of contents and Mermaid diagrams. Re-renders automatically when the file is saved."
+  },
+  "actionTitle": { "message": "Open MD Browser viewer" }
+}

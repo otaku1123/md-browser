@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 type MermaidApi = typeof import('mermaid').default;
 
 let mermaidPromise: Promise<MermaidApi> | null = null;
@@ -38,7 +40,7 @@ export async function renderDiagrams(root: ParentNode): Promise<void> {
       node.classList.add('diagram-error');
       const msg = document.createElement('div');
       msg.className = 'diagram-error-message';
-      msg.textContent = `Mermaid の描画に失敗しました: ${err instanceof Error ? err.message : String(err)}`;
+      msg.textContent = t('mermaidFailed', { error: err instanceof Error ? err.message : String(err) });
       const pre = document.createElement('pre');
       pre.textContent = source;
       node.replaceChildren(msg, pre);

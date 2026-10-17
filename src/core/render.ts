@@ -3,6 +3,7 @@ import anchor from 'markdown-it-anchor';
 import taskLists from 'markdown-it-task-lists';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/common';
+import { t } from '../i18n';
 
 export interface TocItem {
   level: number;
@@ -61,7 +62,7 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
     return `<div class="diagram diagram-${lang}"><pre class="diagram-source">${escapeHtml(token.content)}</pre></div>\n`;
   }
   if (PLANTUML_LANGS.has(lang)) {
-    return `<div class="plantuml-placeholder"><div class="plantuml-note">PlantUML（未対応のためソースを表示）</div>${defaultFence(tokens, idx, options, env, self)}</div>`;
+    return `<div class="plantuml-placeholder"><div class="plantuml-note">${escapeHtml(t('plantumlNote'))}</div>${defaultFence(tokens, idx, options, env, self)}</div>`;
   }
   return defaultFence(tokens, idx, options, env, self);
 };

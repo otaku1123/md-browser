@@ -108,7 +108,9 @@ body {
   font-size: 13px;
   line-height: 1.5;
 }
-.toc.empty { visibility: hidden; }
+.toc.empty { display: none; }
+/* Without headings, give the whole width to the document. */
+.layout:has(> .toc.empty) { grid-template-columns: minmax(0, 1fr); }
 .toc ul { list-style: none; margin: 0; padding: 0; }
 .toc a {
   display: block;
@@ -232,3 +234,26 @@ body {
 .hljs-attr, .hljs-attribute, .hljs-property, .hljs-params { color: var(--hl-attr); }
 .hljs-addition { color: #116329; }
 .hljs-deletion { color: var(--error); }
+
+/* ---- extension setup banner ---- */
+.setup-banner {
+  margin: 0 0 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+.setup-banner h2 { margin: 0 0 8px; padding: 0; border: none; font-size: 1.1em; }
+.setup-banner p { margin: 0 0 8px; }
+.setup-banner ol { margin: 0 0 12px; }
+.setup-banner button {
+  font: inherit;
+  padding: 6px 14px;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.setup-banner.ok { padding: 8px 16px; }
+.setup-banner.ok p { margin: 0; }

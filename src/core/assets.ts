@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 /** Resolves a path relative to the open document into a displayable URL (or null if not found). */
 export type AssetResolver = (relativePath: string) => Promise<string | null>;
 
@@ -42,10 +44,8 @@ export async function resolveImages(root: ParentNode, resolver: AssetResolver | 
       } else {
         img.removeAttribute('src');
         img.classList.add('img-missing');
-        img.title = resolver
-          ? `画像が見つかりません: ${ref}`
-          : `相対パスの画像を表示するには「フォルダを開く」を使ってください: ${ref}`;
-        img.alt = `[画像: ${ref}]`;
+        img.title = t(resolver ? 'imageNotFound' : 'imageNeedsFolder', { ref });
+        img.alt = t('imageAlt', { ref });
       }
     }),
   );

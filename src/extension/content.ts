@@ -3,6 +3,7 @@ import css from '../style.css?inline';
 import { renderMarkdown } from '../core/render';
 import { renderDiagrams } from '../core/diagrams';
 import { createToc } from '../core/toc';
+import { lang, t } from '../i18n';
 import { MSG_READ_SELF, type ReadSelfResponse } from './messages';
 
 const POLL_MS = 1000;
@@ -33,7 +34,7 @@ function buildShell(): { content: HTMLElement; tocEl: HTMLElement; status: HTMLE
   viewport.name = 'viewport';
   viewport.content = 'width=device-width, initial-scale=1.0';
   document.head.append(viewport, style);
-  document.documentElement.lang ||= 'ja';
+  document.documentElement.lang = lang;
 
   const header = document.createElement('header');
   header.className = 'toolbar';
@@ -48,7 +49,7 @@ function buildShell(): { content: HTMLElement; tocEl: HTMLElement; status: HTMLE
   layout.className = 'layout';
   const tocEl = document.createElement('nav');
   tocEl.className = 'toc';
-  tocEl.setAttribute('aria-label', '目次');
+  tocEl.setAttribute('aria-label', t('toc'));
   const content = document.createElement('main');
   content.className = 'content markdown-body';
   layout.append(tocEl, content);
@@ -92,11 +93,11 @@ async function main(): Promise<void> {
   try {
     await fetchSource();
   } catch (err) {
-    status.textContent = `自動更新 OFF（ファイルを再読込できません: ${err instanceof Error ? err.message : err}）`;
+    status.textContent = t('autoReloadOff', { error: err instanceof Error ? err.message : String(err) });
     status.classList.add('error');
     return;
   }
-  status.textContent = '自動更新 ON';
+  status.textContent = t('autoReloadOn');
 
   let busy = false;
   window.setInterval(async () => {
@@ -107,11 +108,11 @@ async function main(): Promise<void> {
       if (next !== current) {
         current = next;
         await render(next, true);
-        status.textContent = `自動更新 ON · ${new Date().toLocaleTimeString()} 更新`;
+        status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
         status.classList.remove('error');
       }
     } catch {
-      status.textContent = '自動更新: ファイルを読めません（削除・移動された可能性）';
+      status.textContent = t('fileUnreadable');
       status.classList.add('error');
     } finally {
       busy = false;

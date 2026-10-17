@@ -1,4 +1,5 @@
 import './style.css';
+import { applyI18n, t } from './i18n';
 import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
 import { renderDiagrams } from './core/diagrams';
@@ -40,7 +41,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   try {
     content = await workspace.read(doc);
   } catch (err) {
-    setStatus(`読み込みに失敗しました: ${doc.path} (${errMsg(err)})`, 'error');
+    setStatus(t('loadFailed', { path: doc.path, error: errMsg(err) }), 'error');
     return;
   }
 
@@ -69,7 +70,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   toc.update();
   document.title = `${doc.path} - MD Browser`;
   setStatus(
-    `${doc.path} · ${workspace.watchable ? '自動更新 ON' : '自動更新 非対応（ドロップしたファイル）'} · ${new Date().toLocaleTimeString()} 更新`,
+    `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
   );
 }
 
@@ -77,7 +78,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
 
 async function openWorkspace(next: Workspace): Promise<void> {
   if (next.docs.length === 0) {
-    setStatus(`Markdown ファイルが見つかりません: ${next.label}`, 'error');
+    setStatus(t('noMarkdown', { label: next.label }), 'error');
     return;
   }
   ws = next;
@@ -105,7 +106,7 @@ async function poll(): Promise<void> {
     const stamp = await ws.stat(currentDoc);
     if (stamp !== lastStamp) await showDoc(currentDoc, { keepScroll: true });
   } catch (err) {
-    setStatus(`ファイルにアクセスできません（削除・移動された可能性）: ${currentDoc.path} (${errMsg(err)})`, 'error');
+    setStatus(t('fileGone', { path: currentDoc.path, error: errMsg(err) }), 'error');
   } finally {
     polling = false;
   }
@@ -135,7 +136,7 @@ async function pickDirectory(): Promise<void> {
   if (window.showDirectoryPicker) {
     try {
       const dir = await window.showDirectoryPicker({ mode: 'read' });
-      setStatus(`${dir.name}/ をスキャン中…`);
+      setStatus(t('scanning', { name: dir.name }));
       await openWorkspace(await fromDirectoryHandle(dir));
     } catch (err) {
       if (!isAbort(err)) setStatus(errMsg(err), 'error');
@@ -172,7 +173,7 @@ async function handleDrop(e: DragEvent): Promise<void> {
   const handles = settled.filter((h): h is FileSystemHandle => h != null);
   const dir = handles.find((h): h is FileSystemDirectoryHandle => h.kind === 'directory');
   if (dir) {
-    setStatus(`${dir.name}/ をスキャン中…`);
+    setStatus(t('scanning', { name: dir.name }));
     await openWorkspace(await fromDirectoryHandle(dir));
     return;
   }
@@ -203,6 +204,11 @@ function isAbort(err: unknown): boolean {
 
 // ---- event wiring ------------------------------------------------------------
 
+applyI18n();
+if (location.protocol === 'chrome-extension:') {
+  void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
+}
+
 $('open-file').addEventListener('click', pickFile);
 $('open-dir').addEventListener('click', pickDirectory);
 
@@ -230,7 +236,7 @@ contentEl.addEventListener('click', (e) => {
     fileSelect.value = doc.path;
     void showDoc(doc, { keepScroll: false });
   } else {
-    setStatus(`リンク先を開けません: ${href}`, 'error');
+    setStatus(t('linkNotFound', { href }), 'error');
   }
 });
 

@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "MD Browser",
-  "version": "0.1.0",
-  "description": "ローカルの Markdown ファイルを目次・Mermaid 図付きで表示し、更新を自動で反映します。",
+  "name": "__MSG_extName__",
+  "short_name": "__MSG_extShortName__",
+  "version": "1.0.0",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
+  "homepage_url": "https://github.com/otaku1123/md-browser",
+  "minimum_chrome_version": "120",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "MD Browser ビューアーを開く",
+    "default_title": "__MSG_actionTitle__",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png"
@@ -28,14 +32,21 @@
         "file:///*.mdown",
         "file:///*.mkd"
       ],
-      "js": ["content-loader.js"],
+      "js": [
+        "content-loader.js"
+      ],
       "run_at": "document_end"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content.js", "assets/*"],
-      "matches": ["file:///*"]
+      "resources": [
+        "content.js",
+        "assets/*"
+      ],
+      "matches": [
+        "file:///*"
+      ]
     }
   ]
 }
