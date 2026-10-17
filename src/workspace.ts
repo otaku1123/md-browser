@@ -1,0 +1,133 @@
+import { resolvePath, type AssetResolver } from './core/assets';
+
+export interface DocEntry {
+  /** Path relative to the workspace root, e.g. "docs/guide.md". */
+  path: string;
+}
+
+export interface DocContent {
+  text: string;
+  /** Changes whenever the file content changes; used for polling. */
+  stamp: string;
+}
+
+/**
+ * Something the user opened: a single file, a folder, or plain dropped files.
+ * Hides whether we have File System Access handles (watchable) or only File snapshots.
+ */
+export interface Workspace {
+  label: string;
+  docs: DocEntry[];
+  watchable: boolean;
+  read(doc: DocEntry): Promise<DocContent>;
+  /** Cheap change check (no content read). */
+  stat(doc: DocEntry): Promise<string>;
+  /** Creates a resolver for one render pass. Call the returned release() before the next pass. */
+  assetResolver(doc: DocEntry): { resolve: AssetResolver | null; release: () => void };
+}
+
+const MD_EXT = /\.(md|markdown|mdown|mkd)$/i;
+const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', 'dist', 'build']);
+const MAX_SCAN = 5000;
+
+export function isMarkdownName(name: string): boolean {
+  return MD_EXT.test(name);
+}
+
+function stampOf(file: File): string {
+  return `${file.lastModified}:${file.size}`;
+}
+
+function blobResolverScope(lookup: (path: string) => Promise<Blob | null>, doc: DocEntry) {
+  const urls: string[] = [];
+  const resolve: AssetResolver = async (ref) => {
+    const path = resolvePath(doc.path, ref);
+    if (path === null) return null;
+    const blob = await lookup(path).catch(() => null);
+    if (!blob) return null;
+    const url = URL.createObjectURL(blob);
+    urls.push(url);
+    return url;
+  };
+  return { resolve, release: () => urls.splice(0).forEach((u) => URL.revokeObjectURL(u)) };
+}
+
+// ---- single file handle -------------------------------------------------
+
+export function fromFileHandle(handle: FileSystemFileHandle): Workspace {
+  const doc = { path: handle.name };
+  return {
+    label: handle.name,
+    docs: [doc],
+    watchable: true,
+    async read() {
+      const file = await handle.getFile();
+      return { text: await file.text(), stamp: stampOf(file) };
+    },
+    stat: async () => stampOf(await handle.getFile()),
+    // Browsers give no access to sibling files of a single picked file.
+    assetResolver: () => ({ resolve: null, release: () => {} }),
+  };
+}
+
+// ---- directory handle ---------------------------------------------------
+
+async function scanDirectory(dir: FileSystemDirectoryHandle): Promise<DocEntry[]> {
+  const found: DocEntry[] = [];
+  let visited = 0;
+  async function walk(handle: FileSystemDirectoryHandle, prefix: string): Promise<void> {
+    for await (const entry of handle.values()) {
+      if (++visited > MAX_SCAN) return;
+      if (entry.kind === 'directory') {
+        if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
+        await walk(entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`);
+      } else if (isMarkdownName(entry.name)) {
+        found.push({ path: `${prefix}${entry.name}` });
+      }
+    }
+  }
+  await walk(dir, '');
+  return found.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function getFileByPath(root: FileSystemDirectoryHandle, path: string): Promise<File> {
+  const segs = path.split('/');
+  let dir = root;
+  for (const seg of segs.slice(0, -1)) dir = await dir.getDirectoryHandle(seg);
+  const fh = await dir.getFileHandle(segs[segs.length - 1]);
+  return fh.getFile();
+}
+
+export async function fromDirectoryHandle(root: FileSystemDirectoryHandle): Promise<Workspace> {
+  const docs = await scanDirectory(root);
+  return {
+    label: `${root.name}/`,
+    docs,
+    watchable: true,
+    async read(doc) {
+      const file = await getFileByPath(root, doc.path);
+      return { text: await file.text(), stamp: stampOf(file) };
+    },
+    stat: async (doc) => stampOf(await getFileByPath(root, doc.path)),
+    assetResolver: (doc) => blobResolverScope((p) => getFileByPath(root, p), doc),
+  };
+}
+
+// ---- plain File objects (fallback when handles are unavailable) ----------
+
+export function fromFiles(files: File[]): Workspace {
+  const byPath = new Map<string, File>();
+  for (const f of files) byPath.set(f.webkitRelativePath || f.name, f);
+  const docs = [...byPath.keys()].filter(isMarkdownName).sort().map((path) => ({ path }));
+  return {
+    label: docs.length === 1 ? docs[0].path : `${files.length} files`,
+    docs,
+    watchable: false,
+    async read(doc) {
+      const file = byPath.get(doc.path)!;
+      return { text: await file.text(), stamp: stampOf(file) };
+    },
+    stat: async (doc) => stampOf(byPath.get(doc.path)!),
+    assetResolver: (doc) => blobResolverScope(async (p) => byPath.get(p) ?? null, doc),
+  };
+}
