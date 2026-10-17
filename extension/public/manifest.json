@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "MD Browser",
+  "version": "0.1.0",
+  "description": "ローカルの Markdown ファイルを目次・Mermaid 図付きで表示し、更新を自動で反映します。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "MD Browser ビューアーを開く",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "file:///*.md",
+        "file:///*.MD",
+        "file:///*.markdown",
+        "file:///*.mdown",
+        "file:///*.mkd"
+      ],
+      "js": ["content-loader.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content.js", "assets/*"],
+      "matches": ["file:///*"]
+    }
+  ]
+}

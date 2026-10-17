@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:ext": "tsc --noEmit && vite build --config vite.extension.config.ts"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +23,7 @@
     "mermaid": "^12.2.0"
   },
   "devDependencies": {
+    "@types/chrome": "^0.3.5",
     "@types/markdown-it": "^14.2.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4"

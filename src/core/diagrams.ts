@@ -20,7 +20,7 @@ function loadMermaid(): Promise<MermaidApi> {
   return mermaidPromise;
 }
 
-export async function renderDiagrams(root: HTMLElement): Promise<void> {
+export async function renderDiagrams(root: ParentNode): Promise<void> {
   const nodes = Array.from(root.querySelectorAll<HTMLElement>('.diagram-mermaid'));
   if (nodes.length === 0) return;
 

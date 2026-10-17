@@ -1,5 +1,6 @@
 import './style.css';
-import { renderMarkdown, type TocItem } from './core/render';
+import { renderMarkdown } from './core/render';
+import { createToc } from './core/toc';
 import { renderDiagrams } from './core/diagrams';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
@@ -19,6 +20,7 @@ const tocEl = $<HTMLElement>('toc');
 const statusEl = $<HTMLElement>('status');
 const fileSelect = $<HTMLSelectElement>('file-select');
 const overlay = $<HTMLElement>('drop-overlay');
+const toc = createToc(tocEl);
 
 let ws: Workspace | null = null;
 let currentDoc: DocEntry | null = null;
@@ -27,8 +29,6 @@ let renderSeq = 0;
 let releaseAssets: () => void = () => {};
 let pollTimer: number | undefined;
 let polling = false;
-/** TOC entry the user clicked; wins over scroll position until they scroll manually (needed near page end). */
-let pinnedTocTarget: string | null = null;
 
 // ---- rendering ------------------------------------------------------------
 
@@ -44,68 +44,33 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
     return;
   }
 
-  const { html, toc } = renderMarkdown(content.text);
+  const { html, toc: tocItems } = renderMarkdown(content.text);
   // Build off-DOM first so images and diagrams swap in without flicker.
-  const staging = document.createElement('div');
+  // <template> content is inert, so images don't start loading unresolved relative URLs.
+  const staging = document.createElement('template');
   staging.innerHTML = html;
   const assets = workspace.assetResolver(doc);
-  await resolveImages(staging, assets.resolve);
-  await renderDiagrams(staging);
+  await resolveImages(staging.content, assets.resolve);
+  await renderDiagrams(staging.content);
   if (seq !== renderSeq) {
     assets.release();
     return; // a newer render started meanwhile
   }
 
   const scrollY = window.scrollY;
-  contentEl.replaceChildren(...staging.childNodes);
+  contentEl.replaceChildren(staging.content);
   releaseAssets();
   releaseAssets = assets.release;
-  if (currentDoc !== doc) pinnedTocTarget = null;
+  if (currentDoc !== doc) toc.reset();
   currentDoc = doc;
   lastStamp = content.stamp;
-  renderToc(toc);
+  toc.render(tocItems);
   window.scrollTo(0, opts.keepScroll ? scrollY : 0);
-  updateActiveToc();
+  toc.update();
   document.title = `${doc.path} - MD Browser`;
   setStatus(
     `${doc.path} · ${workspace.watchable ? '自動更新 ON' : '自動更新 非対応（ドロップしたファイル）'} · ${new Date().toLocaleTimeString()} 更新`,
   );
-}
-
-function renderToc(items: TocItem[]): void {
-  if (items.length === 0) {
-    tocEl.replaceChildren();
-    tocEl.classList.add('empty');
-    return;
-  }
-  tocEl.classList.remove('empty');
-  const minLevel = Math.min(...items.map((i) => i.level));
-  const list = document.createElement('ul');
-  for (const item of items) {
-    const li = document.createElement('li');
-    li.className = `toc-l${item.level - minLevel + 1}`;
-    const a = document.createElement('a');
-    a.href = `#${item.id}`;
-    a.dataset.target = item.id;
-    a.textContent = item.text;
-    li.append(a);
-    list.append(li);
-  }
-  tocEl.replaceChildren(list);
-}
-
-function updateActiveToc(): void {
-  const links = Array.from(tocEl.querySelectorAll<HTMLAnchorElement>('a[data-target]'));
-  let active = pinnedTocTarget
-    ? links.find((l) => l.dataset.target === pinnedTocTarget)
-    : undefined;
-  if (!active) for (const link of links) {
-    const h = document.getElementById(link.dataset.target!);
-    if (h && h.getBoundingClientRect().top <= 80) active = link;
-  }
-  active ??= links[0];
-  for (const link of links) link.classList.toggle('active', link === active);
-  active?.scrollIntoView({ block: 'nearest' });
 }
 
 // ---- workspace / watching -------------------------------------------------
@@ -246,15 +211,6 @@ fileSelect.addEventListener('change', () => {
   if (doc) void showDoc(doc, { keepScroll: false });
 });
 
-tocEl.addEventListener('click', (e) => {
-  const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[data-target]');
-  if (!a) return;
-  e.preventDefault();
-  pinnedTocTarget = a.dataset.target!;
-  document.getElementById(a.dataset.target!)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  history.replaceState(null, '', `#${a.dataset.target}`);
-});
-
 contentEl.addEventListener('click', (e) => {
   const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
   if (!a) return;
@@ -277,19 +233,6 @@ contentEl.addEventListener('click', (e) => {
     setStatus(`リンク先を開けません: ${href}`, 'error');
   }
 });
-
-let scrollRaf = 0;
-window.addEventListener('scroll', () => {
-  cancelAnimationFrame(scrollRaf);
-  scrollRaf = requestAnimationFrame(updateActiveToc);
-});
-
-for (const type of ['wheel', 'touchmove', 'keydown', 'mousedown'] as const) {
-  window.addEventListener(type, (e) => {
-    if (type === 'mousedown' && tocEl.contains(e.target as Node)) return;
-    pinnedTocTarget = null;
-  }, { passive: true });
-}
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) void poll();

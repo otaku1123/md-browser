@@ -30,7 +30,7 @@ export function resolvePath(docPath: string, ref: string): string | null {
 }
 
 /** Rewrites relative <img src> to resolved URLs. Unresolvable images get a visible marker. */
-export async function resolveImages(root: HTMLElement, resolver: AssetResolver | null): Promise<void> {
+export async function resolveImages(root: ParentNode, resolver: AssetResolver | null): Promise<void> {
   const imgs = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
   await Promise.all(
     imgs.map(async (img) => {
