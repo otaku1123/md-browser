@@ -66,9 +66,31 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   return defaultFence(tokens, idx, options, env, self);
 };
 
+// ChatGPT exports keep internal markers in Private Use Area characters:
+//    type  arg  arg … 
+// e.g. "cite" (source ids, unresolvable outside ChatGPT), "entity" (["organization","Name",…]),
+// "image_group" (carousel spec). Keep entity names, drop everything else.
+const CHATGPT_MARKER = /([\w-]+)((?:[^]*)*)/g;
+const STRAY_MARKER_CHARS = /[-]/g;
+
+function stripChatGptMarkers(src: string): string {
+  if (!src.includes('')) return src;
+  return src
+    .replace(CHATGPT_MARKER, (_m, type: string, args: string) => {
+      if (type !== 'entity') return '';
+      try {
+        const value: unknown = JSON.parse(args.split('')[1] ?? '');
+        return Array.isArray(value) && typeof value[1] === 'string' ? value[1] : '';
+      } catch {
+        return '';
+      }
+    })
+    .replace(STRAY_MARKER_CHARS, '');
+}
+
 export function renderMarkdown(src: string): RenderResult {
   const env = {};
-  const tokens = md.parse(src, env);
+  const tokens = md.parse(stripChatGptMarkers(src), env);
 
   const toc: TocItem[] = [];
   for (let i = 0; i < tokens.length; i++) {
