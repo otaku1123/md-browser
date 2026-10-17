@@ -2,6 +2,10 @@
 
 Markdown ファイルをブラウザでプレビューする静的 Web アプリ。
 
+**公開版:** https://otaku1123.github.io/md-browser/
+
+`main` に push すると GitHub Actions（`.github/workflows/deploy-pages.yml`）で自動デプロイされます。
+
 ## 機能
 
 - GFM 相当の Markdown 表示（表・タスクリスト・コードハイライト）
