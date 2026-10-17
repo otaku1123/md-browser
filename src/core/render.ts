@@ -67,19 +67,20 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 };
 
 // ChatGPT exports keep internal markers in Private Use Area characters:
-//    type  arg  arg … 
+//   \uE200 type \uE202 arg \uE202 arg … \uE201
 // e.g. "cite" (source ids, unresolvable outside ChatGPT), "entity" (["organization","Name",…]),
 // "image_group" (carousel spec). Keep entity names, drop everything else.
-const CHATGPT_MARKER = /([\w-]+)((?:[^]*)*)/g;
-const STRAY_MARKER_CHARS = /[-]/g;
+// The inner class must exclude \uE202 too; otherwise unclosed markers backtrack exponentially (ReDoS).
+const CHATGPT_MARKER = /\uE200([\w-]+)((?:\uE202[^\uE200-\uE202]*)*)\uE201/g;
+const STRAY_MARKER_CHARS = /[\uE200-\uE202]/g;
 
 function stripChatGptMarkers(src: string): string {
-  if (!src.includes('')) return src;
+  if (!src.includes('\uE200')) return src;
   return src
     .replace(CHATGPT_MARKER, (_m, type: string, args: string) => {
       if (type !== 'entity') return '';
       try {
-        const value: unknown = JSON.parse(args.split('')[1] ?? '');
+        const value: unknown = JSON.parse(args.split('\uE202')[1] ?? '');
         return Array.isArray(value) && typeof value[1] === 'string' ? value[1] : '';
       } catch {
         return '';
@@ -107,6 +108,10 @@ export function renderMarkdown(src: string): RenderResult {
   }
 
   const raw = md.renderer.render(tokens, md.options, env);
-  const html = DOMPurify.sanitize(raw, { ADD_ATTR: ['target'] });
+  const html = DOMPurify.sanitize(raw, {
+    ADD_ATTR: ['target'],
+    // No legitimate use in a preview; prevents phishing forms posting to external sites.
+    FORBID_TAGS: ['form'],
+  });
   return { html, toc };
 }
