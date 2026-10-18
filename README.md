@@ -28,6 +28,16 @@ npm run build      # 型チェック + dist/ へビルド
 npm run preview    # ビルド結果の確認
 ```
 
+### テスト
+
+```sh
+npm test                     # 単体テスト（vitest + jsdom）: 表示・サニタイズ・パス解決・フォント名
+npx playwright install chromium   # 初回のみ
+npm run test:e2e             # Web 版と拡張機能をビルドして E2E テスト（Playwright）
+```
+
+push と PR のたびに GitHub Actions（`.github/workflows/test.yml`）で型チェック・単体テスト・E2E テストが走る。失敗時はレポートが Artifacts に保存される。
+
 ## 使い方
 
 | 開き方 | 自動更新 | 相対パス画像 |

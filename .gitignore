@@ -3,3 +3,5 @@ dist/
 .DS_Store
 dist-extension/
 release/
+test-results/
+playwright-report/
