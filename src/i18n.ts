@@ -29,7 +29,7 @@ const en = {
   setupBody:
     'To render .md files opened from your computer (file://), Chrome requires you to turn on "Allow access to file URLs" for this extension.',
   setupStep1: 'Click "Open extension settings" below.',
-  setupStep2: 'Turn on "Allow access to file URLs".',
+  setupStep2: 'Turn on "Allow access to file URLs". Reload any .md tabs that are already open.',
   setupStep3: 'Drag a .md file into Chrome. It will be rendered with a table of contents and diagrams.',
   setupButton: 'Open extension settings',
   setupDone: 'File access is enabled. Drag a .md file into Chrome to view it.',
@@ -65,7 +65,7 @@ const ja: Record<Key, string> = {
   setupBody:
     'パソコン上の .md ファイル（file://）を表示するには、この拡張機能の「ファイルの URL へのアクセスを許可する」を ON にする必要があります（Chrome の仕様）。',
   setupStep1: '下の「拡張機能の設定を開く」をクリックします。',
-  setupStep2: '「ファイルの URL へのアクセスを許可する」を ON にします。',
+  setupStep2: '「ファイルの URL へのアクセスを許可する」を ON にします。すでに開いている .md のタブは再読み込みしてください。',
   setupStep3: '.md ファイルを Chrome にドラッグすると、目次や図つきで表示されます。',
   setupButton: '拡張機能の設定を開く',
   setupDone: 'ファイルへのアクセスが許可されています。.md ファイルを Chrome にドラッグして表示できます。',

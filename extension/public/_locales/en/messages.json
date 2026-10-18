@@ -4,5 +4,6 @@
   "extDescription": {
     "message": "View local Markdown files with a table of contents and Mermaid diagrams. Re-renders automatically when the file is saved."
   },
-  "actionTitle": { "message": "Open MD Browser viewer" }
+  "actionTitle": { "message": "Open MD Browser viewer" },
+  "actionTitleNeedsAccess": { "message": "MD Browser: turn on \"Allow access to file URLs\" to render .md files (click for setup)" }
 }

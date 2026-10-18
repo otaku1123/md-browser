@@ -1,3 +1,4 @@
+import { updateFileAccessBadge } from './file-access-badge';
 import { MSG_READ_SELF, type ReadSelfResponse } from './messages';
 
 const VIEWER_URL = chrome.runtime.getURL('index.html');
@@ -11,6 +12,9 @@ chrome.action.onClicked.addListener(() => {
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === chrome.runtime.OnInstalledReason.INSTALL) void chrome.tabs.create({ url: VIEWER_URL });
 });
+
+// Runs whenever the service worker starts (including after the extension is reloaded).
+void updateFileAccessBadge();
 
 const MD_URL = /^file:\/\/\/.+\.(md|markdown|mdown|mkd)$/i;
 

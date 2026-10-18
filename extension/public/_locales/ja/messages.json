@@ -4,5 +4,6 @@
   "extDescription": {
     "message": "ローカルの Markdown ファイルを目次・Mermaid 図付きで表示。ファイルを保存すると自動で再描画します。"
   },
-  "actionTitle": { "message": "MD Browser ビューアーを開く" }
+  "actionTitle": { "message": "MD Browser ビューアーを開く" },
+  "actionTitleNeedsAccess": { "message": "MD Browser: .md を表示するには「ファイルの URL へのアクセスを許可する」を ON にしてください（クリックで設定手順）" }
 }
