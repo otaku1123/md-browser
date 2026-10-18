@@ -4,6 +4,8 @@ Markdown ファイルをブラウザでプレビューする静的 Web アプリ
 
 **公開版:** https://otaku1123.github.io/md-browser/
 
+**Chrome 拡張機能:** [Chrome ウェブストア](https://chromewebstore.google.com/detail/infhmmggjagaoiiogbjkffelfdgfdkop)
+
 `main` に push すると GitHub Actions（`.github/workflows/deploy-pages.yml`）で自動デプロイされます。
 
 ## 機能
@@ -41,7 +43,13 @@ npm run preview    # ビルド結果の確認
 - ファイルを保存すると約 1 秒で自動再描画（スクロール位置を保持）
 - ツールバーのアイコンをクリックすると、Web 版と同じビューアーを拡張内で開く
 
-### ビルドとインストール
+### ストアからインストール
+
+1. [Chrome ウェブストア](https://chromewebstore.google.com/detail/infhmmggjagaoiiogbjkffelfdgfdkop) で「Chrome に追加」を押す
+2. 自動で開く案内画面のボタンから拡張機能の詳細を開き、**「ファイルの URL へのアクセスを許可する」を ON にする**（必須）
+3. `.md` ファイルを Chrome にドラッグする（または `file:///パス/README.md` を開く）
+
+### ソースからビルドしてインストール（開発用）
 
 ```sh
 npm run build:ext   # dist-extension/ に出力
@@ -69,7 +77,7 @@ npm run pack:ext    # release/md-browser-<version>.zip を作成
 
 | 症状 | 確認すること |
 |---|---|
-| 生のテキストのまま表示される | 手順 4 の「ファイルの URL へのアクセス」が ON か。ON にした後は対象タブを再読み込みする |
+| 生のテキストのまま表示される | 拡張機能の詳細で「ファイルの URL へのアクセスを許可する」が ON か。ON にした後は対象タブを再読み込みする |
 | `.md` がダウンロードされてしまう | OS 側の MIME 設定の影響。ドラッグ&ドロップで開くか、ツールバーのビューアーを使う |
 | 「自動更新 OFF」と表示される | 拡張を再読み込み（`chrome://extensions` の更新ボタン）してからタブを再読み込みする |
 | コードを変更したのに反映されない | `npm run build:ext` の後、`chrome://extensions` で拡張の更新ボタンを押す |
