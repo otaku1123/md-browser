@@ -13,7 +13,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.1.0.zip` |
+| アップロードするファイル | `release/md-browser-1.2.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -41,6 +41,9 @@ FEATURES
 • Sidebar table of contents that follows your scroll position
 • Mermaid diagrams (flowcharts, sequence diagrams, and more)
 • Live reload: save the file in your editor and the page re-renders within about a second, keeping your scroll position
+• GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
+• One-click copy button on code blocks
+• Choose your own fonts for body text and code
 • Relative images and links to other .md files just work
 • Light and dark themes (follows your system setting)
 • Built-in viewer (click the toolbar icon) to open files or whole folders
@@ -69,6 +72,9 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • スクロール位置に連動する目次サイドバー
 • Mermaid 図（フローチャート、シーケンス図など）
 • 自動更新：エディタで保存すると約 1 秒で再描画（スクロール位置を保持）
+• GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示
+• コードブロックのワンクリックコピー
+• 本文とコードのフォントを好みに変更
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
 • ライト / ダークテーマ（OS の設定に追従）
 • ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示）

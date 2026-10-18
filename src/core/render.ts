@@ -53,6 +53,45 @@ const md = new MarkdownIt({
   })
   .use(taskLists, { enabled: false });
 
+// GitHub alerts: a blockquote whose first line is only "[!NOTE]" (TIP, IMPORTANT, WARNING,
+// CAUTION; case-insensitive) becomes a callout. Anything else stays an ordinary blockquote.
+const ALERT_TITLES = {
+  note: 'alertNote',
+  tip: 'alertTip',
+  important: 'alertImportant',
+  warning: 'alertWarning',
+  caution: 'alertCaution',
+} as const;
+const ALERT_MARKER = /^\[!(note|tip|important|warning|caution)\][ \t]*(?:\n|$)/i;
+
+md.core.ruler.after('block', 'github_alerts', (state) => {
+  const tokens = state.tokens;
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].type !== 'blockquote_open') continue;
+    const inline = tokens[i + 2];
+    if (tokens[i + 1]?.type !== 'paragraph_open' || inline?.type !== 'inline') continue;
+    const m = ALERT_MARKER.exec(inline.content);
+    if (!m) continue;
+
+    const type = m[1].toLowerCase() as keyof typeof ALERT_TITLES;
+    tokens[i].tag = 'div';
+    tokens[i].attrSet('class', `markdown-alert markdown-alert-${type}`);
+    for (let j = i, depth = 0; j < tokens.length; j++) {
+      if (tokens[j].type === 'blockquote_open') depth++;
+      else if (tokens[j].type === 'blockquote_close' && --depth === 0) {
+        tokens[j].tag = 'div';
+        break;
+      }
+    }
+
+    const title = new state.Token('html_block', '', 0);
+    title.content = `<p class="markdown-alert-title">${escapeHtml(t(ALERT_TITLES[type]))}</p>\n`;
+    inline.content = inline.content.slice(m[0].length);
+    // A marker on its own paragraph leaves it empty: replace that paragraph with the title.
+    tokens.splice(i + 1, inline.content.trim() ? 0 : 3, title);
+  }
+});
+
 const defaultFence = md.renderer.rules.fence!;
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
@@ -76,7 +115,7 @@ const CHATGPT_MARKER = /\uE200([\w-]+)((?:\uE202[^\uE200-\uE202]*)*)\uE201/g;
 const STRAY_MARKER_CHARS = /[\uE200-\uE202]/g;
 
 function stripChatGptMarkers(src: string): string {
-  if (!src.includes('\uE200')) return src;
+  if (!/[\uE200-\uE202]/.test(src)) return src;
   return src
     .replace(CHATGPT_MARKER, (_m, type: string, args: string) => {
       if (type !== 'entity') return '';
@@ -90,9 +129,27 @@ function stripChatGptMarkers(src: string): string {
     .replace(STRAY_MARKER_CHARS, '');
 }
 
+// Front matter: YAML between "---" lines (closed by "---" or "...") or TOML between "+++" lines,
+// at the very top of the file. Shown as a collapsed block instead of a stray rule + text.
+const FRONT_MATTER =
+  /^\uFEFF?(?:---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?(?:---|\.\.\.)|\+\+\+[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?\+\+\+)[ \t]*(?:\r?\n|$)/;
+
+function splitFrontMatter(src: string): { frontMatter: string; body: string } {
+  const m = FRONT_MATTER.exec(src);
+  if (!m) return { frontMatter: '', body: src };
+  const toml = m[0].replace(/^\uFEFF/, '').startsWith('+++');
+  const lang = toml ? 'toml' : 'yaml';
+  const code = md.options.highlight!((toml ? m[2] : m[1]) ?? '', lang, '');
+  const html =
+    `<details class="front-matter"><summary>${escapeHtml(t('frontMatter'))}</summary>` +
+    `<pre><code class="hljs language-${lang}">${code}</code></pre></details>\n`;
+  return { frontMatter: html, body: src.slice(m[0].length) };
+}
+
 export function renderMarkdown(src: string): RenderResult {
   const env = {};
-  const tokens = md.parse(stripChatGptMarkers(src), env);
+  const { frontMatter, body } = splitFrontMatter(stripChatGptMarkers(src));
+  const tokens = md.parse(body, env);
 
   const toc: TocItem[] = [];
   for (let i = 0; i < tokens.length; i++) {
@@ -108,7 +165,7 @@ export function renderMarkdown(src: string): RenderResult {
     toc.push({ level: Number(t.tag.slice(1)), text, id: String(id) });
   }
 
-  const raw = md.renderer.render(tokens, md.options, env);
+  const raw = frontMatter + md.renderer.render(tokens, md.options, env);
   const html = DOMPurify.sanitize(raw, {
     ADD_ATTR: ['target'],
     // No legitimate use in a preview; prevents phishing forms posting to external sites.

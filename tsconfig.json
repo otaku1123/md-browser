@@ -12,5 +12,5 @@
     "noEmit": true,
     "types": ["vite/client", "chrome"]
   },
-  "include": ["src"]
+  "include": ["src", "tests/unit", "vitest.config.ts"]
 }

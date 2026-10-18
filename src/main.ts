@@ -4,6 +4,7 @@ import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
 import { renderDiagrams } from './core/diagrams';
+import { addCopyButtons } from './core/code-copy';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
   fromDirectoryHandle,
@@ -54,6 +55,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   const assets = workspace.assetResolver(doc);
   await resolveImages(staging.content, assets.resolve);
   await renderDiagrams(staging.content);
+  addCopyButtons(staging.content);
   if (seq !== renderSeq) {
     assets.release();
     return; // a newer render started meanwhile
@@ -206,6 +208,14 @@ function isAbort(err: unknown): boolean {
 // ---- event wiring ------------------------------------------------------------
 
 applyI18n();
+// The develop branch is deployed to /dev/; mark it so it isn't mistaken for production.
+if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
+  document.title = `${document.title} (dev)`;
+  const badge = document.createElement('span');
+  badge.className = 'env-badge';
+  badge.textContent = 'DEV';
+  document.querySelector('.brand')?.after(badge);
+}
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!);
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
