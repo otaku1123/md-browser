@@ -10,9 +10,11 @@ test('renders a local .md file in place', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
-  await expect(page.locator('.toc a')).toHaveCount(8);
+  await expect(page.locator('.toc a')).toHaveCount(9);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.plantuml-note')).toBeVisible();
+  await expect(page.locator('.markdown-alert')).toHaveCount(5);
+  await expect(page.locator('.markdown-alert-warning .markdown-alert-title')).toHaveText('警告');
   await expect(page.locator('.status')).toHaveText('自動更新 ON');
   // Relative images resolve natively against the file URL.
   await expect(page.locator('img[alt="diagram"]')).toHaveJSProperty('naturalWidth', 240);

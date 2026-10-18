@@ -87,3 +87,48 @@ describe('ChatGPT export markers', () => {
     expect(performance.now() - start).toBeLessThan(2000);
   });
 });
+
+describe('GitHub alerts', () => {
+  const types = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'];
+
+  it.each(types)('turns > [!%s] into a callout with a title', (type) => {
+    const root = dom(renderMarkdown(`> [!${type}]\n> Body text\n`).html);
+    const alert = root.querySelector(`div.markdown-alert.markdown-alert-${type.toLowerCase()}`);
+    expect(alert).not.toBeNull();
+    expect(root.querySelector('blockquote')).toBeNull();
+    expect(alert?.querySelector('.markdown-alert-title')?.textContent).toBeTruthy();
+    expect(alert?.querySelector('p:not(.markdown-alert-title)')?.textContent).toBe('Body text');
+    expect(alert?.textContent).not.toContain('[!');
+  });
+
+  it('is case-insensitive and keeps multiple paragraphs and lists', () => {
+    const root = dom(renderMarkdown('> [!warning]\n>\n> First\n>\n> - item\n').html);
+    const alert = root.querySelector('.markdown-alert-warning');
+    expect(alert?.querySelectorAll('p').length).toBe(2); // title + "First"
+    expect(alert?.querySelector('li')?.textContent).toBe('item');
+  });
+
+  it.each([
+    ['text after the marker', '> [!NOTE] inline text\n> more\n'],
+    ['unknown type', '> [!FOO]\n> text\n'],
+    ['marker not on the first line', '> text\n> [!NOTE]\n'],
+    ['ordinary blockquote', '> just a quote\n'],
+  ])('leaves %s as a blockquote', (_name, src) => {
+    const root = dom(renderMarkdown(src).html);
+    expect(root.querySelector('blockquote')).not.toBeNull();
+    expect(root.querySelector('.markdown-alert')).toBeNull();
+  });
+
+  it('closes the right element when alerts are nested in quotes', () => {
+    const root = dom(renderMarkdown('> [!TIP]\n> outer\n> > inner quote\n>\n> after\n\nOutside\n').html);
+    const alert = root.querySelector('.markdown-alert-tip');
+    expect(alert?.querySelector('blockquote')?.textContent?.trim()).toBe('inner quote');
+    expect(alert?.textContent).toContain('after');
+    expect(alert?.textContent).not.toContain('Outside');
+  });
+
+  it('still sanitizes content inside alerts', () => {
+    const root = dom(renderMarkdown('> [!NOTE]\n> <img src="x" onerror="alert(1)">\n').html);
+    expect(root.querySelector('img')?.hasAttribute('onerror')).toBe(false);
+  });
+});

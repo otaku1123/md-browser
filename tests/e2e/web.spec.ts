@@ -44,8 +44,10 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
 
 test('renders a folder: TOC, diagrams and relative images', async ({ page }) => {
   await openSampleFolder(page);
-  await expect(page.locator('.toc a')).toHaveCount(8);
+  await expect(page.locator('.toc a')).toHaveCount(9);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
+  await expect(page.locator('.markdown-alert')).toHaveCount(5);
+  await expect(page.locator('.markdown-alert-note .markdown-alert-title')).toHaveText('Note');
   await expect(page.locator('img[alt="diagram"]')).toHaveAttribute('src', /^blob:/);
   await expect(page.locator('img.img-missing')).toHaveCount(1);
   await expect(page.locator('#file-select option')).toHaveCount(3);
