@@ -256,6 +256,31 @@ body {
   border-radius: 6px;
 }
 .markdown-body pre code { padding: 0; background: none; font-size: 0.85em; }
+.markdown-body .code-block { position: relative; }
+.markdown-body .copy-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.markdown-body .code-block:hover .copy-button,
+.markdown-body .copy-button:focus-visible,
+.markdown-body .copy-button.done { opacity: 1; }
+.markdown-body .copy-button:hover { color: var(--fg); border-color: var(--accent); }
+.markdown-body .copy-button.done { color: var(--alert-tip); border-color: var(--alert-tip); }
+.markdown-body .copy-button.failed { color: var(--error); border-color: var(--error); }
+@media (hover: none) {
+  .markdown-body .copy-button { opacity: 1; }
+}
 .markdown-body .task-list-item { list-style: none; }
 .markdown-body .task-list-item input { margin: 0 0.4em 0 -1.4em; }
 

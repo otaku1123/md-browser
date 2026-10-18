@@ -4,6 +4,7 @@ import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
 import { renderDiagrams } from './core/diagrams';
+import { addCopyButtons } from './core/code-copy';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
   fromDirectoryHandle,
@@ -54,6 +55,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   const assets = workspace.assetResolver(doc);
   await resolveImages(staging.content, assets.resolve);
   await renderDiagrams(staging.content);
+  addCopyButtons(staging.content);
   if (seq !== renderSeq) {
     assets.release();
     return; // a newer render started meanwhile
