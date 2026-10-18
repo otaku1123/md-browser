@@ -33,6 +33,12 @@ const en = {
   setupStep3: 'Drag a .md file into Chrome. It will be rendered with a table of contents and diagrams.',
   setupButton: 'Open extension settings',
   setupDone: 'File access is enabled. Drag a .md file into Chrome to view it.',
+  fontSettings: 'Fonts',
+  fontBody: 'Body',
+  fontCode: 'Code',
+  fontDefault: 'Default',
+  fontHint: 'Enter the name of a font installed on your computer. Unknown fonts fall back to the default.',
+  fontReset: 'Reset to default',
 } as const;
 
 type Key = keyof typeof en;
@@ -69,6 +75,12 @@ const ja: Record<Key, string> = {
   setupStep3: '.md ファイルを Chrome にドラッグすると、目次や図つきで表示されます。',
   setupButton: '拡張機能の設定を開く',
   setupDone: 'ファイルへのアクセスが許可されています。.md ファイルを Chrome にドラッグして表示できます。',
+  fontSettings: 'フォント',
+  fontBody: '本文',
+  fontCode: 'コード',
+  fontDefault: '既定',
+  fontHint: 'PC にインストールされているフォント名を入力してください。見つからない場合は既定のフォントで表示します。',
+  fontReset: '既定に戻す',
 };
 
 export const lang: 'ja' | 'en' = (navigator.language || 'en').toLowerCase().startsWith('ja') ? 'ja' : 'en';

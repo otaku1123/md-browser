@@ -3,6 +3,7 @@ import css from '../style.css?inline';
 import { renderMarkdown } from '../core/render';
 import { renderDiagrams } from '../core/diagrams';
 import { createToc } from '../core/toc';
+import { mountFontSettings } from '../core/font-settings';
 import { lang, t } from '../i18n';
 import { MSG_READ_SELF, type ReadSelfResponse } from './messages';
 
@@ -44,6 +45,7 @@ function buildShell(): { content: HTMLElement; tocEl: HTMLElement; status: HTMLE
   const status = document.createElement('span');
   status.className = 'status';
   header.append(brand, status);
+  mountFontSettings(header);
 
   const layout = document.createElement('div');
   layout.className = 'layout';

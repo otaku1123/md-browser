@@ -1,5 +1,6 @@
 import './style.css';
 import { applyI18n, t } from './i18n';
+import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
 import { renderDiagrams } from './core/diagrams';
@@ -205,6 +206,7 @@ function isAbort(err: unknown): boolean {
 // ---- event wiring ------------------------------------------------------------
 
 applyI18n();
+mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!);
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
 }

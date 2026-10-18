@@ -24,7 +24,7 @@
   <body>
     <main>
       <h1>Privacy Policy</h1>
-      <p class="meta">MD Browser (web app and Chrome extension) · Last updated: 2026-10-17</p>
+      <p class="meta">MD Browser (web app and Chrome extension) · Last updated: 2026-10-18</p>
 
       <h2>Summary</h2>
       <p>MD Browser does not collect, store, transmit, sell, or share any personal data or file contents. All processing happens locally in your browser.</p>
@@ -34,6 +34,9 @@
         <li><strong>Markdown files you open in Chrome</strong> (<code>file:///…/*.md</code>): the extension reads the file you are viewing to render it, and re-reads only that same file to detect changes (auto-reload). File contents never leave your computer.</li>
         <li><strong>Files or folders you pick in the viewer</strong>: read locally with the browser's File System Access API, only after you choose them.</li>
       </ul>
+
+      <h2>Settings</h2>
+      <p>If you change the fonts, only the two font names you entered (for the document body and for code) are saved. The extension saves them with <code>chrome.storage.sync</code>, so Chrome may sync them across your signed-in browsers; the web app saves them in your browser's <code>localStorage</code>. No file contents or personal data are saved.</p>
 
       <h2>What we do not do</h2>
       <ul>
@@ -52,7 +55,7 @@
 
       <h1 lang="ja">プライバシーポリシー</h1>
       <div lang="ja">
-        <p class="meta">MD Browser（Web アプリおよび Chrome 拡張機能）· 最終更新日: 2026-10-17</p>
+        <p class="meta">MD Browser（Web アプリおよび Chrome 拡張機能）· 最終更新日: 2026-10-18</p>
 
         <h2>概要</h2>
         <p>MD Browser は、個人データやファイルの内容を収集・保存・送信・販売・共有しません。すべての処理はお使いのブラウザ内で完結します。</p>
@@ -62,6 +65,9 @@
           <li><strong>Chrome で開いた Markdown ファイル</strong>（<code>file:///…/*.md</code>）: 表示のために閲覧中のファイルを読み込み、変更の検知（自動更新）のために同じファイルだけを再読み込みします。ファイルの内容がパソコンの外に出ることはありません。</li>
           <li><strong>ビューアーで選択したファイル・フォルダ</strong>: ユーザーが選択した後に限り、ブラウザの File System Access API でローカルに読み込みます。</li>
         </ul>
+
+        <h2>設定の保存</h2>
+        <p>フォントを変更した場合、入力したフォント名 2 つ（本文用とコード用）だけを保存します。拡張機能は <code>chrome.storage.sync</code> に保存するため、Chrome にログインしている場合はブラウザ間で同期されることがあります。Web アプリはブラウザの <code>localStorage</code> に保存します。ファイルの内容や個人データは保存しません。</p>
 
         <h2>行わないこと</h2>
         <ul>

@@ -111,6 +111,12 @@ content_scripts の `file:///*.md` などへのマッチが、ホスト権限と
 The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. No other pages or files are accessed, and no network requests are made by the extension.
 ```
 
+### storage 権限が必要な理由（Permission justification: storage）
+
+```text
+Stores the user's font preferences (font names for the document body and code blocks) so they apply to every rendered Markdown file and the viewer. Only these two font names are stored; no file contents or personal data are saved.
+```
+
 ### リモートコード（Remote code）
 
 - **No, I am not using remote code**（Mermaid などのライブラリも含め、すべてのコードをパッケージに同梱）
