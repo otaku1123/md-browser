@@ -6,7 +6,17 @@ Markdown ファイルをブラウザでプレビューする静的 Web アプリ
 
 **Chrome 拡張機能:** [Chrome ウェブストア](https://chromewebstore.google.com/detail/infhmmggjagaoiiogbjkffelfdgfdkop)
 
-`main` に push すると GitHub Actions（`.github/workflows/deploy-pages.yml`）で自動デプロイされます。
+**開発版:** https://otaku1123.github.io/md-browser/dev/ （`develop` ブランチ。ツールバーに「DEV」と表示）
+
+`main` / `develop` に push すると GitHub Actions（`.github/workflows/deploy-pages.yml`）で両方がまとめてデプロイされます。
+
+### ブランチ運用
+
+| ブランチ | 用途 | デプロイ先 |
+|---|---|---|
+| `feature/*` などの作業ブランチ | 1 Issue ＝ 1 ブランチ。PR は `develop` 向け（既定ブランチ） | なし（PR で CI のみ） |
+| `develop` | 開発版。PR をマージして dev 環境で動作確認する | `/dev/` |
+| `main` | リリース版。ある程度まとまったら `develop` → `main` の PR を作ってマージ | `/`（本番）＋ストア提出用の zip を作成 |
 
 ## 機能
 
