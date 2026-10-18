@@ -76,7 +76,7 @@ const CHATGPT_MARKER = /\uE200([\w-]+)((?:\uE202[^\uE200-\uE202]*)*)\uE201/g;
 const STRAY_MARKER_CHARS = /[\uE200-\uE202]/g;
 
 function stripChatGptMarkers(src: string): string {
-  if (!src.includes('\uE200')) return src;
+  if (!/[\uE200-\uE202]/.test(src)) return src;
   return src
     .replace(CHATGPT_MARKER, (_m, type: string, args: string) => {
       if (type !== 'entity') return '';
