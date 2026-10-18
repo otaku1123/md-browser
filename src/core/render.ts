@@ -129,9 +129,27 @@ function stripChatGptMarkers(src: string): string {
     .replace(STRAY_MARKER_CHARS, '');
 }
 
+// Front matter: YAML between "---" lines (closed by "---" or "...") or TOML between "+++" lines,
+// at the very top of the file. Shown as a collapsed block instead of a stray rule + text.
+const FRONT_MATTER =
+  /^\uFEFF?(?:---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?(?:---|\.\.\.)|\+\+\+[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?\+\+\+)[ \t]*(?:\r?\n|$)/;
+
+function splitFrontMatter(src: string): { frontMatter: string; body: string } {
+  const m = FRONT_MATTER.exec(src);
+  if (!m) return { frontMatter: '', body: src };
+  const toml = m[0].replace(/^\uFEFF/, '').startsWith('+++');
+  const lang = toml ? 'toml' : 'yaml';
+  const code = md.options.highlight!((toml ? m[2] : m[1]) ?? '', lang, '');
+  const html =
+    `<details class="front-matter"><summary>${escapeHtml(t('frontMatter'))}</summary>` +
+    `<pre><code class="hljs language-${lang}">${code}</code></pre></details>\n`;
+  return { frontMatter: html, body: src.slice(m[0].length) };
+}
+
 export function renderMarkdown(src: string): RenderResult {
   const env = {};
-  const tokens = md.parse(stripChatGptMarkers(src), env);
+  const { frontMatter, body } = splitFrontMatter(stripChatGptMarkers(src));
+  const tokens = md.parse(body, env);
 
   const toc: TocItem[] = [];
   for (let i = 0; i < tokens.length; i++) {
@@ -147,7 +165,7 @@ export function renderMarkdown(src: string): RenderResult {
     toc.push({ level: Number(t.tag.slice(1)), text, id: String(id) });
   }
 
-  const raw = md.renderer.render(tokens, md.options, env);
+  const raw = frontMatter + md.renderer.render(tokens, md.options, env);
   const html = DOMPurify.sanitize(raw, {
     ADD_ATTR: ['target'],
     // No legitimate use in a preview; prevents phishing forms posting to external sites.

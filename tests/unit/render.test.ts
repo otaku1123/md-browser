@@ -132,3 +132,52 @@ describe('GitHub alerts', () => {
     expect(root.querySelector('img')?.hasAttribute('onerror')).toBe(false);
   });
 });
+
+describe('front matter', () => {
+  const fm = (html: string) => dom(html).querySelector('details.front-matter');
+
+  it('moves YAML front matter into a collapsed block', () => {
+    const { html, toc } = renderMarkdown('---\ntitle: Plan\ntags: [a, b]\n---\n# Heading\n');
+    const block = fm(html);
+    expect(block).not.toBeNull();
+    expect(block?.hasAttribute('open')).toBe(false);
+    expect(block?.querySelector('code.language-yaml')?.textContent).toBe('title: Plan\ntags: [a, b]');
+    expect(dom(html).querySelector('hr')).toBeNull();
+    expect(toc.map((h) => h.text)).toEqual(['Heading']);
+  });
+
+  it('supports TOML (+++), "..." closing, CRLF, BOM and empty blocks', () => {
+    expect(fm(renderMarkdown('+++\ntitle = "x"\n+++\nbody').html)?.querySelector('code.language-toml')?.textContent).toBe('title = "x"');
+    expect(fm(renderMarkdown('---\na: 1\n...\nbody').html)).not.toBeNull();
+    expect(fm(renderMarkdown('---\r\na: 1\r\n---\r\nbody').html)?.textContent).toContain('a: 1');
+    expect(fm(renderMarkdown('\uFEFF---\na: 1\n---\nbody').html)).not.toBeNull();
+    expect(fm(renderMarkdown('---\n---\nbody').html)).not.toBeNull();
+  });
+
+  it('keeps a TOML block intact when a line inside is "..."', () => {
+    const block = fm(renderMarkdown('+++\na = 1\n...\nb = 2\n+++\nbody').html);
+    expect(block?.textContent).toContain('b = 2');
+  });
+
+  it.each([
+    ['not at the top', 'intro\n\n---\na: 1\n---\n'],
+    ['unclosed', '---\na: 1\n\nbody'],
+    ['mismatched delimiters', '+++\na = 1\n---\nbody'],
+    ['a longer rule as the closer', '---\na: 1\n----\nbody'],
+  ])('ignores front matter that is %s', (_name, src) => {
+    expect(fm(renderMarkdown(src).html)).toBeNull();
+  });
+
+  it('escapes HTML inside front matter', () => {
+    const root = dom(renderMarkdown('---\ntitle: <img src=x onerror=alert(1)>\n---\n').html);
+    expect(root.querySelector('img')).toBeNull();
+    expect(fm(root.innerHTML)?.textContent).toContain('<img src=x onerror=alert(1)>');
+  });
+
+  it('scans an unclosed block in linear time', () => {
+    const src = '---\n' + 'a: 1\n'.repeat(200000);
+    const start = performance.now();
+    renderMarkdown(src);
+    expect(performance.now() - start).toBeLessThan(3000);
+  });
+});

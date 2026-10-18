@@ -14,6 +14,8 @@ test('renders a local .md file in place', async ({ context, workdir }) => {
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.plantuml-note')).toBeVisible();
   await expect(page.locator('.markdown-alert')).toHaveCount(5);
+  await expect(page.locator('details.front-matter')).not.toHaveAttribute('open');
+  await expect(page.locator('details.front-matter code')).toContainText('tags: [markdown, viewer]');
   await expect(page.locator('.markdown-alert-warning .markdown-alert-title')).toHaveText('警告');
   await expect(page.locator('.status')).toHaveText('自動更新 ON');
   // Relative images resolve natively against the file URL.

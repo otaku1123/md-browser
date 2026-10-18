@@ -1,3 +1,9 @@
+---
+title: MD Browser サンプル
+tags: [markdown, viewer]
+author:
+  name: otaku1123
+---
 # MD Browser サンプル
 
 このファイルを編集して保存すると、ブラウザ側が自動で再描画されます。
