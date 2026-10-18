@@ -2,6 +2,7 @@
 import css from '../style.css?inline';
 import { renderMarkdown } from '../core/render';
 import { renderDiagrams } from '../core/diagrams';
+import { addCopyButtons } from '../core/code-copy';
 import { createToc } from '../core/toc';
 import { mountFontSettings } from '../core/font-settings';
 import { lang, t } from '../i18n';
@@ -78,6 +79,7 @@ async function main(): Promise<void> {
     staging.innerHTML = html;
     // Relative images/links resolve natively against the file:// URL.
     await renderDiagrams(staging.content);
+    addCopyButtons(staging.content);
     if (mine !== seq) return;
     const y = window.scrollY;
     content.replaceChildren(staging.content);

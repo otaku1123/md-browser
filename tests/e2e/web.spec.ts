@@ -85,3 +85,16 @@ test('remembers font settings across reloads', async ({ page }) => {
   await expect(page.locator('.font-settings-row').nth(1).locator('input')).toHaveValue('Courier New');
   expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--font-code'))).toContain('Courier New');
 });
+
+test('copies code blocks to the clipboard', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openSampleFolder(page);
+  await expect(page.locator('.code-block .copy-button')).toHaveCount(2); // ts + plantuml; not mermaid
+  const block = page.locator('.code-block').first();
+  await block.hover();
+  await block.locator('.copy-button').click();
+  await expect(block.locator('.copy-button')).toHaveText('Copied');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    'function greet(name: string): string {\n  return `Hello, ${name}`; // comment\n}',
+  );
+});

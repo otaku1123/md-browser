@@ -97,3 +97,13 @@ test('shares font settings between file tabs and the viewer', async ({ context, 
   await viewer.getByRole('button', { name: '既定に戻す' }).click();
   await expect.poll(() => bodyFont(a)).not.toMatch(/Georgia/);
 });
+
+test('adds copy buttons to code blocks', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page.locator('.code-block .copy-button')).toHaveCount(2);
+  const button = page.locator('.code-block .copy-button').first();
+  await page.locator('.code-block').first().hover();
+  await button.click();
+  await expect(button).toHaveText('コピーしました');
+});
