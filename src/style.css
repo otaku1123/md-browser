@@ -114,7 +114,25 @@ body {
 /* ---- layout ---- */
 .layout {
   display: grid;
-  grid-template-columns: var(--toc-w) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Wide screens: files (left) | document | TOC (right). DOM order stays files, toc, content
+   (shared with the extension's shell), so narrow screens still stack the TOC above the text. */
+@media (min-width: 801px) {
+  .layout { grid-template-columns: minmax(0, 1fr) var(--toc-w); grid-template-areas: "content toc"; }
+  .layout > .files { grid-area: files; }
+  .layout > .toc { grid-area: toc; }
+  .layout > .content { grid-area: content; }
+  /* Without headings, give the whole width to the document. */
+  .layout:has(> .toc.empty) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "content"; }
+  .layout:has(> .files:not([hidden])) {
+    grid-template-columns: var(--files-w) minmax(0, 1fr) var(--toc-w);
+    grid-template-areas: "files content toc";
+  }
+  .layout:has(> .files:not([hidden])):has(> .toc.empty) {
+    grid-template-columns: var(--files-w) minmax(0, 1fr);
+    grid-template-areas: "files content";
+  }
 }
 
 .toc {
@@ -123,18 +141,11 @@ body {
   height: calc(100vh - var(--toolbar-h));
   overflow-y: auto;
   padding: 16px 8px 32px;
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   font-size: 13px;
   line-height: 1.5;
 }
 .toc.empty { display: none; }
-/* Without headings, give the whole width to the document. */
-.layout:has(> .toc.empty) { grid-template-columns: minmax(0, 1fr); }
-/* With the file sidebar open, it takes the leftmost column. */
-@media (min-width: 801px) {
-  .layout:has(> .files:not([hidden])) { grid-template-columns: var(--files-w) var(--toc-w) minmax(0, 1fr); }
-  .layout:has(> .files:not([hidden])):has(> .toc.empty) { grid-template-columns: var(--files-w) minmax(0, 1fr); }
-}
 
 .files {
   position: sticky;
@@ -202,7 +213,7 @@ body {
     position: static;
     height: auto;
     max-height: 40vh;
-    border-right: none;
+    border-left: none;
     border-bottom: 1px solid var(--border);
   }
   .toc.empty { display: none; }
