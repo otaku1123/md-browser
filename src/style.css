@@ -32,7 +32,8 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
+/* Screen only: printing always uses the light palette (white paper). */
+@media screen and (prefers-color-scheme: dark) {
   :root {
     --bg: #0d1117;
     --bg-soft: #151b23;
@@ -349,6 +350,7 @@ body {
 /* ---- diagrams ---- */
 .diagram { margin: 0 0 1em; overflow-x: auto; text-align: center; }
 .diagram svg { max-width: 100%; height: auto; }
+.diagram-print { display: none; }
 .diagram-error { text-align: left; }
 .diagram-error-message { color: var(--error); font-size: 13px; margin-bottom: 4px; }
 .plantuml-note { font-size: 12px; color: var(--fg-muted); margin-bottom: 4px; }
@@ -436,4 +438,37 @@ body {
   border-radius: 999px;
   text-decoration: none;
   white-space: nowrap;
+}
+
+/* ---- print / PDF ---- */
+@page { margin: 15mm; }
+@media print {
+  .toolbar,
+  .files,
+  .toc,
+  .drop-overlay,
+  .copy-button { display: none !important; }
+  body { background: #fff; }
+  .layout { display: block; }
+  .content { max-width: none; margin: 0; padding: 0; }
+
+  /* Overflowing content is clipped on paper, so wrap instead of scrolling. */
+  .markdown-body pre { overflow: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .markdown-body table,
+  .diagram { overflow: visible; }
+
+  /* Keep blocks whole where possible, and headings with the text that follows. */
+  .markdown-body pre,
+  .markdown-body blockquote,
+  .markdown-body .markdown-alert,
+  .markdown-body img,
+  .diagram { break-inside: avoid; }
+  .markdown-body tr { break-inside: avoid; }
+  .markdown-body thead { display: table-header-group; }
+  .markdown-body h1, .markdown-body h2, .markdown-body h3,
+  .markdown-body h4, .markdown-body h5, .markdown-body h6 { break-after: avoid; }
+
+  /* In dark mode diagrams carry a light-theme copy for white paper (see diagrams.ts). */
+  .diagram-screen { display: none; }
+  .diagram-print { display: block; }
 }
