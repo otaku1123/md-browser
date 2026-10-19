@@ -3,6 +3,7 @@ import { applyI18n, t } from './i18n';
 import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
+import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
 import { addCopyButtons } from './core/code-copy';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
@@ -21,9 +22,14 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const contentEl = $<HTMLElement>('content');
 const tocEl = $<HTMLElement>('toc');
 const statusEl = $<HTMLElement>('status');
-const fileSelect = $<HTMLSelectElement>('file-select');
+const filesEl = $<HTMLElement>('files');
+const filesToggle = $<HTMLButtonElement>('toggle-files');
 const overlay = $<HTMLElement>('drop-overlay');
 const toc = createToc(tocEl);
+const fileTree = createFileTree(filesEl, (path) => {
+  const doc = ws?.docs.find((d) => d.path === path);
+  if (doc && doc !== currentDoc) void showDoc(doc, { keepScroll: false });
+});
 
 let ws: Workspace | null = null;
 let currentDoc: DocEntry | null = null;
@@ -70,6 +76,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   lastStamp = content.stamp;
   toc.render(tocItems);
   window.scrollTo(0, opts.keepScroll ? scrollY : 0);
+  fileTree.setActive(doc.path);
   toc.update();
   document.title = `${doc.path} - MD Browser`;
   setStatus(
@@ -85,15 +92,44 @@ async function openWorkspace(next: Workspace): Promise<void> {
     return;
   }
   ws = next;
-  fileSelect.replaceChildren(
-    ...next.docs.map((d) => new Option(d.path, d.path)),
-  );
-  fileSelect.hidden = next.docs.length <= 1;
+  fileTree.render(next.docs.map((d) => d.path));
+  updateSidebar();
   const initial =
     next.docs.find((d) => /^(readme|index)\.md$/i.test(d.path)) ?? next.docs[0];
-  fileSelect.value = initial.path;
   await showDoc(initial, { keepScroll: false });
   startPolling();
+}
+
+// ---- file sidebar ----------------------------------------------------------
+
+const SIDEBAR_KEY = 'md-browser:files-sidebar';
+
+function loadSidebarOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) !== 'closed';
+  } catch {
+    return true;
+  }
+}
+
+let sidebarOpen = loadSidebarOpen();
+
+/** The sidebar is only offered when the workspace has more than one document. */
+function updateSidebar(): void {
+  const available = (ws?.docs.length ?? 0) > 1;
+  filesToggle.hidden = !available;
+  filesToggle.setAttribute('aria-expanded', String(sidebarOpen));
+  filesEl.hidden = !(available && sidebarOpen);
+}
+
+function toggleSidebar(): void {
+  sidebarOpen = !sidebarOpen;
+  try {
+    localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? 'open' : 'closed');
+  } catch {
+    // storage unavailable (e.g. blocked site data): keep the state for this session only
+  }
+  updateSidebar();
 }
 
 function startPolling(): void {
@@ -211,9 +247,19 @@ applyI18n();
 // The develop branch is deployed to /dev/; mark it so it isn't mistaken for production.
 if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   document.title = `${document.title} (dev)`;
-  const badge = document.createElement('span');
+  // Set by the Pages workflow for the dev build only; absent locally.
+  const sha: string = import.meta.env.VITE_COMMIT_SHA ?? '';
+  const repo: string = import.meta.env.VITE_REPO_URL ?? '';
+  const hasSha = /^[0-9a-f]{40}$/.test(sha);
+  const badge = document.createElement(hasSha && repo ? 'a' : 'span');
   badge.className = 'env-badge';
-  badge.textContent = 'DEV';
+  badge.textContent = hasSha ? `DEV · ${sha.slice(0, 7)}` : 'DEV';
+  if (badge instanceof HTMLAnchorElement) {
+    badge.href = `${repo}/commit/${sha}`;
+    badge.target = '_blank';
+    badge.rel = 'noopener noreferrer';
+    badge.title = sha;
+  }
   document.querySelector('.brand')?.after(badge);
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!);
@@ -224,10 +270,7 @@ if (location.protocol === 'chrome-extension:') {
 $('open-file').addEventListener('click', pickFile);
 $('open-dir').addEventListener('click', pickDirectory);
 
-fileSelect.addEventListener('change', () => {
-  const doc = ws?.docs.find((d) => d.path === fileSelect.value);
-  if (doc) void showDoc(doc, { keepScroll: false });
-});
+filesToggle.addEventListener('click', toggleSidebar);
 
 contentEl.addEventListener('click', (e) => {
   const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
@@ -245,7 +288,6 @@ contentEl.addEventListener('click', (e) => {
   const path = resolvePath(currentDoc.path, href);
   const doc = path ? ws.docs.find((d) => d.path === path) : undefined;
   if (doc) {
-    fileSelect.value = doc.path;
     void showDoc(doc, { keepScroll: false });
   } else {
     setStatus(t('linkNotFound', { href }), 'error');

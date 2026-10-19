@@ -10,6 +10,7 @@
   --code-bg: #f6f8fa;
   --toolbar-h: 48px;
   --toc-w: 280px;
+  --files-w: 240px;
   /* Defaults; the font settings panel overrides --font-body / --font-code. */
   --font-body-default: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
   --font-code-default: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -98,6 +99,7 @@ body {
   max-width: 280px;
 }
 .toolbar button:hover { border-color: var(--accent); }
+.toolbar button[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
 .status {
   margin-left: auto;
   font-size: 12px;
@@ -112,10 +114,40 @@ body {
 /* ---- layout ---- */
 .layout {
   display: grid;
-  grid-template-columns: var(--toc-w) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Wide screens: files (left) | document | TOC (right). DOM order stays files, toc, content
+   (shared with the extension's shell), so narrow screens still stack the TOC above the text. */
+@media (min-width: 801px) {
+  .layout { grid-template-columns: minmax(0, 1fr) var(--toc-w); grid-template-areas: "content toc"; }
+  .layout > .files { grid-area: files; }
+  .layout > .toc { grid-area: toc; }
+  .layout > .content { grid-area: content; }
+  /* Without headings, give the whole width to the document. */
+  .layout:has(> .toc.empty) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "content"; }
+  .layout:has(> .files:not([hidden])) {
+    grid-template-columns: var(--files-w) minmax(0, 1fr) var(--toc-w);
+    grid-template-areas: "files content toc";
+  }
+  .layout:has(> .files:not([hidden])):has(> .toc.empty) {
+    grid-template-columns: var(--files-w) minmax(0, 1fr);
+    grid-template-areas: "files content";
+  }
 }
 
 .toc {
+  position: sticky;
+  top: var(--toolbar-h);
+  height: calc(100vh - var(--toolbar-h));
+  overflow-y: auto;
+  padding: 16px 8px 32px;
+  border-left: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.toc.empty { display: none; }
+
+.files {
   position: sticky;
   top: var(--toolbar-h);
   height: calc(100vh - var(--toolbar-h));
@@ -125,9 +157,32 @@ body {
   font-size: 13px;
   line-height: 1.5;
 }
-.toc.empty { display: none; }
-/* Without headings, give the whole width to the document. */
-.layout:has(> .toc.empty) { grid-template-columns: minmax(0, 1fr); }
+.files[hidden] { display: none; }
+.files ul { list-style: none; margin: 0; padding: 0; }
+.files ul ul { padding-left: 12px; }
+.files summary {
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.files summary:hover { background: var(--bg-soft); }
+.file-tree-file {
+  display: block;
+  width: 100%;
+  padding: 3px 8px 3px 20px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.file-tree-file:hover { color: var(--fg); background: var(--bg-soft); }
+.file-tree-file.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+
 .toc ul { list-style: none; margin: 0; padding: 0; }
 .toc a {
   display: block;
@@ -158,10 +213,17 @@ body {
     position: static;
     height: auto;
     max-height: 40vh;
-    border-right: none;
+    border-left: none;
     border-bottom: 1px solid var(--border);
   }
   .toc.empty { display: none; }
+  .files {
+    position: static;
+    height: auto;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
   .content { padding: 16px 16px 80px; }
   .brand { display: none; }
 }
@@ -372,4 +434,6 @@ body {
   color: #fff;
   background: #bc4c00;
   border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
 }
