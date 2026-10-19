@@ -6,7 +6,15 @@
 
 - Chrome ウェブストアのデベロッパー登録が済んでいる（登録料 $5、一度だけ）
 - Google アカウントで 2 段階認証が有効になっている
-- `npm run pack:ext` で `release/md-browser-<version>.zip` を作成済み
+- リリース PR（`develop` → `main`）がマージ済み
+- **`main` ブランチで** `npm run pack:ext` を実行し、`release/md-browser-<version>.zip` を作成済み（`develop` には未リリースの変更が入るため使わない）
+  ```sh
+  git switch main && git pull --ff-only && npm run pack:ext
+  ```
+- 提出するコミットに `v<version>` タグを付けて push 済み（ストアの版とコードを対応づけるため）
+  ```sh
+  git tag v<version> origin/main && git push origin v<version>
+  ```
 - GitHub Pages に `privacy.html` がデプロイ済み（`main` に push すれば自動でデプロイされる）
 
 ## 1. パッケージ
