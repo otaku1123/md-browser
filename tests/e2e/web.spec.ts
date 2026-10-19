@@ -113,3 +113,28 @@ test('copies code blocks to the clipboard', async ({ page, context }) => {
     'function greet(name: string): string {\n  return `Hello, ${name}`; // comment\n}',
   );
 });
+
+test('prints only the document, on white, even in dark mode', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openSampleFolder(page);
+  await expect(page.locator('.diagram-screen svg')).toHaveCount(2);
+  await expect(page.locator('.diagram-print').first()).toBeHidden();
+  await page.emulateMedia({ media: 'print', colorScheme: 'dark' });
+  for (const sel of ['.toolbar', '#files', '.toc', '.diagram-screen']) await expect(page.locator(sel).first()).toBeHidden();
+  await expect(page.locator('.diagram-print svg')).toHaveCount(2);
+  await expect(page.locator('.diagram-print').first()).toBeVisible();
+  const style = await page.evaluate(() => {
+    const body = getComputedStyle(document.body);
+    const content = document.getElementById('content')!.getBoundingClientRect();
+    return {
+      bg: body.backgroundColor,
+      fg: body.color,
+      contentWidth: content.width,
+      layoutWidth: document.querySelector('.layout')!.getBoundingClientRect().width,
+    };
+  });
+  expect(style.bg).toBe('rgb(255, 255, 255)');
+  expect(style.fg).toBe('rgb(31, 35, 40)'); // light --fg
+  expect(style.contentWidth).toBe(style.layoutWidth);
+});
+
