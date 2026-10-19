@@ -423,4 +423,6 @@ body {
   color: #fff;
   background: #bc4c00;
   border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
 }
