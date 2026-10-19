@@ -43,7 +43,12 @@ jobs:
         working-directory: develop
         env:
           VITE_DEPLOY_ENV: dev
-        run: npm ci && npm run build
+          VITE_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        # The commit is read from the develop checkout (GITHUB_SHA may be a main commit).
+        # Only the dev build gets it, so the production site never shows a version.
+        run: |
+          export VITE_COMMIT_SHA="$(git rev-parse HEAD)"
+          npm ci && npm run build
       - name: Assemble site
         run: |
           mkdir -p site/dev

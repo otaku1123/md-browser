@@ -247,9 +247,19 @@ applyI18n();
 // The develop branch is deployed to /dev/; mark it so it isn't mistaken for production.
 if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   document.title = `${document.title} (dev)`;
-  const badge = document.createElement('span');
+  // Set by the Pages workflow for the dev build only; absent locally.
+  const sha: string = import.meta.env.VITE_COMMIT_SHA ?? '';
+  const repo: string = import.meta.env.VITE_REPO_URL ?? '';
+  const hasSha = /^[0-9a-f]{40}$/.test(sha);
+  const badge = document.createElement(hasSha && repo ? 'a' : 'span');
   badge.className = 'env-badge';
-  badge.textContent = 'DEV';
+  badge.textContent = hasSha ? `DEV · ${sha.slice(0, 7)}` : 'DEV';
+  if (badge instanceof HTMLAnchorElement) {
+    badge.href = `${repo}/commit/${sha}`;
+    badge.target = '_blank';
+    badge.rel = 'noopener noreferrer';
+    badge.title = sha;
+  }
   document.querySelector('.brand')?.after(badge);
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!);
