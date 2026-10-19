@@ -10,10 +10,11 @@
       <strong class="brand">MD Browser</strong>
       <button id="open-file" type="button" data-i18n="openFile">Open file</button>
       <button id="open-dir" type="button" data-i18n="openFolder">Open folder</button>
-      <select id="file-select" hidden></select>
+      <button id="toggle-files" type="button" aria-controls="files" aria-expanded="true" data-i18n="files" hidden>Files</button>
       <span id="status" class="status"></span>
     </header>
     <div class="layout">
+      <nav id="files" class="files" data-i18n-aria="files" hidden></nav>
       <nav id="toc" class="toc empty" data-i18n-aria="toc"></nav>
       <main id="content" class="content markdown-body">
         <section class="welcome">

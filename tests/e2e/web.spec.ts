@@ -52,13 +52,28 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('.markdown-alert-note .markdown-alert-title')).toHaveText('Note');
   await expect(page.locator('img[alt="diagram"]')).toHaveAttribute('src', /^blob:/);
   await expect(page.locator('img.img-missing')).toHaveCount(1);
-  await expect(page.locator('#file-select option')).toHaveCount(3);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await expect(page.locator('#files summary')).toHaveText(['docs']);
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
 });
 
 test('follows relative links between documents', async ({ page }) => {
   await openSampleFolder(page);
   await page.getByRole('link', { name: '別のMDファイル' }).click();
-  await expect(page.locator('#file-select')).toHaveValue('docs/other.md');
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+});
+
+test('opens files from the sidebar and toggles it', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.locator('#files').getByRole('button', { name: 'other.md' }).click();
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  const toggle = page.getByRole('button', { name: 'Files' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await toggle.click();
+  await expect(page.locator('#files')).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(page.locator('#files')).toBeVisible();
 });
 
 test('re-renders when the file changes', async ({ page }) => {
@@ -69,7 +84,7 @@ test('re-renders when the file changes', async ({ page }) => {
 
 test('does not execute scripts embedded in Markdown', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#file-select').selectOption('xss.md');
+  await page.locator('#files').getByRole('button', { name: 'xss.md' }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('XSS');
   await expect(page.locator('a[href^="javascript:" i]')).toHaveCount(0);
   await page.waitForTimeout(500);

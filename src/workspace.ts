@@ -34,6 +34,10 @@ export function isMarkdownName(name: string): boolean {
   return MD_EXT.test(name);
 }
 
+function isSkippedDir(name: string): boolean {
+  return name.startsWith('.') || SKIP_DIRS.has(name);
+}
+
 function stampOf(file: File): string {
   return `${file.lastModified}:${file.size}`;
 }
@@ -79,7 +83,7 @@ async function scanDirectory(dir: FileSystemDirectoryHandle): Promise<DocEntry[]
     for await (const entry of handle.values()) {
       if (++visited > MAX_SCAN) return;
       if (entry.kind === 'directory') {
-        if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
+        if (isSkippedDir(entry.name)) continue;
         await walk(entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`);
       } else if (isMarkdownName(entry.name)) {
         found.push({ path: `${prefix}${entry.name}` });
@@ -115,10 +119,21 @@ export async function fromDirectoryHandle(root: FileSystemDirectoryHandle): Prom
 
 // ---- plain File objects (fallback when handles are unavailable) ----------
 
+/**
+ * Applies the same directory exclusions as scanDirectory() to a webkitRelativePath.
+ * The first segment is the picked folder itself, which (like the scan root) is never skipped.
+ */
+function inSkippedDir(path: string): boolean {
+  return path.split('/').slice(1, -1).some(isSkippedDir);
+}
+
 export function fromFiles(files: File[]): Workspace {
   const byPath = new Map<string, File>();
   for (const f of files) byPath.set(f.webkitRelativePath || f.name, f);
-  const docs = [...byPath.keys()].filter(isMarkdownName).sort().map((path) => ({ path }));
+  const docs = [...byPath.keys()]
+    .filter((p) => isMarkdownName(p) && !inSkippedDir(p))
+    .sort()
+    .map((path) => ({ path }));
   return {
     label: docs.length === 1 ? docs[0].path : `${files.length} files`,
     docs,
