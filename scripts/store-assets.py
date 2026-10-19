@@ -27,6 +27,26 @@ TAGLINE = {
     'ja': ('MD Browser', '目次・Mermaid 図・自動更新<br>Markdown ビューアー'),
 }
 
+# Extra files around release-plan.md so the viewer's file tree has something to show.
+FOLDER_STUBS = {
+    'en': {
+        'CHANGELOG.md': '# Changelog',
+        'docs/architecture.md': '# Architecture',
+        'docs/deployment.md': '# Deployment',
+        'docs/api/endpoints.md': '# API endpoints',
+        'notes/kickoff.md': '# Kickoff notes',
+        'notes/retrospective.md': '# Retrospective',
+    },
+    'ja': {
+        'CHANGELOG.md': '# 変更履歴',
+        'docs/architecture.md': '# システム構成',
+        'docs/deployment.md': '# デプロイ手順',
+        'docs/api/endpoints.md': '# API 一覧',
+        'notes/kickoff.md': '# キックオフ議事録',
+        'notes/retrospective.md': '# ふりかえり',
+    },
+}
+
 failures = []
 
 
@@ -98,6 +118,43 @@ def run_locale(p, loc):
     dark.evaluate("document.querySelectorAll('h2')[1].scrollIntoView()")
     time.sleep(1)
     dark.screenshot(path=str(out / '2-dark.png'))
+
+    print(f'[{loc}] viewer with a folder')
+    # The folder picker can't be driven headlessly, so stand it in with an OPFS folder (as the e2e tests do).
+    files = {'release-plan.md': (ROOT / 'docs' / 'store' / 'demo' / loc / 'release-plan.md').read_text(encoding='utf-8'),
+             **FOLDER_STUBS[loc]}
+    folder = ctx.new_page()
+    folder.goto(f'chrome-extension://{ext_id}/index.html')
+    folder.evaluate('''(files) => {
+      window.showDirectoryPicker = async () => {
+        const root = await navigator.storage.getDirectory();
+        await root.removeEntry('release-v2', { recursive: true }).catch(() => {});
+        const top = await root.getDirectoryHandle('release-v2', { create: true });
+        for (const [rel, text] of Object.entries(files)) {
+          const parts = rel.split('/');
+          let dir = top;
+          for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part, { create: true });
+          const w = await (await dir.getFileHandle(parts.at(-1), { create: true })).createWritable();
+          await w.write(text);
+          await w.close();
+        }
+        return top;
+      };
+    }''', files)
+    folder.click('#open-dir')
+    folder.wait_for_selector('#files .file-tree-file')
+    folder.click('#files button[data-path="release-plan.md"]')
+    folder.wait_for_selector('#files [aria-current="page"][data-path="release-plan.md"]')
+    folder.wait_for_selector('.diagram-mermaid svg', timeout=10000)
+    time.sleep(1)
+    tree = folder.evaluate('''() => ({
+      files: document.querySelectorAll('#files .file-tree-file').length,
+      folders: [...document.querySelectorAll('#files summary')].map((s) => s.textContent),
+      visible: !document.getElementById('files').hidden,
+    })''')
+    check(tree == {'files': len(files), 'folders': ['docs', 'api', 'notes'], 'visible': True},
+          f'file tree lists the folder {tree}')
+    folder.screenshot(path=str(out / '4-folder.png'))
 
     print(f'[{loc}] promo tile')
     tile = ctx.new_page()

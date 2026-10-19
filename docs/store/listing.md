@@ -13,7 +13,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.2.0.zip` |
+| アップロードするファイル | `release/md-browser-1.3.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -46,7 +46,7 @@ FEATURES
 • Choose your own fonts for body text and code
 • Relative images and links to other .md files just work
 • Light and dark themes (follows your system setting)
-• Built-in viewer (click the toolbar icon) to open files or whole folders
+• Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree
 
 PRIVACY
 Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only re-reads the Markdown file you are currently viewing.
@@ -77,7 +77,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • 本文とコードのフォントを好みに変更
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
 • ライト / ダークテーマ（OS の設定に追従）
-• ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示）
+• ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリー付き）
 
 プライバシー
 すべての処理はブラウザ内で完結します。データの収集・送信やアクセス解析は一切行いません。拡張機能が再読み込みするのは、表示中の Markdown ファイルだけです。
@@ -96,7 +96,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 | 種類 | サイズ | ファイル |
 |---|---|---|
 | ストアアイコン | 128×128 | `store-icon-128.png` |
-| スクリーンショット | 1280×800 | `en/1-document.png`, `en/2-dark.png`, `en/3-setup.png`（日本語版は `ja/` 配下） |
+| スクリーンショット | 1280×800 | `en/1-document.png`, `en/2-dark.png`, `en/3-setup.png`, `en/4-folder.png`（日本語版は `ja/` 配下） |
 | 小さいプロモーション タイル | 440×280 | `en/promo-small-440x280.png`（日本語版は `ja/` 配下） |
 
 作り直すとき: `npm run build:ext` の後に `python scripts/store-assets.py <一時ディレクトリ>` を実行する（Playwright for Python が必要）。
