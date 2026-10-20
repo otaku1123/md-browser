@@ -4,6 +4,7 @@ import { renderMarkdown } from '../core/render';
 import { renderDiagrams } from '../core/diagrams';
 import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
+import { enableImageZoom } from '../core/image-zoom';
 import { createToc } from '../core/toc';
 import { mountFontSettings } from '../core/font-settings';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
@@ -102,6 +103,7 @@ async function main(): Promise<void> {
   await render(current, false);
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
   onThemeChange(() => void renderDiagrams(content));
+  enableImageZoom(content);
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
   try {

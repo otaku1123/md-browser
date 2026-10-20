@@ -217,6 +217,32 @@ test('applies the folder scan limit from the settings', async ({ page }) => {
   await expect(page.locator('.markdown-body h1')).toHaveText('Big');
 });
 
+test('limits the image size and shows an image at full size on click', async ({ page }) => {
+  await openSampleFolder(page);
+  const img = page.locator('img[alt="diagram"]');
+  const limits = () => img.evaluate((el) => ({ w: getComputedStyle(el).maxWidth, h: getComputedStyle(el).maxHeight }));
+  expect(await limits()).toEqual({ w: '100%', h: 'none' });
+
+  await page.locator('.font-settings-toggle').click();
+  await page
+    .locator('.font-settings-panel')
+    .getByRole('radiogroup', { name: 'Images' })
+    .getByRole('radio', { name: 'Medium', exact: true })
+    .check();
+  expect(await limits()).toEqual({ w: 'min(100%, 480px)', h: '480px' });
+  await page.locator('.font-settings-toggle').click();
+
+  await img.click();
+  const zoom = page.getByRole('dialog', { name: 'diagram' });
+  await expect(zoom).toBeVisible();
+  await expect(zoom.locator('img')).toHaveJSProperty('naturalWidth', 240);
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+  await img.click();
+  await zoom.click();
+  await expect(zoom).toHaveCount(0);
+});
+
 const LIGHT_NODE = 'rgb(236, 236, 255)'; // mermaid "default" theme
 const DARK_NODE = 'rgb(31, 32, 32)'; // mermaid "dark" theme
 const nodeFill = (page: Page) =>
