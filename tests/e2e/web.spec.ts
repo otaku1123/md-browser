@@ -101,6 +101,54 @@ test('remembers font settings across reloads', async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--font-code'))).toContain('Courier New');
 });
 
+const LIGHT_NODE = 'rgb(236, 236, 255)'; // mermaid "default" theme
+const DARK_NODE = 'rgb(31, 32, 32)'; // mermaid "dark" theme
+const nodeFill = (page: Page) =>
+  page.locator('.diagram-mermaid svg').first().evaluate((svg) => getComputedStyle(svg.querySelector('rect')!).fill);
+const bodyBg = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+test('switches the theme from the display settings and redraws diagrams', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  expect(await nodeFill(page)).toBe(LIGHT_NODE);
+
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: 'Dark' }).check();
+  expect(await bodyBg(page)).toBe('rgb(13, 17, 23)');
+  await expect.poll(() => nodeFill(page)).toBe(DARK_NODE);
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:theme'))).toBe('"dark"');
+
+  // Printing stays light even when dark is picked by hand.
+  await page.emulateMedia({ media: 'print' });
+  expect(await bodyBg(page)).toBe('rgb(255, 255, 255)');
+  await expect(page.locator('.diagram-print').first()).toBeVisible();
+  await page.emulateMedia({ media: 'screen' });
+
+  await page.getByRole('radio', { name: 'Light' }).check();
+  expect(await bodyBg(page)).toBe('rgb(255, 255, 255)');
+  await expect.poll(() => nodeFill(page)).toBe(LIGHT_NODE);
+});
+
+test('redraws diagrams when the OS theme changes after loading', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  expect(await nodeFill(page)).toBe(LIGHT_NODE);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(() => nodeFill(page)).toBe(DARK_NODE);
+  await expect(page.locator('.diagram-mermaid svg')).toHaveCount(4); // screen + print copies
+});
+
+test('remembers the theme across reloads', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto('/');
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: 'Dark' }).check();
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.locator('.font-settings-toggle').click();
+  await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
+});
+
 test('copies code blocks to the clipboard', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await openSampleFolder(page);

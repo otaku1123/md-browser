@@ -2,6 +2,7 @@
 import css from '../style.css?inline';
 import { renderMarkdown } from '../core/render';
 import { renderDiagrams } from '../core/diagrams';
+import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
 import { createToc } from '../core/toc';
 import { mountFontSettings } from '../core/font-settings';
@@ -92,6 +93,8 @@ async function main(): Promise<void> {
   }
 
   await render(current, false);
+  // Diagrams carry their theme's colours, so redraw them when the theme changes.
+  onThemeChange(() => void renderDiagrams(content));
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
   try {

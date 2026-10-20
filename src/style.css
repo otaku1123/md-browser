@@ -32,9 +32,37 @@
   color-scheme: light;
 }
 
-/* Screen only: printing always uses the light palette (white paper). */
+/* Dark palette: the OS is dark and the user didn't pick light, or the user picked dark (theme.ts).
+   Screen only: printing always uses the light palette (white paper). */
 @media screen and (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --bg-soft: #151b23;
+    --fg: #e6edf3;
+    --fg-muted: #9198a1;
+    --border: #3d444d;
+    --accent: #4493f8;
+    --accent-soft: #121d2f;
+    --error: #f85149;
+    --code-bg: #151b23;
+
+    --hl-keyword: #ff7b72;
+    --hl-string: #a5d6ff;
+    --hl-number: #79c0ff;
+    --hl-comment: #9198a1;
+    --hl-title: #d2a8ff;
+    --hl-attr: #ffa657;
+
+    --alert-note: #4493f8;
+    --alert-tip: #3fb950;
+    --alert-important: #ab7df8;
+    --alert-warning: #d29922;
+    --alert-caution: #f85149;
+    color-scheme: dark;
+  }
+}
+@media screen {
+  :root[data-theme="dark"] {
     --bg: #0d1117;
     --bg-soft: #151b23;
     --fg: #e6edf3;
@@ -414,7 +442,7 @@ body {
 }
 .font-settings-panel[hidden] { display: none; }
 .font-settings-title { margin: 0 0 8px; font-weight: 600; }
-.font-settings-row { display: grid; grid-template-columns: 4.5em 1fr; align-items: center; gap: 8px; margin: 0 0 8px; }
+.font-settings-row, .theme-setting { display: grid; grid-template-columns: 4.5em 1fr; align-items: center; gap: 8px; margin: 0 0 8px; }
 .font-settings-row input {
   min-width: 0;
   font: inherit;
@@ -425,6 +453,9 @@ body {
   border-radius: 6px;
 }
 .font-settings-row input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.theme-options { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.theme-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.theme-options input { margin: 0; accent-color: var(--accent); }
 .font-settings-hint { margin: 0 0 10px; font-size: 12px; color: var(--fg-muted); }
 
 /* ---- dev deployment marker ---- */
