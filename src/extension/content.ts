@@ -6,10 +6,13 @@ import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
 import { createToc } from '../core/toc';
 import { mountFontSettings } from '../core/font-settings';
+import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
 import { MSG_READ_SELF, type ReadSelfResponse } from './messages';
 
 const POLL_MS = 1000;
+/** Background tabs still poll, less often, so the tab icon can flag changes. */
+const HIDDEN_POLL_EVERY = 5;
 
 /** Chrome shows text files as <body><pre>…</pre></body>; anything else is not ours to touch. */
 function readPlainTextSource(): string | null {
@@ -68,6 +71,7 @@ async function main(): Promise<void> {
   if (initial === null) return;
 
   const { content, tocEl, status } = buildShell();
+  initFavicon();
   const toc = createToc(tocEl);
   let current = initial;
   let seq = 0;
@@ -89,7 +93,8 @@ async function main(): Promise<void> {
     else if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
     toc.update();
     const h1 = items.find((i) => i.level === 1)?.text;
-    document.title = h1 ? `${h1} - ${fileName()}` : fileName();
+    // File name first: narrow tabs only show the start of the title.
+    document.title = h1 ? `${fileName()} - ${h1}` : fileName();
   }
 
   await render(current, false);
@@ -102,13 +107,16 @@ async function main(): Promise<void> {
   } catch (err) {
     status.textContent = t('autoReloadOff', { error: err instanceof Error ? err.message : String(err) });
     status.classList.add('error');
+    faviconError(true);
     return;
   }
   status.textContent = t('autoReloadOn');
 
   let busy = false;
+  let hiddenTicks = 0;
   window.setInterval(async () => {
-    if (busy || document.hidden) return;
+    if (busy) return;
+    if (document.hidden && ++hiddenTicks % HIDDEN_POLL_EVERY !== 0) return;
     busy = true;
     try {
       const next = await fetchSource();
@@ -117,10 +125,13 @@ async function main(): Promise<void> {
         await render(next, true);
         status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
         status.classList.remove('error');
+        faviconUpdated();
       }
+      faviconError(false);
     } catch {
       status.textContent = t('fileUnreadable');
       status.classList.add('error');
+      faviconError(true);
     } finally {
       busy = false;
     }

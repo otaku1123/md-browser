@@ -121,3 +121,10 @@ test('adds copy buttons to code blocks', async ({ context, workdir }) => {
   await button.click();
   await expect(button).toHaveText('コピーしました');
 });
+
+test('marks the tab with the file name first and its own icon', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page).toHaveTitle('README.md - MD Browser サンプル');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /^data:image\/svg\+xml,/);
+});

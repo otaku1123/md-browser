@@ -7,6 +7,7 @@ import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
+import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
   fromDirectoryHandle,
@@ -19,6 +20,8 @@ import {
 import { clearRecent, loadRecent, saveRecent, type Recent, type RecentHandle } from './recent';
 
 const POLL_MS = 1000;
+/** Background tabs still poll, less often, so the tab icon can flag changes. */
+const HIDDEN_POLL_EVERY = 5;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const contentEl = $<HTMLElement>('content');
@@ -42,6 +45,7 @@ let pollTimer: number | undefined;
 /** Handle behind the open workspace, kept so a reload can reopen it (null: can't be kept). */
 let recentHandle: RecentHandle | null = null;
 let polling = false;
+let hiddenTicks = 0;
 
 // ---- rendering ------------------------------------------------------------
 
@@ -54,6 +58,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
     content = await workspace.read(doc);
   } catch (err) {
     setStatus(t('loadFailed', { path: doc.path, error: errMsg(err) }), 'error');
+    faviconError(true);
     return;
   }
 
@@ -85,7 +90,11 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   window.scrollTo(0, opts.keepScroll ? scrollY : 0);
   fileTree.setActive(doc.path);
   toc.update();
-  document.title = `${doc.path} - MD Browser`;
+  // File name first: narrow tabs only show the start of the title.
+  const slash = doc.path.lastIndexOf('/');
+  const dir = slash < 0 ? '' : ` - ${doc.path.slice(0, slash)}`;
+  document.title = `${doc.path.slice(slash + 1)}${dir} - MD Browser`;
+  faviconError(false);
   setStatus(
     `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
   );
@@ -152,13 +161,18 @@ function startPolling(): void {
 }
 
 async function poll(): Promise<void> {
-  if (polling || document.hidden || !ws || !currentDoc) return;
+  if (polling || !ws || !currentDoc) return;
+  if (document.hidden && ++hiddenTicks % HIDDEN_POLL_EVERY !== 0) return;
   polling = true;
   try {
     const stamp = await ws.stat(currentDoc);
-    if (stamp !== lastStamp) await showDoc(currentDoc, { keepScroll: true });
+    if (stamp !== lastStamp) {
+      await showDoc(currentDoc, { keepScroll: true });
+      faviconUpdated();
+    }
   } catch (err) {
     setStatus(t('fileGone', { path: currentDoc.path, error: errMsg(err) }), 'error');
+    faviconError(true);
   } finally {
     polling = false;
   }
@@ -297,6 +311,7 @@ function isAbort(err: unknown): boolean {
 // ---- event wiring ------------------------------------------------------------
 
 applyI18n();
+initFavicon();
 // The develop branch is deployed to /dev/; mark it so it isn't mistaken for production.
 if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   document.title = `${document.title} (dev)`;
