@@ -13,6 +13,8 @@ import { MSG_READ_SELF, type ReadSelfResponse } from './messages';
 const POLL_MS = 1000;
 /** Background tabs still poll, less often, so the tab icon can flag changes. */
 const HIDDEN_POLL_EVERY = 5;
+/** Consecutive failed polls before reporting: editors and sync tools briefly replace files. */
+const FAIL_LIMIT = 3;
 
 /** Chrome shows text files as <body><pre>…</pre></body>; anything else is not ours to touch. */
 function readPlainTextSource(): string | null {
@@ -114,6 +116,7 @@ async function main(): Promise<void> {
 
   let busy = false;
   let hiddenTicks = 0;
+  let failures = 0;
   window.setInterval(async () => {
     if (busy) return;
     if (document.hidden && ++hiddenTicks % HIDDEN_POLL_EVERY !== 0) return;
@@ -126,9 +129,14 @@ async function main(): Promise<void> {
         status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
         status.classList.remove('error');
         faviconUpdated();
+      } else if (failures >= FAIL_LIMIT) {
+        status.textContent = t('autoReloadOn');
+        status.classList.remove('error');
       }
+      failures = 0;
       faviconError(false);
     } catch {
+      if (++failures < FAIL_LIMIT) return;
       status.textContent = t('fileUnreadable');
       status.classList.add('error');
       faviconError(true);
