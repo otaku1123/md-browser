@@ -39,6 +39,7 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Open file' })).toBeVisible();
   await expect(page.locator('.toc')).toHaveClass(/empty/);
+  await expect(page.locator('#workspace-name')).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
 
@@ -55,6 +56,7 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
   await expect(page.locator('#files summary')).toHaveText(['docs']);
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(page.locator('#workspace-name')).toHaveText('sample/');
 });
 
 test('opens another folder in the same tab', async ({ page }) => {
@@ -72,6 +74,7 @@ test('opens another folder in the same tab', async ({ page }) => {
   await page.getByRole('button', { name: 'Open folder' }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Notes');
   await expect(page.locator('#status')).toHaveText(/^notes\.md · /);
+  await expect(page.locator('#workspace-name')).toHaveText('other/');
   await page.waitForTimeout(1500); // a poll of the previous folder's document would report an error
   await expect(page.locator('#status')).not.toHaveClass(/error/);
 });
