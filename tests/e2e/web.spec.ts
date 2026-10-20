@@ -57,6 +57,34 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
 });
 
+test('reopens the last folder and document after a reload', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.locator('#files [data-path="docs/other.md"]').click();
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await page.waitForTimeout(300); // the remembered document is saved asynchronously
+  await page.reload();
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await expect(page.locator('.welcome')).toHaveCount(0);
+});
+
+test('offers a button when the permission must be asked again', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.waitForTimeout(300);
+  // Chrome asks again after the permission has lapsed; reproduce that state.
+  await page.addInitScript(() => {
+    let asked = false;
+    FileSystemHandle.prototype.queryPermission = async () => (asked ? 'granted' : 'prompt');
+    FileSystemHandle.prototype.requestPermission = async () => ((asked = true), 'granted');
+  });
+  await page.reload();
+  const button = page.getByRole('button', { name: 'Reopen sample/' });
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect(button).toHaveCount(0); // the welcome screen is gone
+});
+
 test('follows relative links between documents', async ({ page }) => {
   await openSampleFolder(page);
   await page.getByRole('link', { name: '別のMDファイル' }).click();
