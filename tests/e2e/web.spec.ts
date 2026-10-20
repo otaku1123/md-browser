@@ -39,6 +39,7 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Open file' })).toBeVisible();
   await expect(page.locator('.toc')).toHaveClass(/empty/);
+  await expect(page.locator('#workspace-name')).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
 
@@ -55,6 +56,7 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
   await expect(page.locator('#files summary')).toHaveText(['docs']);
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(page.locator('#workspace-name')).toHaveText('sample/');
 });
 
 test('reopens the last folder and document after a reload', async ({ page }) => {

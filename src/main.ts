@@ -112,6 +112,10 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   // A newer open replaces the remembered one, even when it can't be remembered itself.
   if (!recentHandle) void clearRecent();
   $('reopen').hidden = true;
+  const nameEl = $('workspace-name');
+  nameEl.textContent = next.label;
+  nameEl.title = next.label;
+  nameEl.hidden = false;
   fileTree.render(next.docs.map((d) => d.path));
   updateSidebar();
   const initial =
