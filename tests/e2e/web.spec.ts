@@ -59,6 +59,26 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('#workspace-name')).toHaveText('sample/');
 });
 
+test('opens another folder in the same tab', async ({ page }) => {
+  await openSampleFolder(page);
+  // The second pick returns a different folder, without the first one's documents.
+  await page.evaluate(() => {
+    window.showDirectoryPicker = async () => {
+      const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('other', { create: true });
+      const w = await (await dir.getFileHandle('notes.md', { create: true })).createWritable();
+      await w.write('# Notes');
+      await w.close();
+      return dir;
+    };
+  });
+  await page.getByRole('button', { name: 'Open folder' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('Notes');
+  await expect(page.locator('#status')).toHaveText(/^notes\.md · /);
+  await expect(page.locator('#workspace-name')).toHaveText('other/');
+  await page.waitForTimeout(1500); // a poll of the previous folder's document would report an error
+  await expect(page.locator('#status')).not.toHaveClass(/error/);
+});
+
 test('reopens the last folder and document after a reload', async ({ page }) => {
   await openSampleFolder(page);
   await page.locator('#files [data-path="docs/other.md"]').click();

@@ -111,7 +111,9 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   recentHandle = opts.handle ?? null;
   // A newer open replaces the remembered one, even when it can't be remembered itself.
   if (!recentHandle) void clearRecent();
-  $('reopen').hidden = true;
+  // The button lives in the welcome screen, which is gone once a document has been shown.
+  const reopenButton = document.getElementById('reopen');
+  if (reopenButton) reopenButton.hidden = true;
   const nameEl = $('workspace-name');
   nameEl.textContent = next.label;
   nameEl.title = next.label;
