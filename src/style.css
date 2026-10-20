@@ -386,6 +386,18 @@ body {
 /* ---- welcome ---- */
 .welcome { padding-top: 40px; }
 .welcome h1 { border-bottom: none; }
+.welcome .reopen {
+  margin: 0 0 16px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.welcome .reopen:hover { text-decoration: underline; }
 
 /* ---- highlight.js tokens ---- */
 .hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-type, .hljs-meta .hljs-keyword { color: var(--hl-keyword); }
