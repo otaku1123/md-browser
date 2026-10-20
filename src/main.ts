@@ -8,6 +8,7 @@ import { renderDiagrams } from './core/diagrams';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
+import { scanLimitStore } from './core/scan-limit';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
   fromDirectoryHandle,
@@ -100,7 +101,9 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   faviconError(false);
   pollFailures = 0;
   setStatus(
-    `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
+    // Warning first: the status line is cut off at the end when it doesn't fit.
+    (workspace.truncatedAt ? `${t('scanTruncated', { max: workspace.truncatedAt.toLocaleString() })} · ` : '') +
+      `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
   );
 }
 
@@ -195,6 +198,11 @@ async function poll(): Promise<void> {
 
 // ---- opening files --------------------------------------------------------
 
+/** Scans a folder with the limit from the settings panel. */
+async function scanFolder(dir: FileSystemDirectoryHandle): Promise<Workspace> {
+  return fromDirectoryHandle(dir, await scanLimitStore().load());
+}
+
 const MD_ACCEPT = { 'text/markdown': ['.md', '.markdown', '.mdown', '.mkd'] };
 
 async function pickFile(): Promise<void> {
@@ -218,7 +226,7 @@ async function pickDirectory(): Promise<void> {
     try {
       const dir = await window.showDirectoryPicker({ mode: 'read' });
       setStatus(t('scanning', { name: dir.name }));
-      await openWorkspace(await fromDirectoryHandle(dir), { handle: dir });
+      await openWorkspace(await scanFolder(dir), { handle: dir });
     } catch (err) {
       if (!isAbort(err)) setStatus(errMsg(err), 'error');
     }
@@ -255,7 +263,7 @@ async function handleDrop(e: DragEvent): Promise<void> {
   const dir = handles.find((h): h is FileSystemDirectoryHandle => h.kind === 'directory');
   if (dir) {
     setStatus(t('scanning', { name: dir.name }));
-    await openWorkspace(await fromDirectoryHandle(dir), { handle: dir });
+    await openWorkspace(await scanFolder(dir), { handle: dir });
     return;
   }
   const mdHandle = handles.find(
@@ -266,6 +274,18 @@ async function handleDrop(e: DragEvent): Promise<void> {
     return;
   }
   if (files.length) await openWorkspace(fromFiles(files));
+}
+
+/** Scans the open folder again (after the scan limit changed), staying on the current document. */
+async function rescanFolder(): Promise<void> {
+  if (recentHandle?.kind !== 'directory') return; // a single file or dropped files: nothing to scan
+  const dir = recentHandle;
+  setStatus(t('scanning', { name: dir.name }));
+  try {
+    await openWorkspace(await scanFolder(dir), { handle: dir, docPath: currentDoc?.path });
+  } catch (err) {
+    setStatus(errMsg(err), 'error');
+  }
 }
 
 // ---- reopening after a reload ------------------------------------------------
@@ -279,7 +299,7 @@ async function reopen({ handle, docPath }: Recent): Promise<void> {
   try {
     if (handle.kind === 'directory') {
       setStatus(t('scanning', { name: handle.name }));
-      await openWorkspace(await fromDirectoryHandle(handle), { handle, docPath });
+      await openWorkspace(await scanFolder(handle), { handle, docPath });
     } else {
       await openWorkspace(fromFileHandle(handle), { handle, docPath });
     }
@@ -345,7 +365,7 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   }
   document.querySelector('.brand')?.after(badge);
 }
-mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!);
+mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl));
 if (location.protocol === 'chrome-extension:') {

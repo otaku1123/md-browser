@@ -1,8 +1,9 @@
 // Display settings panel (gear button): theme, text size, content width, and fonts for the document body
-// and code. Fonts are referenced by name (installed on the user's computer); unknown names fall back
+// and code, plus the folder scan limit in the viewer. Fonts are referenced by name (installed on the user's computer); unknown names fall back
 // to the default stack.
 import { t } from '../i18n';
 import { createSettingsStore } from './settings-store';
+import { normalizeScanLimit, scanLimitStore, SCAN_LIMIT_MAX, SCAN_LIMIT_MIN } from './scan-limit';
 import { applyTheme, normalizeTheme, type ThemePreference } from './theme';
 
 // Values for the document only: the toolbar and TOC keep their size.
@@ -109,8 +110,46 @@ function choiceRow<V extends string>(
   return { row, set: (value) => void (inputs.get(value)!.checked = true) };
 }
 
+/** A number field for the folder scan limit; saved when committed (blur / Enter), clamped to range. */
+function scanLimitRow(id: string, onChange: (limit: number) => void): HTMLElement {
+  const limits = scanLimitStore();
+  const section = document.createElement('div');
+  section.className = 'scan-limit-setting';
+  const row = document.createElement('label');
+  row.className = 'font-settings-row';
+  const text = document.createElement('span');
+  text.textContent = t('scanLimit');
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.id = `${id}-scan-limit`;
+  input.min = String(SCAN_LIMIT_MIN);
+  input.max = String(SCAN_LIMIT_MAX);
+  input.step = '100';
+  input.inputMode = 'numeric';
+  input.addEventListener('change', () => {
+    const value = normalizeScanLimit(input.value);
+    input.value = String(value);
+    void limits.save(value).then(() => onChange(value));
+  });
+  row.append(text, input);
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('scanLimitHint', { min: SCAN_LIMIT_MIN.toLocaleString(), max: SCAN_LIMIT_MAX.toLocaleString() });
+  section.append(row, hint);
+
+  const show = (value: number) => {
+    if (document.activeElement !== input) input.value = String(value);
+  };
+  void limits.load().then(show);
+  limits.onChange(show);
+  return section;
+}
+
 /** Adds the settings (gear) button and its panel to the end of the toolbar. */
-export function mountFontSettings(toolbar: HTMLElement): void {
+export function mountFontSettings(
+  toolbar: HTMLElement,
+  opts: { onScanLimitChange?: (limit: number) => void } = {},
+): void {
   const store = createSettingsStore(STORAGE_KEY, normalize);
   const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
   let current: FontSettings = { ...EMPTY };
@@ -189,6 +228,8 @@ export function mountFontSettings(toolbar: HTMLElement): void {
     syncInputs(true);
   });
   panel.append(hint, reset);
+  // Only the viewer opens folders; the file:// page shows a single document.
+  if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
   wrap.append(toggle, panel);
   toolbar.append(wrap);
 

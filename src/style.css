@@ -482,6 +482,9 @@ body {
 .choice-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .choice-options input { margin: 0; accent-color: var(--accent); }
 .font-settings-hint { margin: 0 0 10px; font-size: 12px; color: var(--fg-muted); }
+/* Not a display setting (and not reset with them): set apart from the rows above. */
+.scan-limit-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.scan-limit-setting .font-settings-hint { margin-bottom: 0; }
 
 /* ---- dev deployment marker ---- */
 .env-badge {

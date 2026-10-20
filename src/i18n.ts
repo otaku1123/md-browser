@@ -17,6 +17,7 @@ const en = {
   updatedAt: 'updated {time}',
   noMarkdown: 'No Markdown files found: {label}',
   scanning: 'Scanning {name}/ …',
+  scanTruncated: '⚠ Folder too large: scanned only {max} entries, shallowest first (limit can be raised in ⚙)',
   reopen: 'Reopen {name}',
   reopenFailed: 'Cannot reopen {name} (moved or deleted?): {error}',
   fileGone: 'Cannot access the file (moved or deleted?): {path} ({error})',
@@ -64,6 +65,8 @@ const en = {
   fontDefault: 'Default',
   fontHint: 'Enter the name of a font installed on your computer. Unknown fonts fall back to the default.',
   fontReset: 'Reset to default',
+  scanLimit: 'Scan limit',
+  scanLimitHint: 'Entries scanned when opening a folder ({min}–{max}). Changing it rescans the open folder.',
 } as const;
 
 type Key = keyof typeof en;
@@ -84,6 +87,7 @@ const ja: Record<Key, string> = {
   updatedAt: '{time} 更新',
   noMarkdown: 'Markdown ファイルが見つかりません: {label}',
   scanning: '{name}/ をスキャン中…',
+  scanTruncated: '⚠ フォルダが大きいため、浅い階層から {max} 件までのみ読み込みました（上限は ⚙ で変更可）',
   reopen: '前回の {name} を開く',
   reopenFailed: '{name} を開けません（削除・移動された可能性）: {error}',
   fileGone: 'ファイルにアクセスできません（削除・移動された可能性）: {path} ({error})',
@@ -131,6 +135,8 @@ const ja: Record<Key, string> = {
   fontDefault: '既定',
   fontHint: 'PC にインストールされているフォント名を入力してください。見つからない場合は既定のフォントで表示します。',
   fontReset: '既定に戻す',
+  scanLimit: '走査上限',
+  scanLimitHint: 'フォルダを開くときに調べる件数（{min}〜{max}）。変更すると、開いているフォルダを読み直します。',
 };
 
 export const lang: 'ja' | 'en' = (navigator.language || 'en').toLowerCase().startsWith('ja') ? 'ja' : 'en';
