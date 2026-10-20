@@ -19,20 +19,32 @@ describe('sanitizeFontName', () => {
   });
 });
 
+const DEFAULTS = { body: '', code: '', size: 'normal', width: 'normal' } as const;
+
 describe('applyFonts', () => {
   afterEach(() => document.documentElement.removeAttribute('style'));
 
   it('sets the CSS variables with the default stack as fallback', () => {
-    applyFonts({ body: 'Georgia', code: 'Menlo' });
+    applyFonts({ ...DEFAULTS, body: 'Georgia', code: 'Menlo' });
     const style = document.documentElement.style;
     expect(style.getPropertyValue('--font-body')).toBe('"Georgia", var(--font-body-default)');
     expect(style.getPropertyValue('--font-code')).toBe('"Menlo", var(--font-code-default)');
   });
 
   it('removes the override when a font is cleared', () => {
-    applyFonts({ body: 'Georgia', code: 'Menlo' });
-    applyFonts({ body: '', code: '' });
+    applyFonts({ ...DEFAULTS, body: 'Georgia', code: 'Menlo' });
+    applyFonts(DEFAULTS);
     expect(document.documentElement.style.getPropertyValue('--font-body')).toBe('');
     expect(document.documentElement.style.getPropertyValue('--font-code')).toBe('');
+  });
+
+  it('sets the document size and width, and clears them on default', () => {
+    const style = document.documentElement.style;
+    applyFonts({ ...DEFAULTS, size: 'large', width: 'full' });
+    expect(style.getPropertyValue('--doc-font-size')).toBe('18px');
+    expect(style.getPropertyValue('--doc-max-width')).toBe('none');
+    applyFonts(DEFAULTS);
+    expect(style.getPropertyValue('--doc-font-size')).toBe('');
+    expect(style.getPropertyValue('--doc-max-width')).toBe('');
   });
 });

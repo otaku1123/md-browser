@@ -5,6 +5,7 @@ import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
 import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
+import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
@@ -15,6 +16,7 @@ import {
   type DocEntry,
   type Workspace,
 } from './workspace';
+import { clearRecent, loadRecent, saveRecent, type Recent, type RecentHandle } from './recent';
 
 const POLL_MS = 1000;
 
@@ -37,6 +39,8 @@ let lastStamp = '';
 let renderSeq = 0;
 let releaseAssets: () => void = () => {};
 let pollTimer: number | undefined;
+/** Handle behind the open workspace, kept so a reload can reopen it (null: can't be kept). */
+let recentHandle: RecentHandle | null = null;
 let polling = false;
 
 // ---- rendering ------------------------------------------------------------
@@ -71,7 +75,10 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   contentEl.replaceChildren(staging.content);
   releaseAssets();
   releaseAssets = assets.release;
-  if (currentDoc !== doc) toc.reset();
+  if (currentDoc !== doc) {
+    toc.reset();
+    if (recentHandle) void saveRecent({ handle: recentHandle, docPath: doc.path });
+  }
   currentDoc = doc;
   lastStamp = content.stamp;
   toc.render(tocItems);
@@ -86,16 +93,22 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
 
 // ---- workspace / watching -------------------------------------------------
 
-async function openWorkspace(next: Workspace): Promise<void> {
+async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; docPath?: string } = {}): Promise<void> {
   if (next.docs.length === 0) {
     setStatus(t('noMarkdown', { label: next.label }), 'error');
     return;
   }
   ws = next;
+  recentHandle = opts.handle ?? null;
+  // A newer open replaces the remembered one, even when it can't be remembered itself.
+  if (!recentHandle) void clearRecent();
+  $('reopen').hidden = true;
   fileTree.render(next.docs.map((d) => d.path));
   updateSidebar();
   const initial =
-    next.docs.find((d) => /^(readme|index)\.md$/i.test(d.path)) ?? next.docs[0];
+    next.docs.find((d) => d.path === opts.docPath) ??
+    next.docs.find((d) => /^(readme|index)\.md$/i.test(d.path)) ??
+    next.docs[0];
   await showDoc(initial, { keepScroll: false });
   startPolling();
 }
@@ -161,7 +174,7 @@ async function pickFile(): Promise<void> {
       const [handle] = await window.showOpenFilePicker({
         types: [{ description: 'Markdown', accept: MD_ACCEPT }],
       });
-      await openWorkspace(fromFileHandle(handle));
+      await openWorkspace(fromFileHandle(handle), { handle });
     } catch (err) {
       if (!isAbort(err)) setStatus(errMsg(err), 'error');
     }
@@ -176,7 +189,7 @@ async function pickDirectory(): Promise<void> {
     try {
       const dir = await window.showDirectoryPicker({ mode: 'read' });
       setStatus(t('scanning', { name: dir.name }));
-      await openWorkspace(await fromDirectoryHandle(dir));
+      await openWorkspace(await fromDirectoryHandle(dir), { handle: dir });
     } catch (err) {
       if (!isAbort(err)) setStatus(errMsg(err), 'error');
     }
@@ -213,17 +226,57 @@ async function handleDrop(e: DragEvent): Promise<void> {
   const dir = handles.find((h): h is FileSystemDirectoryHandle => h.kind === 'directory');
   if (dir) {
     setStatus(t('scanning', { name: dir.name }));
-    await openWorkspace(await fromDirectoryHandle(dir));
+    await openWorkspace(await fromDirectoryHandle(dir), { handle: dir });
     return;
   }
   const mdHandle = handles.find(
     (h): h is FileSystemFileHandle => h.kind === 'file' && isMarkdownName(h.name),
   );
   if (mdHandle) {
-    await openWorkspace(fromFileHandle(mdHandle));
+    await openWorkspace(fromFileHandle(mdHandle), { handle: mdHandle });
     return;
   }
   if (files.length) await openWorkspace(fromFiles(files));
+}
+
+// ---- reopening after a reload ------------------------------------------------
+
+function recentName(handle: RecentHandle): string {
+  return handle.kind === 'directory' ? `${handle.name}/` : handle.name;
+}
+
+async function reopen({ handle, docPath }: Recent): Promise<void> {
+  if (ws) return; // the user opened something else meanwhile
+  try {
+    if (handle.kind === 'directory') {
+      setStatus(t('scanning', { name: handle.name }));
+      await openWorkspace(await fromDirectoryHandle(handle), { handle, docPath });
+    } else {
+      await openWorkspace(fromFileHandle(handle), { handle, docPath });
+    }
+  } catch (err) {
+    setStatus(t('reopenFailed', { name: recentName(handle), error: errMsg(err) }), 'error');
+    void clearRecent();
+  }
+}
+
+/**
+ * Reopens the last file / folder. Chrome often keeps the read permission across a reload;
+ * otherwise asking again needs a click, so offer a button instead.
+ */
+async function restoreRecent(): Promise<void> {
+  const recent = await loadRecent();
+  if (!recent || ws) return;
+  const state = await recent.handle.queryPermission({ mode: 'read' }).catch(() => 'denied' as const);
+  if (state === 'granted') return reopen(recent);
+  if (state !== 'prompt') return;
+  const button = $<HTMLButtonElement>('reopen');
+  button.textContent = t('reopen', { name: recentName(recent.handle) });
+  button.hidden = false;
+  button.onclick = async () => {
+    const answer = await recent.handle.requestPermission({ mode: 'read' }).catch(() => 'denied' as const);
+    if (answer === 'granted') await reopen(recent);
+  };
 }
 
 // ---- helpers ---------------------------------------------------------------
@@ -263,6 +316,8 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   document.querySelector('.brand')?.after(badge);
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!);
+// Diagrams carry their theme's colours, so redraw them when the theme changes.
+onThemeChange(() => void renderDiagrams(contentEl));
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
 }
@@ -271,6 +326,7 @@ $('open-file').addEventListener('click', pickFile);
 $('open-dir').addEventListener('click', pickDirectory);
 
 filesToggle.addEventListener('click', toggleSidebar);
+void restoreRecent();
 
 contentEl.addEventListener('click', (e) => {
   const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
