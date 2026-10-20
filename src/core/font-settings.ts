@@ -111,7 +111,7 @@ function choiceRow<V extends string>(
 }
 
 /** A number field for the folder scan limit; saved when committed (blur / Enter), clamped to range. */
-function scanLimitRow(id: string): HTMLElement {
+function scanLimitRow(id: string, onChange: (limit: number) => void): HTMLElement {
   const limits = scanLimitStore();
   const section = document.createElement('div');
   section.className = 'scan-limit-setting';
@@ -129,7 +129,7 @@ function scanLimitRow(id: string): HTMLElement {
   input.addEventListener('change', () => {
     const value = normalizeScanLimit(input.value);
     input.value = String(value);
-    void limits.save(value);
+    void limits.save(value).then(() => onChange(value));
   });
   row.append(text, input);
   const hint = document.createElement('p');
@@ -146,7 +146,10 @@ function scanLimitRow(id: string): HTMLElement {
 }
 
 /** Adds the settings (gear) button and its panel to the end of the toolbar. */
-export function mountFontSettings(toolbar: HTMLElement, opts: { scanLimit?: boolean } = {}): void {
+export function mountFontSettings(
+  toolbar: HTMLElement,
+  opts: { onScanLimitChange?: (limit: number) => void } = {},
+): void {
   const store = createSettingsStore(STORAGE_KEY, normalize);
   const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
   let current: FontSettings = { ...EMPTY };
@@ -226,7 +229,7 @@ export function mountFontSettings(toolbar: HTMLElement, opts: { scanLimit?: bool
   });
   panel.append(hint, reset);
   // Only the viewer opens folders; the file:// page shows a single document.
-  if (opts.scanLimit) panel.append(scanLimitRow(id));
+  if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
   wrap.append(toggle, panel);
   toolbar.append(wrap);
 

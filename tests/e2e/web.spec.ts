@@ -208,6 +208,13 @@ test('applies the folder scan limit from the settings', async ({ page }) => {
   await page.getByRole('button', { name: 'Open folder' }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Big');
   await expect(page.locator('#status')).toHaveText(/^⚠ Folder too large: scanned only 100 entries/);
+
+  // Raising the limit rescans the open folder right away, staying on the same document.
+  await page.locator('.font-settings-toggle').click();
+  await limit.fill('1000');
+  await limit.press('Enter');
+  await expect(page.locator('#status')).toHaveText(/^README\.md · /);
+  await expect(page.locator('.markdown-body h1')).toHaveText('Big');
 });
 
 const LIGHT_NODE = 'rgb(236, 236, 255)'; // mermaid "default" theme

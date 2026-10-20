@@ -66,7 +66,7 @@ const en = {
   fontHint: 'Enter the name of a font installed on your computer. Unknown fonts fall back to the default.',
   fontReset: 'Reset to default',
   scanLimit: 'Scan limit',
-  scanLimitHint: 'Entries scanned when opening a folder ({min}–{max}). Applies the next time a folder is opened.',
+  scanLimitHint: 'Entries scanned when opening a folder ({min}–{max}). Changing it rescans the open folder.',
 } as const;
 
 type Key = keyof typeof en;
@@ -136,7 +136,7 @@ const ja: Record<Key, string> = {
   fontHint: 'PC にインストールされているフォント名を入力してください。見つからない場合は既定のフォントで表示します。',
   fontReset: '既定に戻す',
   scanLimit: '走査上限',
-  scanLimitHint: 'フォルダを開くときに調べる件数（{min}〜{max}）。次にフォルダを開いたときから反映されます。',
+  scanLimitHint: 'フォルダを開くときに調べる件数（{min}〜{max}）。変更すると、開いているフォルダを読み直します。',
 };
 
 export const lang: 'ja' | 'en' = (navigator.language || 'en').toLowerCase().startsWith('ja') ? 'ja' : 'en';

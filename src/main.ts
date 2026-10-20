@@ -276,6 +276,18 @@ async function handleDrop(e: DragEvent): Promise<void> {
   if (files.length) await openWorkspace(fromFiles(files));
 }
 
+/** Scans the open folder again (after the scan limit changed), staying on the current document. */
+async function rescanFolder(): Promise<void> {
+  if (recentHandle?.kind !== 'directory') return; // a single file or dropped files: nothing to scan
+  const dir = recentHandle;
+  setStatus(t('scanning', { name: dir.name }));
+  try {
+    await openWorkspace(await scanFolder(dir), { handle: dir, docPath: currentDoc?.path });
+  } catch (err) {
+    setStatus(errMsg(err), 'error');
+  }
+}
+
 // ---- reopening after a reload ------------------------------------------------
 
 function recentName(handle: RecentHandle): string {
@@ -353,7 +365,7 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   }
   document.querySelector('.brand')?.after(badge);
 }
-mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { scanLimit: true });
+mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl));
 if (location.protocol === 'chrome-extension:') {
