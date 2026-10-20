@@ -22,6 +22,8 @@ import { clearRecent, loadRecent, saveRecent, type Recent, type RecentHandle } f
 const POLL_MS = 1000;
 /** Background tabs still poll, less often, so the tab icon can flag changes. */
 const HIDDEN_POLL_EVERY = 5;
+/** Consecutive failed polls before reporting: editors and sync tools briefly replace files. */
+const FAIL_LIMIT = 3;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const contentEl = $<HTMLElement>('content');
@@ -46,6 +48,7 @@ let pollTimer: number | undefined;
 let recentHandle: RecentHandle | null = null;
 let polling = false;
 let hiddenTicks = 0;
+let pollFailures = 0;
 
 // ---- rendering ------------------------------------------------------------
 
@@ -95,6 +98,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   const dir = slash < 0 ? '' : ` - ${doc.path.slice(0, slash)}`;
   document.title = `${doc.path.slice(slash + 1)}${dir} - MD Browser`;
   faviconError(false);
+  pollFailures = 0;
   setStatus(
     `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
   );
@@ -175,8 +179,13 @@ async function poll(): Promise<void> {
     if (stamp !== lastStamp) {
       await showDoc(currentDoc, { keepScroll: true });
       faviconUpdated();
+    } else if (pollFailures >= FAIL_LIMIT) {
+      // Back unchanged after a reported error: re-render to restore the normal status.
+      await showDoc(currentDoc, { keepScroll: true });
     }
+    pollFailures = 0;
   } catch (err) {
+    if (++pollFailures < FAIL_LIMIT) return;
     setStatus(t('fileGone', { path: currentDoc.path, error: errMsg(err) }), 'error');
     faviconError(true);
   } finally {
