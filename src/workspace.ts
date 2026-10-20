@@ -1,4 +1,5 @@
 import { resolvePath, type AssetResolver } from './core/assets';
+import { SCAN_LIMIT_DEFAULT } from './core/scan-limit';
 
 export interface DocEntry {
   /** Path relative to the workspace root, e.g. "docs/guide.md". */
@@ -19,8 +20,8 @@ export interface Workspace {
   label: string;
   docs: DocEntry[];
   watchable: boolean;
-  /** The folder scan hit MAX_SCAN, so some (deeper) documents are missing. */
-  truncated?: boolean;
+  /** Set when the folder scan stopped at this entry limit, so some (deeper) documents are missing. */
+  truncatedAt?: number;
   read(doc: DocEntry): Promise<DocContent>;
   /** Cheap change check (no content read). */
   stat(doc: DocEntry): Promise<string>;
@@ -30,7 +31,6 @@ export interface Workspace {
 
 const MD_EXT = /\.(md|markdown|mdown|mkd)$/i;
 const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', 'dist', 'build']);
-export const MAX_SCAN = 5000;
 
 export function isMarkdownName(name: string): boolean {
   return MD_EXT.test(name);
@@ -79,10 +79,13 @@ export function fromFileHandle(handle: FileSystemFileHandle): Workspace {
 // ---- directory handle ---------------------------------------------------
 
 /**
- * Breadth-first, so hitting MAX_SCAN only drops the deepest levels: depth-first used to spend
+ * Breadth-first, so hitting the limit only drops the deepest levels: depth-first used to spend
  * the whole budget inside the first large subfolder and silently skip every folder after it.
  */
-async function scanDirectory(dir: FileSystemDirectoryHandle): Promise<{ docs: DocEntry[]; truncated: boolean }> {
+async function scanDirectory(
+  dir: FileSystemDirectoryHandle,
+  limit: number,
+): Promise<{ docs: DocEntry[]; truncated: boolean }> {
   const found: DocEntry[] = [];
   const queue: [FileSystemDirectoryHandle, string][] = [[dir, '']];
   let visited = 0;
@@ -90,7 +93,7 @@ async function scanDirectory(dir: FileSystemDirectoryHandle): Promise<{ docs: Do
   scan: for (let i = 0; i < queue.length; i++) {
     const [handle, prefix] = queue[i];
     for await (const entry of handle.values()) {
-      if (++visited > MAX_SCAN) {
+      if (++visited > limit) {
         truncated = true;
         break scan;
       }
@@ -112,13 +115,16 @@ async function getFileByPath(root: FileSystemDirectoryHandle, path: string): Pro
   return fh.getFile();
 }
 
-export async function fromDirectoryHandle(root: FileSystemDirectoryHandle): Promise<Workspace> {
-  const { docs, truncated } = await scanDirectory(root);
+export async function fromDirectoryHandle(
+  root: FileSystemDirectoryHandle,
+  limit = SCAN_LIMIT_DEFAULT,
+): Promise<Workspace> {
+  const { docs, truncated } = await scanDirectory(root, limit);
   return {
     label: `${root.name}/`,
     docs,
     watchable: true,
-    truncated,
+    truncatedAt: truncated ? limit : undefined,
     async read(doc) {
       const file = await getFileByPath(root, doc.path);
       return { text: await file.text(), stamp: stampOf(file) };

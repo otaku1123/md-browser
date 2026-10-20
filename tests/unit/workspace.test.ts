@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromDirectoryHandle, fromFiles, MAX_SCAN } from '../../src/workspace';
+import { fromDirectoryHandle, fromFiles } from '../../src/workspace';
 
 /** File as produced by <input webkitdirectory>, which sets webkitRelativePath. */
 function picked(rel: string): File {
@@ -59,12 +59,13 @@ describe('fromDirectoryHandle', () => {
       }),
     );
     expect(ws.docs.map((d) => d.path)).toEqual(['docs/deep/more.md', 'docs/guide.md', 'README.md']);
-    expect(ws.truncated).toBe(false);
+    expect(ws.truncatedAt).toBeUndefined();
   });
 
   it('keeps shallower folders when a large one exhausts the scan limit', async () => {
+    const limit = 20;
     const code: FakeTree = {};
-    for (let i = 0; i < MAX_SCAN; i++) code[`f${i}.ts`] = '';
+    for (let i = 0; i < limit; i++) code[`f${i}.ts`] = '';
     code['deep.md'] = ''; // listed past the limit
     const ws = await fromDirectoryHandle(
       dirHandle('root', {
@@ -72,9 +73,10 @@ describe('fromDirectoryHandle', () => {
         docs: { 'readme.md': '' },
         'notes.md': '',
       }),
+      limit,
     );
     // Depth-first used to stop inside app/src and lose docs/ entirely.
     expect(ws.docs.map((d) => d.path)).toEqual(['docs/readme.md', 'notes.md']);
-    expect(ws.truncated).toBe(true);
+    expect(ws.truncatedAt).toBe(limit);
   });
 });
