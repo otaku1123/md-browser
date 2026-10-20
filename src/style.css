@@ -230,7 +230,7 @@ body {
 .toc .toc-l6 a { padding-left: 44px; font-size: 12px; }
 
 .content {
-  max-width: 980px;
+  max-width: var(--doc-max-width, 980px);
   width: 100%;
   margin: 0 auto;
   padding: 24px 40px 120px;
@@ -432,16 +432,17 @@ body {
 .setup-banner.ok { padding: 8px 16px; }
 .setup-banner.ok p { margin: 0; }
 
-/* ---- font settings ---- */
-/* Only the document follows the chosen fonts; the toolbar and TOC keep the UI font. */
-.markdown-body { font-family: var(--font-body); }
+/* ---- display settings ---- */
+/* Only the document follows the chosen fonts and size; the toolbar and TOC keep the UI font. */
+.markdown-body { font-family: var(--font-body); font-size: var(--doc-font-size, 16px); }
 .font-settings { position: relative; flex: none; }
-.toolbar .font-settings-toggle { font-family: Georgia, "Times New Roman", serif; font-weight: 600; }
+.toolbar .font-settings-toggle { display: inline-flex; align-items: center; padding: 5px 8px; }
+.font-settings-toggle svg { display: block; }
 .font-settings-panel {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  width: 300px;
+  width: 360px;
   max-width: calc(100vw - 32px);
   padding: 12px 14px;
   font-size: 13px;
@@ -454,7 +455,7 @@ body {
 }
 .font-settings-panel[hidden] { display: none; }
 .font-settings-title { margin: 0 0 8px; font-weight: 600; }
-.font-settings-row, .theme-setting { display: grid; grid-template-columns: 4.5em 1fr; align-items: center; gap: 8px; margin: 0 0 8px; }
+.font-settings-row, .choice-setting { display: grid; grid-template-columns: 5.5em 1fr; align-items: center; gap: 8px; margin: 0 0 8px; }
 .font-settings-row input {
   min-width: 0;
   font: inherit;
@@ -465,9 +466,9 @@ body {
   border-radius: 6px;
 }
 .font-settings-row input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.theme-options { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-.theme-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-.theme-options input { margin: 0; accent-color: var(--accent); }
+.choice-options { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.choice-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.choice-options input { margin: 0; accent-color: var(--accent); }
 .font-settings-hint { margin: 0 0 10px; font-size: 12px; color: var(--fg-muted); }
 
 /* ---- dev deployment marker ---- */

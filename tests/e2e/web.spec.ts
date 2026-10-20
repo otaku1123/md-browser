@@ -129,6 +129,32 @@ test('remembers font settings across reloads', async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--font-code'))).toContain('Courier New');
 });
 
+test('sets the text size and content width, and resets them', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await openSampleFolder(page);
+  const doc = () =>
+    page.locator('#content').evaluate((el) => ({ font: getComputedStyle(el).fontSize, max: getComputedStyle(el).maxWidth }));
+  expect(await doc()).toEqual({ font: '16px', max: '980px' });
+
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  await panel.getByRole('radiogroup', { name: 'Text size' }).getByRole('radio', { name: 'Large', exact: true }).check();
+  await panel.getByRole('radiogroup', { name: 'Width' }).getByRole('radio', { name: 'Full', exact: true }).check();
+  expect(await doc()).toEqual({ font: '18px', max: 'none' });
+  // The toolbar keeps its size.
+  expect(await page.locator('#open-file').evaluate((el) => getComputedStyle(el).fontSize)).toBe('13px');
+
+  await page.waitForTimeout(600); // saves are debounced
+  await page.reload();
+  await expect.poll(doc).toEqual({ font: '18px', max: 'none' });
+  await page.locator('.font-settings-toggle').click();
+  await expect(panel.getByRole('radiogroup', { name: 'Width' }).getByRole('radio', { name: 'Full', exact: true })).toBeChecked();
+
+  await panel.getByRole('button', { name: 'Reset to default' }).click();
+  expect(await doc()).toEqual({ font: '16px', max: '980px' });
+  await expect(panel.getByRole('radiogroup', { name: 'Text size' }).getByRole('radio', { name: 'Default', exact: true })).toBeChecked();
+});
+
 const LIGHT_NODE = 'rgb(236, 236, 255)'; // mermaid "default" theme
 const DARK_NODE = 'rgb(31, 32, 32)'; // mermaid "dark" theme
 const nodeFill = (page: Page) =>

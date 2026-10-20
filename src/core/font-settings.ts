@@ -1,15 +1,24 @@
-// Display settings panel ("Aa"): theme, and fonts for the document body and code. Fonts are
-// referenced by name (installed on the user's computer); unknown names fall back to the default stack.
+// Display settings panel (gear button): theme, text size, content width, and fonts for the document body
+// and code. Fonts are referenced by name (installed on the user's computer); unknown names fall back
+// to the default stack.
 import { t } from '../i18n';
 import { createSettingsStore } from './settings-store';
-import { THEME_PREFERENCES, applyTheme, normalizeTheme, type ThemePreference } from './theme';
+import { applyTheme, normalizeTheme, type ThemePreference } from './theme';
+
+// Values for the document only: the toolbar and TOC keep their size.
+const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
+const WIDTHS = { normal: '980px', wide: '1280px', full: 'none' } as const;
+type TextSize = keyof typeof SIZES;
+type ContentWidth = keyof typeof WIDTHS;
 
 export interface FontSettings {
   body: string;
   code: string;
+  size: TextSize;
+  width: ContentWidth;
 }
 
-const EMPTY: FontSettings = { body: '', code: '' };
+const EMPTY: FontSettings = { body: '', code: '', size: 'normal', width: 'normal' };
 const STORAGE_KEY = 'md-browser:fonts';
 const THEME_KEY = 'md-browser:theme';
 const SAVE_DELAY_MS = 400; // chrome.storage.sync allows ~120 writes per minute
@@ -31,7 +40,13 @@ export function sanitizeFontName(name: unknown): string {
 
 function normalize(v: unknown): FontSettings {
   const o = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof FontSettings, unknown>>;
-  return { body: sanitizeFontName(o.body), code: sanitizeFontName(o.code) };
+  return {
+    body: sanitizeFontName(o.body),
+    code: sanitizeFontName(o.code),
+    // Saved before size / width existed, or unknown: use the default.
+    size: typeof o.size === 'string' && o.size in SIZES ? (o.size as TextSize) : 'normal',
+    width: typeof o.width === 'string' && o.width in WIDTHS ? (o.width as ContentWidth) : 'normal',
+  };
 }
 
 /** Overrides the CSS variables defined in style.css; the default stack stays as the fallback. */
@@ -42,13 +57,59 @@ export function applyFonts(s: FontSettings): void {
     if (name) root.setProperty(prop, `"${name}", var(${prop}-default)`);
     else root.removeProperty(prop);
   }
+  const size = SIZES[s.size] ?? SIZES.normal;
+  const width = WIDTHS[s.width] ?? WIDTHS.normal;
+  if (size !== SIZES.normal) root.setProperty('--doc-font-size', size);
+  else root.removeProperty('--doc-font-size');
+  if (width !== WIDTHS.normal) root.setProperty('--doc-max-width', width);
+  else root.removeProperty('--doc-max-width');
 }
+
+const GEAR_ICON =
+  '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<circle cx="12" cy="12" r="3"/>' +
+  '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' +
+  '</svg>';
 
 let uid = 0;
 
 const THEME_LABELS = { auto: 'themeAuto', light: 'themeLight', dark: 'themeDark' } as const;
+const SIZE_LABELS = { small: 'sizeSmall', normal: 'sizeNormal', large: 'sizeLarge', xlarge: 'sizeXlarge' } as const;
+const WIDTH_LABELS = { normal: 'widthNormal', wide: 'widthWide', full: 'widthFull' } as const;
 
-/** Adds the "Aa" button and its panel to the end of the toolbar. */
+/** A labelled radio group; set() shows a value without firing onPick. */
+function choiceRow<V extends string>(
+  name: string,
+  label: string,
+  labels: Record<V, Parameters<typeof t>[0]>,
+  onPick: (value: V) => void,
+): { row: HTMLElement; set(value: V): void } {
+  const row = document.createElement('div');
+  row.className = 'choice-setting';
+  row.setAttribute('role', 'radiogroup');
+  row.setAttribute('aria-labelledby', `${name}-label`);
+  const text = document.createElement('span');
+  text.id = `${name}-label`;
+  text.textContent = label;
+  const options = document.createElement('div');
+  options.className = 'choice-options';
+  const inputs = new Map<V, HTMLInputElement>();
+  for (const value of Object.keys(labels) as V[]) {
+    const option = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = name;
+    radio.value = value;
+    radio.addEventListener('change', () => onPick(value));
+    inputs.set(value, radio);
+    option.append(radio, t(labels[value]));
+    options.append(option);
+  }
+  row.append(text, options);
+  return { row, set: (value) => void (inputs.get(value)!.checked = true) };
+}
+
+/** Adds the settings (gear) button and its panel to the end of the toolbar. */
 export function mountFontSettings(toolbar: HTMLElement): void {
   const store = createSettingsStore(STORAGE_KEY, normalize);
   const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
@@ -60,7 +121,8 @@ export function mountFontSettings(toolbar: HTMLElement): void {
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'font-settings-toggle';
-  toggle.textContent = 'Aa';
+  // Gear icon (inline SVG so it follows the theme colour like the other toolbar buttons).
+  toggle.innerHTML = GEAR_ICON;
   toggle.title = t('fontSettings');
   toggle.setAttribute('aria-label', t('fontSettings'));
   toggle.setAttribute('aria-expanded', 'false');
@@ -98,39 +160,22 @@ export function mountFontSettings(toolbar: HTMLElement): void {
     return input;
   }
 
-  // Theme: one radio group, applied and saved at once (a single write, no debounce needed).
-  const themeRow = document.createElement('div');
-  themeRow.className = 'theme-setting';
-  themeRow.setAttribute('role', 'radiogroup');
-  themeRow.setAttribute('aria-labelledby', `${id}-theme`);
-  const themeLabel = document.createElement('span');
-  themeLabel.id = `${id}-theme`;
-  themeLabel.textContent = t('theme');
-  const themeOptions = document.createElement('div');
-  themeOptions.className = 'theme-options';
-  const themeInputs = new Map<ThemePreference, HTMLInputElement>();
-  for (const pref of THEME_PREFERENCES) {
-    const option = document.createElement('label');
-    const radio = document.createElement('input');
-    radio.type = 'radio';
-    radio.name = `${id}-theme`;
-    radio.value = pref;
-    radio.addEventListener('change', () => {
-      applyTheme(pref);
-      void themeStore.save(pref);
-    });
-    themeInputs.set(pref, radio);
-    option.append(radio, t(THEME_LABELS[pref]));
-    themeOptions.append(option);
-  }
-  themeRow.append(themeLabel, themeOptions);
+  // Theme is stored on its own and saved at once (a single write, no debounce needed).
+  const theme = choiceRow<ThemePreference>(`${id}-theme`, t('theme'), THEME_LABELS, (pref) => {
+    applyTheme(pref);
+    void themeStore.save(pref);
+  });
   function showTheme(pref: ThemePreference): void {
     applyTheme(pref);
-    themeInputs.get(pref)!.checked = true;
+    theme.set(pref);
   }
   showTheme('auto');
+  const size = choiceRow<TextSize>(`${id}-size`, t('textSize'), SIZE_LABELS, (v) => update({ ...current, size: v }));
+  const width = choiceRow<ContentWidth>(`${id}-width`, t('contentWidth'), WIDTH_LABELS, (v) =>
+    update({ ...current, width: v }),
+  );
 
-  panel.append(heading, themeRow);
+  panel.append(heading, theme.row, size.row, width.row);
   const bodyInput = field('body', t('fontBody'), BODY_PRESETS);
   const codeInput = field('code', t('fontCode'), CODE_PRESETS);
   const hint = document.createElement('p');
@@ -151,6 +196,8 @@ export function mountFontSettings(toolbar: HTMLElement): void {
   function syncInputs(force = false): void {
     if (force || document.activeElement !== bodyInput) bodyInput.value = current.body;
     if (force || document.activeElement !== codeInput) codeInput.value = current.code;
+    size.set(current.size);
+    width.set(current.width);
   }
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
