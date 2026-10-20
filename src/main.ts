@@ -14,6 +14,7 @@ import {
   fromFileHandle,
   fromFiles,
   isMarkdownName,
+  MAX_SCAN,
   type DocEntry,
   type Workspace,
 } from './workspace';
@@ -100,7 +101,9 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   faviconError(false);
   pollFailures = 0;
   setStatus(
-    `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
+    // Warning first: the status line is cut off at the end when it doesn't fit.
+    (workspace.truncated ? `${t('scanTruncated', { max: MAX_SCAN })} · ` : '') +
+      `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
   );
 }
 

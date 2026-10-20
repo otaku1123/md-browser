@@ -19,6 +19,8 @@ export interface Workspace {
   label: string;
   docs: DocEntry[];
   watchable: boolean;
+  /** The folder scan hit MAX_SCAN, so some (deeper) documents are missing. */
+  truncated?: boolean;
   read(doc: DocEntry): Promise<DocContent>;
   /** Cheap change check (no content read). */
   stat(doc: DocEntry): Promise<string>;
@@ -28,7 +30,7 @@ export interface Workspace {
 
 const MD_EXT = /\.(md|markdown|mdown|mkd)$/i;
 const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', 'dist', 'build']);
-const MAX_SCAN = 5000;
+export const MAX_SCAN = 5000;
 
 export function isMarkdownName(name: string): boolean {
   return MD_EXT.test(name);
@@ -76,22 +78,30 @@ export function fromFileHandle(handle: FileSystemFileHandle): Workspace {
 
 // ---- directory handle ---------------------------------------------------
 
-async function scanDirectory(dir: FileSystemDirectoryHandle): Promise<DocEntry[]> {
+/**
+ * Breadth-first, so hitting MAX_SCAN only drops the deepest levels: depth-first used to spend
+ * the whole budget inside the first large subfolder and silently skip every folder after it.
+ */
+async function scanDirectory(dir: FileSystemDirectoryHandle): Promise<{ docs: DocEntry[]; truncated: boolean }> {
   const found: DocEntry[] = [];
+  const queue: [FileSystemDirectoryHandle, string][] = [[dir, '']];
   let visited = 0;
-  async function walk(handle: FileSystemDirectoryHandle, prefix: string): Promise<void> {
+  let truncated = false;
+  scan: for (let i = 0; i < queue.length; i++) {
+    const [handle, prefix] = queue[i];
     for await (const entry of handle.values()) {
-      if (++visited > MAX_SCAN) return;
+      if (++visited > MAX_SCAN) {
+        truncated = true;
+        break scan;
+      }
       if (entry.kind === 'directory') {
-        if (isSkippedDir(entry.name)) continue;
-        await walk(entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`);
+        if (!isSkippedDir(entry.name)) queue.push([entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`]);
       } else if (isMarkdownName(entry.name)) {
         found.push({ path: `${prefix}${entry.name}` });
       }
     }
   }
-  await walk(dir, '');
-  return found.sort((a, b) => a.path.localeCompare(b.path));
+  return { docs: found.sort((a, b) => a.path.localeCompare(b.path)), truncated };
 }
 
 async function getFileByPath(root: FileSystemDirectoryHandle, path: string): Promise<File> {
@@ -103,11 +113,12 @@ async function getFileByPath(root: FileSystemDirectoryHandle, path: string): Pro
 }
 
 export async function fromDirectoryHandle(root: FileSystemDirectoryHandle): Promise<Workspace> {
-  const docs = await scanDirectory(root);
+  const { docs, truncated } = await scanDirectory(root);
   return {
     label: `${root.name}/`,
     docs,
     watchable: true,
+    truncated,
     async read(doc) {
       const file = await getFileByPath(root, doc.path);
       return { text: await file.text(), stamp: stampOf(file) };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromFiles } from '../../src/workspace';
+import { fromDirectoryHandle, fromFiles, MAX_SCAN } from '../../src/workspace';
 
 /** File as produced by <input webkitdirectory>, which sets webkitRelativePath. */
 function picked(rel: string): File {
@@ -33,5 +33,48 @@ describe('fromFiles', () => {
     const { resolve, release } = ws.assetResolver({ path: 'proj/a.md' });
     expect(await resolve!('dist/logo.png')).toMatch(/^blob:/);
     release();
+  });
+});
+
+/** Minimal stand-in for a picked folder: only what scanning uses (kind, name, values()). */
+type FakeTree = { [name: string]: FakeTree | string };
+function dirHandle(name: string, tree: FakeTree): FileSystemDirectoryHandle {
+  return {
+    kind: 'directory',
+    name,
+    async *values() {
+      for (const [n, v] of Object.entries(tree)) yield typeof v === 'string' ? { kind: 'file', name: n } : dirHandle(n, v);
+    },
+  } as unknown as FileSystemDirectoryHandle;
+}
+
+describe('fromDirectoryHandle', () => {
+  it('finds nested Markdown and skips excluded folders', async () => {
+    const ws = await fromDirectoryHandle(
+      dirHandle('root', {
+        'README.md': '',
+        docs: { 'guide.md': '', deep: { 'more.md': '' } },
+        node_modules: { 'pkg.md': '' },
+        '.git': { 'x.md': '' },
+      }),
+    );
+    expect(ws.docs.map((d) => d.path)).toEqual(['docs/deep/more.md', 'docs/guide.md', 'README.md']);
+    expect(ws.truncated).toBe(false);
+  });
+
+  it('keeps shallower folders when a large one exhausts the scan limit', async () => {
+    const code: FakeTree = {};
+    for (let i = 0; i < MAX_SCAN; i++) code[`f${i}.ts`] = '';
+    code['deep.md'] = ''; // listed past the limit
+    const ws = await fromDirectoryHandle(
+      dirHandle('root', {
+        app: { src: code },
+        docs: { 'readme.md': '' },
+        'notes.md': '',
+      }),
+    );
+    // Depth-first used to stop inside app/src and lose docs/ entirely.
+    expect(ws.docs.map((d) => d.path)).toEqual(['docs/readme.md', 'notes.md']);
+    expect(ws.truncated).toBe(true);
   });
 });
