@@ -295,7 +295,26 @@ body {
 }
 .markdown-body > :first-child { margin-top: 0; }
 .markdown-body a { color: var(--accent); }
-.markdown-body img { max-width: 100%; }
+.markdown-body img {
+  /* --doc-img-max: image size setting (longest side); unset keeps images as wide as the text. */
+  max-width: min(100%, var(--doc-img-max, 100%));
+  max-height: var(--doc-img-max, none);
+}
+/* Click to see full size (image-zoom.ts); linked images stay links. */
+.markdown-body img:not(a img):not(.img-missing) { cursor: zoom-in; }
+.image-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.8);
+  cursor: zoom-out;
+}
+.image-zoom:focus { outline: none; }
+.image-zoom img { max-width: none; max-height: none; background: #fff; }
 .markdown-body img.img-missing {
   display: inline-block;
   min-width: 120px;
@@ -506,6 +525,7 @@ body {
   .files,
   .toc,
   .drop-overlay,
+  .image-zoom,
   .copy-button { display: none !important; }
   body { background: #fff; }
   .layout { display: block; }

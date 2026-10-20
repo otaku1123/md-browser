@@ -7,6 +7,7 @@ import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
+import { enableImageZoom } from './core/image-zoom';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
@@ -368,6 +369,7 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl));
+enableImageZoom(contentEl);
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
 }

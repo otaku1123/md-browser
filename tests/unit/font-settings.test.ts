@@ -19,7 +19,7 @@ describe('sanitizeFontName', () => {
   });
 });
 
-const DEFAULTS = { body: '', code: '', size: 'normal', width: 'normal' } as const;
+const DEFAULTS = { body: '', code: '', size: 'normal', width: 'normal', image: 'normal' } as const;
 
 describe('applyFonts', () => {
   afterEach(() => document.documentElement.removeAttribute('style'));
@@ -46,5 +46,13 @@ describe('applyFonts', () => {
     applyFonts(DEFAULTS);
     expect(style.getPropertyValue('--doc-font-size')).toBe('');
     expect(style.getPropertyValue('--doc-max-width')).toBe('');
+  });
+
+  it('sets the image size, and clears it on default', () => {
+    const style = document.documentElement.style;
+    applyFonts({ ...DEFAULTS, image: 'medium' });
+    expect(style.getPropertyValue('--doc-img-max')).toBe('480px');
+    applyFonts(DEFAULTS);
+    expect(style.getPropertyValue('--doc-img-max')).toBe('');
   });
 });
