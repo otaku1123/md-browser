@@ -51,10 +51,12 @@ FEATURES
 • Live reload: save the file in your editor and the page re-renders within about a second, keeping your scroll position
 • GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
 • One-click copy button on code blocks
-• Display settings: theme (system / light / dark), text size, content width, and fonts for body text and code
+• Display settings: theme (system / light / dark), text size, content width, image size, and fonts for body text and code
+• Click an image to see it at full size
 • Relative images and links to other .md files just work
 • Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars
-• Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree; it reopens what you had open after a reload
+• Tab icon shows which tabs are rendered by MD Browser, and marks files that changed (or can't be read) while the tab was in the background
+• Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree and the folder name in the toolbar; it reopens what you had open after a reload, and the scan limit for very large folders is adjustable
 
 PRIVACY
 Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only re-reads the Markdown file you are currently viewing.
@@ -82,10 +84,12 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • 自動更新：エディタで保存すると約 1 秒で再描画（スクロール位置を保持）
 • GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示
 • コードブロックのワンクリックコピー
-• 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、本文とコードのフォント
+• 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、画像サイズ、本文とコードのフォント
+• 画像をクリックすると原寸で表示
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
 • 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）
-• ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリー付き。再読み込みしても前回開いていたものを復元）
+• タブのアイコンで MD Browser が表示しているタブがひと目でわかり、裏のタブでファイルが更新された（または読めなくなった）ことも表示
+• ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリーとフォルダ名の表示付き。再読み込みしても前回開いていたものを復元。大きなフォルダの走査上限は変更可能）
 
 プライバシー
 すべての処理はブラウザ内で完結します。データの収集・送信やアクセス解析は一切行いません。拡張機能が再読み込みするのは、表示中の Markdown ファイルだけです。
@@ -128,7 +132,7 @@ The content script runs only on local Markdown files (file:///*.md, *.markdown, 
 ### storage 権限が必要な理由（Permission justification: storage）
 
 ```text
-Stores the user's display preferences (theme, text size, content width, and font names for the document body and code blocks) so they apply to every rendered Markdown file and the viewer. Only these preferences are stored; no file contents or personal data are saved.
+Stores the user's display preferences (theme, text size, content width, image size, and font names for the document body and code blocks) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. Only these preferences are stored; no file contents or personal data are saved.
 ```
 
 ### リモートコード（Remote code）
