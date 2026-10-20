@@ -98,6 +98,20 @@ test('shares font settings between file tabs and the viewer', async ({ context, 
   await expect.poll(() => bodyFont(a)).not.toMatch(/Georgia/);
 });
 
+test('shares the theme between file tabs', async ({ context, workdir }) => {
+  const a = await context.newPage();
+  await a.goto(fileUrl(workdir, 'README.md'));
+  await a.locator('.font-settings-toggle').click();
+  await a.getByRole('radio', { name: 'ダーク' }).check();
+  await expect(a.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+  const b = await context.newPage();
+  await b.goto(fileUrl(workdir, 'docs/other.md'));
+  await expect(b.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await a.locator('.font-settings-panel').getByRole('radio', { name: 'OS 設定' }).check();
+  await expect(b.locator('html')).not.toHaveAttribute('data-theme', /.*/);
+});
+
 test('adds copy buttons to code blocks', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));

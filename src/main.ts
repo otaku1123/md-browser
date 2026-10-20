@@ -5,6 +5,7 @@ import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
 import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
+import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
@@ -263,6 +264,8 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   document.querySelector('.brand')?.after(badge);
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!);
+// Diagrams carry their theme's colours, so redraw them when the theme changes.
+onThemeChange(() => void renderDiagrams(contentEl));
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
 }

@@ -1,6 +1,8 @@
-// User-selectable fonts for the document body and code. Fonts are referenced by name
-// (installed on the user's computer); unknown names fall back to the default stack.
+// Display settings panel ("Aa"): theme, and fonts for the document body and code. Fonts are
+// referenced by name (installed on the user's computer); unknown names fall back to the default stack.
 import { t } from '../i18n';
+import { createSettingsStore } from './settings-store';
+import { THEME_PREFERENCES, applyTheme, normalizeTheme, type ThemePreference } from './theme';
 
 export interface FontSettings {
   body: string;
@@ -9,6 +11,7 @@ export interface FontSettings {
 
 const EMPTY: FontSettings = { body: '', code: '' };
 const STORAGE_KEY = 'md-browser:fonts';
+const THEME_KEY = 'md-browser:theme';
 const SAVE_DELAY_MS = 400; // chrome.storage.sync allows ~120 writes per minute
 
 const BODY_PRESETS = [
@@ -20,12 +23,6 @@ const CODE_PRESETS = [
   'Source Code Pro', 'JetBrains Mono', 'Fira Code', 'BIZ UDGothic', 'Osaka-Mono',
 ];
 
-interface Store {
-  load(): Promise<FontSettings>;
-  save(s: FontSettings): Promise<void>;
-  onChange(cb: (s: FontSettings) => void): void;
-}
-
 /** Keeps only characters that are safe inside a quoted CSS font-family name. */
 export function sanitizeFontName(name: unknown): string {
   if (typeof name !== 'string') return '';
@@ -35,42 +32,6 @@ export function sanitizeFontName(name: unknown): string {
 function normalize(v: unknown): FontSettings {
   const o = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof FontSettings, unknown>>;
   return { body: sanitizeFontName(o.body), code: sanitizeFontName(o.code) };
-}
-
-// Extension pages and content scripts share chrome.storage.sync; the web app uses localStorage.
-function createStore(): Store {
-  const sync = typeof chrome !== 'undefined' ? chrome.storage?.sync : undefined;
-  if (sync) {
-    return {
-      load: async () => normalize((await sync.get(STORAGE_KEY))[STORAGE_KEY]),
-      save: (s) => sync.set({ [STORAGE_KEY]: s }),
-      onChange: (cb) =>
-        chrome.storage.onChanged.addListener((changes, area) => {
-          if (area === 'sync' && STORAGE_KEY in changes) cb(normalize(changes[STORAGE_KEY].newValue));
-        }),
-    };
-  }
-  const read = (): FontSettings => {
-    try {
-      return normalize(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null'));
-    } catch {
-      return { ...EMPTY };
-    }
-  };
-  return {
-    load: async () => read(),
-    save: async (s) => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-      } catch {
-        // Storage unavailable (private mode etc.): the choice lasts for this page only.
-      }
-    },
-    onChange: (cb) =>
-      window.addEventListener('storage', (e) => {
-        if (e.key === STORAGE_KEY) cb(read());
-      }),
-  };
 }
 
 /** Overrides the CSS variables defined in style.css; the default stack stays as the fallback. */
@@ -85,9 +46,12 @@ export function applyFonts(s: FontSettings): void {
 
 let uid = 0;
 
+const THEME_LABELS = { auto: 'themeAuto', light: 'themeLight', dark: 'themeDark' } as const;
+
 /** Adds the "Aa" button and its panel to the end of the toolbar. */
 export function mountFontSettings(toolbar: HTMLElement): void {
-  const store = createStore();
+  const store = createSettingsStore(STORAGE_KEY, normalize);
+  const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
   let current: FontSettings = { ...EMPTY };
   const id = `md-font-${++uid}`;
 
@@ -134,7 +98,39 @@ export function mountFontSettings(toolbar: HTMLElement): void {
     return input;
   }
 
-  panel.append(heading);
+  // Theme: one radio group, applied and saved at once (a single write, no debounce needed).
+  const themeRow = document.createElement('div');
+  themeRow.className = 'theme-setting';
+  themeRow.setAttribute('role', 'radiogroup');
+  themeRow.setAttribute('aria-labelledby', `${id}-theme`);
+  const themeLabel = document.createElement('span');
+  themeLabel.id = `${id}-theme`;
+  themeLabel.textContent = t('theme');
+  const themeOptions = document.createElement('div');
+  themeOptions.className = 'theme-options';
+  const themeInputs = new Map<ThemePreference, HTMLInputElement>();
+  for (const pref of THEME_PREFERENCES) {
+    const option = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = `${id}-theme`;
+    radio.value = pref;
+    radio.addEventListener('change', () => {
+      applyTheme(pref);
+      void themeStore.save(pref);
+    });
+    themeInputs.set(pref, radio);
+    option.append(radio, t(THEME_LABELS[pref]));
+    themeOptions.append(option);
+  }
+  themeRow.append(themeLabel, themeOptions);
+  function showTheme(pref: ThemePreference): void {
+    applyTheme(pref);
+    themeInputs.get(pref)!.checked = true;
+  }
+  showTheme('auto');
+
+  panel.append(heading, themeRow);
   const bodyInput = field('body', t('fontBody'), BODY_PRESETS);
   const codeInput = field('code', t('fontCode'), CODE_PRESETS);
   const hint = document.createElement('p');
@@ -171,7 +167,7 @@ export function mountFontSettings(toolbar: HTMLElement): void {
   function setOpen(open: boolean): void {
     panel.hidden = !open;
     toggle.setAttribute('aria-expanded', String(open));
-    if (open) bodyInput.focus();
+    if (open) panel.querySelector<HTMLInputElement>('input:checked')?.focus();
   }
   toggle.addEventListener('click', () => setOpen(panel.hidden !== false));
   document.addEventListener('mousedown', (e) => {
@@ -183,6 +179,9 @@ export function mountFontSettings(toolbar: HTMLElement): void {
       toggle.focus();
     }
   });
+
+  void themeStore.load().then(showTheme);
+  themeStore.onChange(showTheme);
 
   void store.load().then((s) => {
     current = s;
