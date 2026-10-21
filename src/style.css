@@ -202,6 +202,11 @@ body {
   line-height: 1.5;
 }
 .toc.empty { display: none; }
+/* Wide screens: centre a short TOC vertically in its panel. "safe" falls back to the top when
+   the list is taller than the panel, so a long TOC still starts at the top and scrolls. */
+@media (min-width: 801px) {
+  .toc { display: flex; flex-direction: column; justify-content: safe center; }
+}
 
 .files {
   position: sticky;
