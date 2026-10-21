@@ -154,10 +154,12 @@ export function t(key: Key, vars: Record<string, string | number> = {}): string 
   return dict[key].replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m));
 }
 
-/** Fills elements marked with data-i18n="key" (text) / data-i18n-aria="key" (aria-label). */
+/** Fills elements marked with data-i18n="key" (text) / data-i18n-aria="key" (aria-label) /
+ *  data-i18n-title="key" (tooltip). */
 export function applyI18n(root: ParentNode = document): void {
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n]')) el.textContent = t(el.dataset.i18n as Key);
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-aria]'))
     el.setAttribute('aria-label', t(el.dataset.i18nAria as Key));
+  for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle as Key);
   document.documentElement.lang = lang;
 }

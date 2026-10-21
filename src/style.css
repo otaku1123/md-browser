@@ -141,6 +141,21 @@ body {
 }
 .toolbar button:hover { border-color: var(--accent); }
 .toolbar button[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+/* Sidebar toggle (hamburger) at the far left, right above the file list. */
+.toolbar .icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin-left: -8px;
+  color: var(--fg-muted);
+  background: none;
+  border-color: transparent;
+}
+.toolbar .icon-button:hover { color: var(--fg); background: var(--bg); border-color: var(--border); }
+.toolbar .icon-button[aria-expanded="true"] { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
+.toolbar .icon-button[hidden] { display: none; }
 .status {
   margin-left: auto;
   font-size: 12px;
