@@ -78,6 +78,10 @@ Alice -> Bob: Hello
 
 ![diagram](img/diagram.svg)
 
+アニメーション GIF:
+
+![animation](img/loading.gif)
+
 存在しない画像:
 
 ![missing](img/not-found.png)
