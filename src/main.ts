@@ -7,6 +7,7 @@ import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
+import { addHeadingLinks } from './core/heading-link';
 import { enableImageZoom } from './core/image-zoom';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
@@ -76,6 +77,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   await resolveImages(staging.content, assets.resolve);
   await renderDiagrams(staging.content);
   addCopyButtons(staging.content);
+  addHeadingLinks(staging.content, false);
   if (seq !== renderSeq) {
     assets.release();
     return; // a newer render started meanwhile

@@ -1,9 +1,9 @@
 // Adds a "Copy" button to each code block. Diagram sources and front matter are skipped.
 import { t } from '../i18n';
 
-const RESET_MS = 1500;
+export const RESET_MS = 1500;
 
-async function writeClipboard(text: string): Promise<void> {
+export async function writeClipboard(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     return;
