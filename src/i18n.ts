@@ -17,6 +17,7 @@ const en = {
   updatedAt: 'updated {time}',
   noMarkdown: 'No Markdown files found: {label}',
   scanning: 'Scanning {name}/ …',
+  scanTruncated: '⚠ Folder too large: scanned only {max} entries, shallowest first (limit can be raised in ⚙)',
   reopen: 'Reopen {name}',
   reopenFailed: 'Cannot reopen {name} (moved or deleted?): {error}',
   fileGone: 'Cannot access the file (moved or deleted?): {path} ({error})',
@@ -55,6 +56,10 @@ const en = {
   sizeNormal: 'Default',
   sizeLarge: 'Large',
   sizeXlarge: 'Huge',
+  imageSize: 'Images',
+  imageMedium: 'Medium',
+  imageZoom: 'Image at full size',
+  imageZoomClose: 'Click or press Esc to close',
   contentWidth: 'Width',
   widthNormal: 'Default',
   widthWide: 'Wide',
@@ -64,6 +69,8 @@ const en = {
   fontDefault: 'Default',
   fontHint: 'Enter the name of a font installed on your computer. Unknown fonts fall back to the default.',
   fontReset: 'Reset to default',
+  scanLimit: 'Scan limit',
+  scanLimitHint: 'Entries scanned when opening a folder ({min}–{max}). Changing it rescans the open folder.',
 } as const;
 
 type Key = keyof typeof en;
@@ -84,6 +91,7 @@ const ja: Record<Key, string> = {
   updatedAt: '{time} 更新',
   noMarkdown: 'Markdown ファイルが見つかりません: {label}',
   scanning: '{name}/ をスキャン中…',
+  scanTruncated: '⚠ フォルダが大きいため、浅い階層から {max} 件までのみ読み込みました（上限は ⚙ で変更可）',
   reopen: '前回の {name} を開く',
   reopenFailed: '{name} を開けません（削除・移動された可能性）: {error}',
   fileGone: 'ファイルにアクセスできません（削除・移動された可能性）: {path} ({error})',
@@ -122,6 +130,10 @@ const ja: Record<Key, string> = {
   sizeNormal: '標準',
   sizeLarge: '大',
   sizeXlarge: '特大',
+  imageSize: '画像サイズ',
+  imageMedium: '中',
+  imageZoom: '原寸の画像',
+  imageZoomClose: 'クリックまたは Esc で閉じる',
   contentWidth: '本文幅',
   widthNormal: '標準',
   widthWide: '広い',
@@ -131,6 +143,8 @@ const ja: Record<Key, string> = {
   fontDefault: '既定',
   fontHint: 'PC にインストールされているフォント名を入力してください。見つからない場合は既定のフォントで表示します。',
   fontReset: '既定に戻す',
+  scanLimit: '走査上限',
+  scanLimitHint: 'フォルダを開くときに調べる件数（{min}〜{max}）。変更すると、開いているフォルダを読み直します。',
 };
 
 export const lang: 'ja' | 'en' = (navigator.language || 'en').toLowerCase().startsWith('ja') ? 'ja' : 'en';
@@ -140,10 +154,12 @@ export function t(key: Key, vars: Record<string, string | number> = {}): string 
   return dict[key].replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m));
 }
 
-/** Fills elements marked with data-i18n="key" (text) / data-i18n-aria="key" (aria-label). */
+/** Fills elements marked with data-i18n="key" (text) / data-i18n-aria="key" (aria-label) /
+ *  data-i18n-title="key" (tooltip). */
 export function applyI18n(root: ParentNode = document): void {
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n]')) el.textContent = t(el.dataset.i18n as Key);
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-aria]'))
     el.setAttribute('aria-label', t(el.dataset.i18nAria as Key));
+  for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle as Key);
   document.documentElement.lang = lang;
 }

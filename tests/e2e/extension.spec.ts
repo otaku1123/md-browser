@@ -121,3 +121,27 @@ test('adds copy buttons to code blocks', async ({ context, workdir }) => {
   await button.click();
   await expect(button).toHaveText('コピーしました');
 });
+
+test('marks the tab with the file name first and its own icon', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page).toHaveTitle('README.md - MD Browser サンプル');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /^data:image\/svg\+xml,/);
+});
+
+test('reports a missing file only after repeated failures, and recovers when it is back', async ({
+  context,
+  workdir,
+}) => {
+  const page = await context.newPage();
+  const file = path.join(workdir, 'README.md');
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page.locator('.status')).toHaveText('自動更新 ON');
+  const saved = await fs.readFile(file);
+  await fs.rm(file);
+  await expect(page.locator('.status')).toHaveClass(/error/);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /e5484d/);
+  await fs.writeFile(file, saved);
+  await expect(page.locator('.status')).toHaveText('自動更新 ON');
+  await expect(page.locator('link[rel="icon"]')).not.toHaveAttribute('href', /e5484d/);
+});

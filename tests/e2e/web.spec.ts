@@ -39,6 +39,7 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Open file' })).toBeVisible();
   await expect(page.locator('.toc')).toHaveClass(/empty/);
+  await expect(page.locator('#workspace-name')).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
 
@@ -55,6 +56,27 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
   await expect(page.locator('#files summary')).toHaveText(['docs']);
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(page.locator('#workspace-name')).toHaveText('sample/');
+});
+
+test('opens another folder in the same tab', async ({ page }) => {
+  await openSampleFolder(page);
+  // The second pick returns a different folder, without the first one's documents.
+  await page.evaluate(() => {
+    window.showDirectoryPicker = async () => {
+      const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('other', { create: true });
+      const w = await (await dir.getFileHandle('notes.md', { create: true })).createWritable();
+      await w.write('# Notes');
+      await w.close();
+      return dir;
+    };
+  });
+  await page.getByRole('button', { name: 'Open folder' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('Notes');
+  await expect(page.locator('#status')).toHaveText(/^notes\.md · /);
+  await expect(page.locator('#workspace-name')).toHaveText('other/');
+  await page.waitForTimeout(1500); // a poll of the previous folder's document would report an error
+  await expect(page.locator('#status')).not.toHaveClass(/error/);
 });
 
 test('reopens the last folder and document after a reload', async ({ page }) => {
@@ -153,6 +175,72 @@ test('sets the text size and content width, and resets them', async ({ page }) =
   await panel.getByRole('button', { name: 'Reset to default' }).click();
   expect(await doc()).toEqual({ font: '16px', max: '980px' });
   await expect(panel.getByRole('radiogroup', { name: 'Text size' }).getByRole('radio', { name: 'Default', exact: true })).toBeChecked();
+});
+
+test('applies the folder scan limit from the settings', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.font-settings-toggle').click();
+  const limit = page.getByRole('spinbutton', { name: 'Scan limit' });
+  await expect(limit).toHaveValue('5000');
+  // Out-of-range input is clamped when committed.
+  await limit.fill('1');
+  await limit.press('Enter');
+  await expect(limit).toHaveValue('100');
+  await page.reload();
+  await page.locator('.font-settings-toggle').click();
+  await expect(limit).toHaveValue('100');
+
+  // A folder with more entries than the limit: the shallow document is kept, the scan is cut short.
+  await page.evaluate(() => {
+    window.showDirectoryPicker = async () => {
+      const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('big', { create: true });
+      const write = async (d: FileSystemDirectoryHandle, name: string, text: string) => {
+        const w = await (await d.getFileHandle(name, { create: true })).createWritable();
+        await w.write(text);
+        await w.close();
+      };
+      await write(dir, 'README.md', '# Big');
+      const code = await dir.getDirectoryHandle('code', { create: true });
+      for (let i = 0; i < 150; i++) await write(code, `f${i}.ts`, '');
+      return dir;
+    };
+  });
+  await page.getByRole('button', { name: 'Open folder' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('Big');
+  await expect(page.locator('#status')).toHaveText(/^⚠ Folder too large: scanned only 100 entries/);
+
+  // Raising the limit rescans the open folder right away, staying on the same document.
+  await page.locator('.font-settings-toggle').click();
+  await limit.fill('1000');
+  await limit.press('Enter');
+  await expect(page.locator('#status')).toHaveText(/^README\.md · /);
+  await expect(page.locator('.markdown-body h1')).toHaveText('Big');
+});
+
+test('limits the image size and shows an image at full size on click', async ({ page }) => {
+  await openSampleFolder(page);
+  const img = page.locator('img[alt="diagram"]');
+  const limits = () => img.evaluate((el) => ({ w: getComputedStyle(el).maxWidth, h: getComputedStyle(el).maxHeight }));
+  expect(await limits()).toEqual({ w: '100%', h: 'none' });
+
+  await page.locator('.font-settings-toggle').click();
+  await page
+    .locator('.font-settings-panel')
+    .getByRole('radiogroup', { name: 'Images' })
+    .getByRole('radio', { name: 'Medium', exact: true })
+    .check();
+  expect(await limits()).toEqual({ w: 'min(100%, 480px)', h: '480px' });
+  await page.locator('.font-settings-toggle').click();
+
+  await img.click();
+  const zoom = page.getByRole('dialog', { name: 'diagram' });
+  await expect(zoom).toBeVisible();
+  await expect(zoom.locator('img')).toHaveJSProperty('naturalWidth', 240);
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+  await img.click();
+  await zoom.click();
+  await expect(zoom).toHaveCount(0);
 });
 
 const LIGHT_NODE = 'rgb(236, 236, 255)'; // mermaid "default" theme

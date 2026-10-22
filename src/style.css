@@ -115,6 +115,17 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand { margin-right: 8px; white-space: nowrap; }
+/* What is open (folder / file name), next to the brand. */
+.workspace-name {
+  max-width: 24ch;
+  margin-right: 8px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-name[hidden] { display: none; }
 .toolbar button,
 .toolbar select {
   font: inherit;
@@ -126,9 +137,25 @@ body {
   border-radius: 6px;
   cursor: pointer;
   max-width: 280px;
+  white-space: nowrap;
 }
 .toolbar button:hover { border-color: var(--accent); }
 .toolbar button[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+/* Sidebar toggle (hamburger) at the far left, right above the file list. */
+.toolbar .icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin-left: -8px;
+  color: var(--fg-muted);
+  background: none;
+  border-color: transparent;
+}
+.toolbar .icon-button:hover { color: var(--fg); background: var(--bg); border-color: var(--border); }
+.toolbar .icon-button[aria-expanded="true"] { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
+.toolbar .icon-button[hidden] { display: none; }
 .status {
   margin-left: auto;
   font-size: 12px;
@@ -175,6 +202,11 @@ body {
   line-height: 1.5;
 }
 .toc.empty { display: none; }
+/* Wide screens: centre a short TOC vertically in its panel. "safe" falls back to the top when
+   the list is taller than the panel, so a long TOC still starts at the top and scrolls. */
+@media (min-width: 801px) {
+  .toc { display: flex; flex-direction: column; justify-content: safe center; }
+}
 
 .files {
   position: sticky;
@@ -283,7 +315,26 @@ body {
 }
 .markdown-body > :first-child { margin-top: 0; }
 .markdown-body a { color: var(--accent); }
-.markdown-body img { max-width: 100%; }
+.markdown-body img {
+  /* --doc-img-max: image size setting (longest side); unset keeps images as wide as the text. */
+  max-width: min(100%, var(--doc-img-max, 100%));
+  max-height: var(--doc-img-max, none);
+}
+/* Click to see full size (image-zoom.ts); linked images stay links. */
+.markdown-body img:not(a img):not(.img-missing) { cursor: zoom-in; }
+.image-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.8);
+  cursor: zoom-out;
+}
+.image-zoom:focus { outline: none; }
+.image-zoom img { max-width: none; max-height: none; background: #fff; }
 .markdown-body img.img-missing {
   display: inline-block;
   min-width: 120px;
@@ -470,6 +521,9 @@ body {
 .choice-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .choice-options input { margin: 0; accent-color: var(--accent); }
 .font-settings-hint { margin: 0 0 10px; font-size: 12px; color: var(--fg-muted); }
+/* Not a display setting (and not reset with them): set apart from the rows above. */
+.scan-limit-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.scan-limit-setting .font-settings-hint { margin-bottom: 0; }
 
 /* ---- dev deployment marker ---- */
 .env-badge {
@@ -491,6 +545,7 @@ body {
   .files,
   .toc,
   .drop-overlay,
+  .image-zoom,
   .copy-button { display: none !important; }
   body { background: #fff; }
   .layout { display: block; }

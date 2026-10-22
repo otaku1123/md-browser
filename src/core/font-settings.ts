@@ -1,24 +1,29 @@
-// Display settings panel (gear button): theme, text size, content width, and fonts for the document body
-// and code. Fonts are referenced by name (installed on the user's computer); unknown names fall back
+// Display settings panel (gear button): theme, text size, content width, image size, and fonts for the
+// document body and code, plus the folder scan limit in the viewer. Fonts are referenced by name (installed on the user's computer); unknown names fall back
 // to the default stack.
 import { t } from '../i18n';
 import { createSettingsStore } from './settings-store';
+import { normalizeScanLimit, scanLimitStore, SCAN_LIMIT_MAX, SCAN_LIMIT_MIN } from './scan-limit';
 import { applyTheme, normalizeTheme, type ThemePreference } from './theme';
 
 // Values for the document only: the toolbar and TOC keep their size.
 const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
 const WIDTHS = { normal: '980px', wide: '1280px', full: 'none' } as const;
+// Longest side of document images; "normal" keeps them as wide as the text.
+const IMAGES = { normal: 'none', large: '800px', medium: '480px', small: '240px' } as const;
 type TextSize = keyof typeof SIZES;
 type ContentWidth = keyof typeof WIDTHS;
+type ImageSize = keyof typeof IMAGES;
 
 export interface FontSettings {
   body: string;
   code: string;
   size: TextSize;
   width: ContentWidth;
+  image: ImageSize;
 }
 
-const EMPTY: FontSettings = { body: '', code: '', size: 'normal', width: 'normal' };
+const EMPTY: FontSettings = { body: '', code: '', size: 'normal', width: 'normal', image: 'normal' };
 const STORAGE_KEY = 'md-browser:fonts';
 const THEME_KEY = 'md-browser:theme';
 const SAVE_DELAY_MS = 400; // chrome.storage.sync allows ~120 writes per minute
@@ -43,9 +48,10 @@ function normalize(v: unknown): FontSettings {
   return {
     body: sanitizeFontName(o.body),
     code: sanitizeFontName(o.code),
-    // Saved before size / width existed, or unknown: use the default.
+    // Saved before size / width / image existed, or unknown: use the default.
     size: typeof o.size === 'string' && o.size in SIZES ? (o.size as TextSize) : 'normal',
     width: typeof o.width === 'string' && o.width in WIDTHS ? (o.width as ContentWidth) : 'normal',
+    image: typeof o.image === 'string' && o.image in IMAGES ? (o.image as ImageSize) : 'normal',
   };
 }
 
@@ -63,6 +69,9 @@ export function applyFonts(s: FontSettings): void {
   else root.removeProperty('--doc-font-size');
   if (width !== WIDTHS.normal) root.setProperty('--doc-max-width', width);
   else root.removeProperty('--doc-max-width');
+  const image = IMAGES[s.image] ?? IMAGES.normal;
+  if (image !== IMAGES.normal) root.setProperty('--doc-img-max', image);
+  else root.removeProperty('--doc-img-max');
 }
 
 const GEAR_ICON =
@@ -76,6 +85,7 @@ let uid = 0;
 const THEME_LABELS = { auto: 'themeAuto', light: 'themeLight', dark: 'themeDark' } as const;
 const SIZE_LABELS = { small: 'sizeSmall', normal: 'sizeNormal', large: 'sizeLarge', xlarge: 'sizeXlarge' } as const;
 const WIDTH_LABELS = { normal: 'widthNormal', wide: 'widthWide', full: 'widthFull' } as const;
+const IMAGE_LABELS = { normal: 'sizeNormal', large: 'sizeLarge', medium: 'imageMedium', small: 'sizeSmall' } as const;
 
 /** A labelled radio group; set() shows a value without firing onPick. */
 function choiceRow<V extends string>(
@@ -109,8 +119,46 @@ function choiceRow<V extends string>(
   return { row, set: (value) => void (inputs.get(value)!.checked = true) };
 }
 
+/** A number field for the folder scan limit; saved when committed (blur / Enter), clamped to range. */
+function scanLimitRow(id: string, onChange: (limit: number) => void): HTMLElement {
+  const limits = scanLimitStore();
+  const section = document.createElement('div');
+  section.className = 'scan-limit-setting';
+  const row = document.createElement('label');
+  row.className = 'font-settings-row';
+  const text = document.createElement('span');
+  text.textContent = t('scanLimit');
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.id = `${id}-scan-limit`;
+  input.min = String(SCAN_LIMIT_MIN);
+  input.max = String(SCAN_LIMIT_MAX);
+  input.step = '100';
+  input.inputMode = 'numeric';
+  input.addEventListener('change', () => {
+    const value = normalizeScanLimit(input.value);
+    input.value = String(value);
+    void limits.save(value).then(() => onChange(value));
+  });
+  row.append(text, input);
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('scanLimitHint', { min: SCAN_LIMIT_MIN.toLocaleString(), max: SCAN_LIMIT_MAX.toLocaleString() });
+  section.append(row, hint);
+
+  const show = (value: number) => {
+    if (document.activeElement !== input) input.value = String(value);
+  };
+  void limits.load().then(show);
+  limits.onChange(show);
+  return section;
+}
+
 /** Adds the settings (gear) button and its panel to the end of the toolbar. */
-export function mountFontSettings(toolbar: HTMLElement): void {
+export function mountFontSettings(
+  toolbar: HTMLElement,
+  opts: { onScanLimitChange?: (limit: number) => void } = {},
+): void {
   const store = createSettingsStore(STORAGE_KEY, normalize);
   const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
   let current: FontSettings = { ...EMPTY };
@@ -175,7 +223,11 @@ export function mountFontSettings(toolbar: HTMLElement): void {
     update({ ...current, width: v }),
   );
 
-  panel.append(heading, theme.row, size.row, width.row);
+  const image = choiceRow<ImageSize>(`${id}-image`, t('imageSize'), IMAGE_LABELS, (v) =>
+    update({ ...current, image: v }),
+  );
+
+  panel.append(heading, theme.row, size.row, width.row, image.row);
   const bodyInput = field('body', t('fontBody'), BODY_PRESETS);
   const codeInput = field('code', t('fontCode'), CODE_PRESETS);
   const hint = document.createElement('p');
@@ -189,6 +241,8 @@ export function mountFontSettings(toolbar: HTMLElement): void {
     syncInputs(true);
   });
   panel.append(hint, reset);
+  // Only the viewer opens folders; the file:// page shows a single document.
+  if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
   wrap.append(toggle, panel);
   toolbar.append(wrap);
 
@@ -198,6 +252,7 @@ export function mountFontSettings(toolbar: HTMLElement): void {
     if (force || document.activeElement !== codeInput) codeInput.value = current.code;
     size.set(current.size);
     width.set(current.width);
+    image.set(current.image);
   }
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;

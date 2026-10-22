@@ -7,6 +7,9 @@ import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
+import { enableImageZoom } from './core/image-zoom';
+import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
+import { scanLimitStore } from './core/scan-limit';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
   fromDirectoryHandle,
@@ -19,6 +22,10 @@ import {
 import { clearRecent, loadRecent, saveRecent, type Recent, type RecentHandle } from './recent';
 
 const POLL_MS = 1000;
+/** Background tabs still poll, less often, so the tab icon can flag changes. */
+const HIDDEN_POLL_EVERY = 5;
+/** Consecutive failed polls before reporting: editors and sync tools briefly replace files. */
+const FAIL_LIMIT = 3;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const contentEl = $<HTMLElement>('content');
@@ -42,6 +49,8 @@ let pollTimer: number | undefined;
 /** Handle behind the open workspace, kept so a reload can reopen it (null: can't be kept). */
 let recentHandle: RecentHandle | null = null;
 let polling = false;
+let hiddenTicks = 0;
+let pollFailures = 0;
 
 // ---- rendering ------------------------------------------------------------
 
@@ -54,6 +63,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
     content = await workspace.read(doc);
   } catch (err) {
     setStatus(t('loadFailed', { path: doc.path, error: errMsg(err) }), 'error');
+    faviconError(true);
     return;
   }
 
@@ -85,9 +95,16 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   window.scrollTo(0, opts.keepScroll ? scrollY : 0);
   fileTree.setActive(doc.path);
   toc.update();
-  document.title = `${doc.path} - MD Browser`;
+  // File name first: narrow tabs only show the start of the title.
+  const slash = doc.path.lastIndexOf('/');
+  const dir = slash < 0 ? '' : ` - ${doc.path.slice(0, slash)}`;
+  document.title = `${doc.path.slice(slash + 1)}${dir} - MD Browser`;
+  faviconError(false);
+  pollFailures = 0;
   setStatus(
-    `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
+    // Warning first: the status line is cut off at the end when it doesn't fit.
+    (workspace.truncatedAt ? `${t('scanTruncated', { max: workspace.truncatedAt.toLocaleString() })} · ` : '') +
+      `${doc.path} · ${t(workspace.watchable ? 'autoReloadOn' : 'autoReloadUnsupported')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`,
   );
 }
 
@@ -102,7 +119,13 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   recentHandle = opts.handle ?? null;
   // A newer open replaces the remembered one, even when it can't be remembered itself.
   if (!recentHandle) void clearRecent();
-  $('reopen').hidden = true;
+  // The button lives in the welcome screen, which is gone once a document has been shown.
+  const reopenButton = document.getElementById('reopen');
+  if (reopenButton) reopenButton.hidden = true;
+  const nameEl = $('workspace-name');
+  nameEl.textContent = next.label;
+  nameEl.title = next.label;
+  nameEl.hidden = false;
   fileTree.render(next.docs.map((d) => d.path));
   updateSidebar();
   const initial =
@@ -152,19 +175,34 @@ function startPolling(): void {
 }
 
 async function poll(): Promise<void> {
-  if (polling || document.hidden || !ws || !currentDoc) return;
+  if (polling || !ws || !currentDoc) return;
+  if (document.hidden && ++hiddenTicks % HIDDEN_POLL_EVERY !== 0) return;
   polling = true;
   try {
     const stamp = await ws.stat(currentDoc);
-    if (stamp !== lastStamp) await showDoc(currentDoc, { keepScroll: true });
+    if (stamp !== lastStamp) {
+      await showDoc(currentDoc, { keepScroll: true });
+      faviconUpdated();
+    } else if (pollFailures >= FAIL_LIMIT) {
+      // Back unchanged after a reported error: re-render to restore the normal status.
+      await showDoc(currentDoc, { keepScroll: true });
+    }
+    pollFailures = 0;
   } catch (err) {
+    if (++pollFailures < FAIL_LIMIT) return;
     setStatus(t('fileGone', { path: currentDoc.path, error: errMsg(err) }), 'error');
+    faviconError(true);
   } finally {
     polling = false;
   }
 }
 
 // ---- opening files --------------------------------------------------------
+
+/** Scans a folder with the limit from the settings panel. */
+async function scanFolder(dir: FileSystemDirectoryHandle): Promise<Workspace> {
+  return fromDirectoryHandle(dir, await scanLimitStore().load());
+}
 
 const MD_ACCEPT = { 'text/markdown': ['.md', '.markdown', '.mdown', '.mkd'] };
 
@@ -189,7 +227,7 @@ async function pickDirectory(): Promise<void> {
     try {
       const dir = await window.showDirectoryPicker({ mode: 'read' });
       setStatus(t('scanning', { name: dir.name }));
-      await openWorkspace(await fromDirectoryHandle(dir), { handle: dir });
+      await openWorkspace(await scanFolder(dir), { handle: dir });
     } catch (err) {
       if (!isAbort(err)) setStatus(errMsg(err), 'error');
     }
@@ -226,7 +264,7 @@ async function handleDrop(e: DragEvent): Promise<void> {
   const dir = handles.find((h): h is FileSystemDirectoryHandle => h.kind === 'directory');
   if (dir) {
     setStatus(t('scanning', { name: dir.name }));
-    await openWorkspace(await fromDirectoryHandle(dir), { handle: dir });
+    await openWorkspace(await scanFolder(dir), { handle: dir });
     return;
   }
   const mdHandle = handles.find(
@@ -237,6 +275,18 @@ async function handleDrop(e: DragEvent): Promise<void> {
     return;
   }
   if (files.length) await openWorkspace(fromFiles(files));
+}
+
+/** Scans the open folder again (after the scan limit changed), staying on the current document. */
+async function rescanFolder(): Promise<void> {
+  if (recentHandle?.kind !== 'directory') return; // a single file or dropped files: nothing to scan
+  const dir = recentHandle;
+  setStatus(t('scanning', { name: dir.name }));
+  try {
+    await openWorkspace(await scanFolder(dir), { handle: dir, docPath: currentDoc?.path });
+  } catch (err) {
+    setStatus(errMsg(err), 'error');
+  }
 }
 
 // ---- reopening after a reload ------------------------------------------------
@@ -250,7 +300,7 @@ async function reopen({ handle, docPath }: Recent): Promise<void> {
   try {
     if (handle.kind === 'directory') {
       setStatus(t('scanning', { name: handle.name }));
-      await openWorkspace(await fromDirectoryHandle(handle), { handle, docPath });
+      await openWorkspace(await scanFolder(handle), { handle, docPath });
     } else {
       await openWorkspace(fromFileHandle(handle), { handle, docPath });
     }
@@ -297,6 +347,7 @@ function isAbort(err: unknown): boolean {
 // ---- event wiring ------------------------------------------------------------
 
 applyI18n();
+initFavicon();
 // The develop branch is deployed to /dev/; mark it so it isn't mistaken for production.
 if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   document.title = `${document.title} (dev)`;
@@ -315,9 +366,10 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   }
   document.querySelector('.brand')?.after(badge);
 }
-mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!);
+mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl));
+enableImageZoom(contentEl);
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
 }
