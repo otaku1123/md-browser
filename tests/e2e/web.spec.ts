@@ -45,7 +45,7 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
 
 test('renders a folder: TOC, diagrams and relative images', async ({ page }) => {
   await openSampleFolder(page);
-  await expect(page.locator('.toc a')).toHaveCount(9);
+  await expect(page.locator('.toc a')).toHaveCount(10);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.markdown-alert')).toHaveCount(5);
   await expect(page.locator('details.front-matter')).not.toHaveAttribute('open');
@@ -57,6 +57,15 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('#files summary')).toHaveText(['docs']);
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
   await expect(page.locator('#workspace-name')).toHaveText('sample/');
+});
+
+test('jumps between a footnote reference and its note', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.locator('.footnote-ref a').first().click();
+  await expect(page.locator('.footnotes li').first()).toBeInViewport();
+  await expect(page).toHaveURL(/#fn-md-1$/);
+  await page.locator('.footnote-backref').first().click();
+  await expect(page.locator('.footnote-ref a').first()).toBeInViewport();
 });
 
 test('opens another folder in the same tab', async ({ page }) => {

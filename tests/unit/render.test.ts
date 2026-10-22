@@ -181,3 +181,44 @@ describe('front matter', () => {
     expect(performance.now() - start).toBeLessThan(3000);
   });
 });
+
+describe('footnotes', () => {
+  const src = 'Text[^1] and more[^note] again[^1].\n\n[^1]: First *note*.\n[^note]: Named.\n';
+
+  it('renders references and a footnote section with back-references', () => {
+    const root = dom(renderMarkdown(src).html);
+    const refs = root.querySelectorAll('sup.footnote-ref a');
+    expect(refs).toHaveLength(3);
+    const target = refs[0].getAttribute('href')!;
+    expect(root.querySelector(target)?.textContent).toContain('First note.');
+    expect(root.querySelectorAll('section.footnotes li')).toHaveLength(2);
+    expect(root.querySelector('hr.footnotes-sep')).not.toBeNull();
+  });
+
+  it('links every reference to the same note and back to each reference', () => {
+    const root = dom(renderMarkdown(src).html);
+    const refs = [...root.querySelectorAll('sup.footnote-ref a')];
+    expect(refs[0].getAttribute('href')).toBe(refs[2].getAttribute('href'));
+    expect(refs[0].id).not.toBe(refs[2].id);
+    const backrefs = [...root.querySelectorAll('li:first-child a.footnote-backref')].map((a) => a.getAttribute('href'));
+    expect(backrefs).toEqual([`#${refs[0].id}`, `#${refs[2].id}`]);
+  });
+
+  it('keeps ids and in-page links through sanitization', () => {
+    const root = dom(renderMarkdown(src).html);
+    for (const a of root.querySelectorAll('a.footnote-backref, sup.footnote-ref a')) {
+      // Attribute selector: ids like "fnref-md-1:1" contain a colon.
+      expect(root.querySelector(`[id="${a.getAttribute('href')!.slice(1)}"]`)).not.toBeNull();
+    }
+  });
+
+  it('leaves the table of contents alone', () => {
+    const { toc } = renderMarkdown('# Title\n\nText[^1]\n\n[^1]: Note\n');
+    expect(toc).toEqual([{ level: 1, text: 'Title', id: 'title' }]);
+  });
+
+  it('does not carry footnotes over to the next render', () => {
+    renderMarkdown(src);
+    expect(renderMarkdown('No notes here.\n').html).not.toContain('footnote');
+  });
+});
