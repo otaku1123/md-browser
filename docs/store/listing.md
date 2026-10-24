@@ -21,7 +21,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.5.0.zip` |
+| アップロードするファイル | `release/md-browser-1.6.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -46,20 +46,23 @@ Open any .md file from your computer (drag it into Chrome or open file:///…/RE
 
 FEATURES
 • GitHub-style rendering: tables, task lists, syntax-highlighted code blocks
-• Sidebar table of contents that follows your scroll position
-• Mermaid diagrams (flowcharts, sequence diagrams, and more)
+• Sidebar table of contents that follows your scroll position; hide it or drag to resize
+• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open
+• Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
+• Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
 • Live reload: save the file in your editor and the page re-renders within about a second, keeping your scroll position
 • GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
-• One-click copy button on code blocks
+• One-click copy button on code blocks, and a link button on headings
+• Switch to the raw Markdown source (button or Ctrl/⌘+Shift+M), with line numbers
 • Display settings: theme (system / light / dark), text size, content width, image size, and fonts for body text and code
 • Click an image to see it at full size
 • Relative images and links to other .md files just work
 • Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars
 • Tab icon shows which tabs are rendered by MD Browser, and marks files that changed (or can't be read) while the tab was in the background
-• Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree and the folder name in the toolbar; it reopens what you had open after a reload, and the scan limit for very large folders is adjustable
+• Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree and the folder name in the toolbar; a list of recently opened files and folders, and an adjustable scan limit for very large folders is adjustable
 
 PRIVACY
-Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only re-reads the Markdown file you are currently viewing.
+Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only reads the Markdown file you are viewing and, for the file sidebar, the names of the files in that file's folder and below.
 
 SETUP (important)
 Chrome requires one extra step for extensions that read local files:
@@ -79,20 +82,23 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 
 主な機能
 • GitHub 風の表示：表・タスクリスト・シンタックスハイライト付きコードブロック
-• スクロール位置に連動する目次サイドバー
-• Mermaid 図（フローチャート、シーケンス図など）
+• スクロール位置に連動する目次サイドバー（表示の切り替え、ドラッグで幅を変更）
+• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける
+• Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
+• KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
 • 自動更新：エディタで保存すると約 1 秒で再描画（スクロール位置を保持）
 • GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示
-• コードブロックのワンクリックコピー
+• コードブロックのワンクリックコピーと、見出しへのリンクのコピー
+• 元の Markdown テキスト表示への切り替え（ボタンまたは Ctrl/⌘+Shift+M、行番号付き）
 • 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、画像サイズ、本文とコードのフォント
 • 画像をクリックすると原寸で表示
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
 • 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）
 • タブのアイコンで MD Browser が表示しているタブがひと目でわかり、裏のタブでファイルが更新された（または読めなくなった）ことも表示
-• ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリーとフォルダ名の表示付き。再読み込みしても前回開いていたものを復元。大きなフォルダの走査上限は変更可能）
+• ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリーとフォルダ名の表示付き。最近開いたファイル・フォルダの一覧。大きなフォルダの走査上限は変更可能）
 
 プライバシー
-すべての処理はブラウザ内で完結します。データの収集・送信やアクセス解析は一切行いません。拡張機能が再読み込みするのは、表示中の Markdown ファイルだけです。
+すべての処理はブラウザ内で完結します。データの収集・送信やアクセス解析は一切行いません。拡張機能が読み込むのは、表示中の Markdown ファイルと、ファイル一覧のサイドバー用に、そのファイルがあるフォルダとその下にあるファイルの名前だけです。
 
 初期設定（重要）
 ローカルファイルを読む拡張機能には、Chrome の仕様で次の設定が必要です。
@@ -126,13 +132,13 @@ Render local Markdown (.md) files opened in Chrome as formatted documents with a
 content_scripts の `file:///*.md` などへのマッチが、ホスト権限として扱われる。
 
 ```text
-The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. No other pages or files are accessed, and no network requests are made by the extension.
+The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders and node_modules are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. No file contents other than the viewed file are read, no other pages are accessed, and no network requests are made by the extension.
 ```
 
 ### storage 権限が必要な理由（Permission justification: storage）
 
 ```text
-Stores the user's display preferences (theme, text size, content width, image size, and font names for the document body and code blocks) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. Only these preferences are stored; no file contents or personal data are saved.
+Stores the user's display preferences (theme, text size, content width, image size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and the table of contents width) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. Only these preferences and folder locations are stored; no file contents or personal data are saved.
 ```
 
 ### リモートコード（Remote code）
@@ -164,7 +170,7 @@ https://otaku1123.github.io/md-browser/privacy.html
 ## 5. 審査担当者向けメモ（必要な場合）
 
 ```text
-To test: install the extension, enable "Allow access to file URLs" on the extension's details page, then open any local .md file in Chrome (e.g. drag a README.md into a tab). The file is rendered with a table of contents and diagrams. Editing and saving the file re-renders the page within about one second. The toolbar icon opens the bundled viewer.
+To test: install the extension, enable "Allow access to file URLs" on the extension's details page, then open any local .md file in Chrome (e.g. drag a README.md into a tab). The file is rendered with a table of contents and diagrams. Editing and saving the file re-renders the page within about one second. If the folder contains other .md files, they are listed in the left sidebar (toggle with the button at the top left). The toolbar icon opens the bundled viewer.
 ```
 
 ## トラブルシューティング
