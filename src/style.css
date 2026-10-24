@@ -521,18 +521,38 @@ body {
 /* ---- welcome ---- */
 .welcome { padding-top: 40px; }
 .welcome h1 { border-bottom: none; }
-.welcome .reopen {
-  margin: 0 0 16px;
-  padding: 6px 14px;
+.recent { margin: 0 0 20px; max-width: 560px; }
+.recent[hidden] { display: none; }
+.recent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.welcome .recent h2 { margin: 0; padding: 0; border: none; font-size: 14px; color: var(--fg-muted); }
+.recent ul { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.recent li { display: flex; align-items: stretch; }
+.recent li + li { border-top: 1px solid var(--border); }
+.recent button {
   font: inherit;
   font-size: 14px;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
+  color: inherit;
+  background: none;
+  border: none;
   cursor: pointer;
 }
-.welcome .reopen:hover { text-decoration: underline; }
+.recent-open {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 10px;
+  text-align: left;
+}
+.recent-open:hover, .recent-remove:hover { background: var(--accent-soft); }
+.recent-name { color: var(--accent); white-space: nowrap; }
+.recent-doc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-muted); font-size: 13px; }
+.recent-when { margin-left: auto; padding-left: 8px; white-space: nowrap; color: var(--fg-muted); font-size: 12px; }
+.recent-remove { padding: 0 12px; color: var(--fg-muted); font-size: 16px; }
+.recent-clear { padding: 2px 6px; color: var(--fg-muted); border-radius: 4px; }
+.recent-clear:hover { color: var(--accent); text-decoration: underline; }
+.recent button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* ---- highlight.js tokens ---- */
 .hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-type, .hljs-meta .hljs-keyword { color: var(--hl-keyword); }

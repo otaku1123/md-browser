@@ -110,11 +110,47 @@ test('offers a button when the permission must be asked again', async ({ page })
     FileSystemHandle.prototype.requestPermission = async () => ((asked = true), 'granted');
   });
   await page.reload();
-  const button = page.getByRole('button', { name: 'Reopen sample/' });
+  const button = page.getByRole('button', { name: /sample\// }).first();
   await expect(button).toBeVisible();
   await button.click();
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
-  await expect(button).toHaveCount(0); // the welcome screen is gone
+  await expect(page.locator('.welcome')).toHaveCount(0); // the welcome screen is gone
+});
+
+test('lists recent folders, most recent first, and removes them', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.locator('#files [data-path="docs/other.md"]').click();
+  await page.waitForTimeout(300);
+  // A second folder, opened later, goes on top.
+  await page.evaluate(() => {
+    window.showDirectoryPicker = async () => {
+      const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('other', { create: true });
+      const w = await (await dir.getFileHandle('notes.md', { create: true })).createWritable();
+      await w.write('# Notes');
+      await w.close();
+      return dir;
+    };
+  });
+  await page.getByRole('button', { name: 'Open folder' }).click();
+  await expect(page.locator('#workspace-name')).toHaveText('other/');
+  await page.waitForTimeout(300);
+  // Permission has lapsed after the reload: the list is shown instead of reopening.
+  await page.addInitScript(() => {
+    FileSystemHandle.prototype.queryPermission = async () => 'prompt';
+    FileSystemHandle.prototype.requestPermission = async () => 'granted';
+  });
+  await page.reload();
+  const rows = page.locator('.recent-open');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText('other/');
+  await expect(rows.nth(1)).toContainText('sample/');
+  await expect(rows.nth(1)).toContainText('docs/other.md');
+  await page.getByRole('button', { name: 'Remove other/ from the list' }).click();
+  await expect(rows).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator('.recent-open')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Clear' }).click();
+  await expect(page.locator('#recent')).toBeHidden();
 });
 
 test('follows relative links between documents', async ({ page }) => {
