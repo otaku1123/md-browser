@@ -349,6 +349,14 @@ body {
   color: var(--fg-muted);
   border-left: 4px solid var(--border);
 }
+.markdown-body .footnote-ref { font-size: 0.75em; }
+.markdown-body .footnote-ref a { text-decoration: none; }
+.markdown-body .footnotes-sep { margin: 2em 0 1em; border: none; border-top: 1px solid var(--border); }
+.markdown-body .footnotes { font-size: 0.875em; color: var(--fg-muted); }
+.markdown-body .footnotes ol { padding-left: 1.5em; }
+.markdown-body .footnotes li:target { background: var(--accent-soft); }
+.markdown-body .footnotes p { margin: 0.25em 0; }
+.markdown-body .footnote-backref { margin-left: 0.25em; text-decoration: none; }
 .markdown-body .front-matter {
   margin: 0 0 1.5em;
   border: 1px solid var(--border);
@@ -584,6 +592,7 @@ body {
   .markdown-body pre,
   .markdown-body blockquote,
   .markdown-body .markdown-alert,
+  .markdown-body .footnotes li,
   .markdown-body img,
   .diagram { break-inside: avoid; }
   .markdown-body tr { break-inside: avoid; }

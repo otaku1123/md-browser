@@ -10,7 +10,7 @@ test('renders a local .md file in place', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
-  await expect(page.locator('.toc a')).toHaveCount(9);
+  await expect(page.locator('.toc a')).toHaveCount(10);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.plantuml-note')).toBeVisible();
   await expect(page.locator('.markdown-alert')).toHaveCount(5);

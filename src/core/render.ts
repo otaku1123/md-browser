@@ -1,6 +1,7 @@
 import MarkdownIt from 'markdown-it';
 import anchor from 'markdown-it-anchor';
 import taskLists from 'markdown-it-task-lists';
+import footnote from 'markdown-it-footnote';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/common';
 import { t } from '../i18n';
@@ -51,7 +52,8 @@ const md = new MarkdownIt({
           .replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, ''),
       ),
   })
-  .use(taskLists, { enabled: false });
+  .use(taskLists, { enabled: false })
+  .use(footnote);
 
 // GitHub alerts: a blockquote whose first line is only "[!NOTE]" (TIP, IMPORTANT, WARNING,
 // CAUTION; case-insensitive) becomes a callout. Anything else stays an ordinary blockquote.
@@ -147,7 +149,8 @@ function splitFrontMatter(src: string): { frontMatter: string; body: string } {
 }
 
 export function renderMarkdown(src: string): RenderResult {
-  const env = {};
+  // docId namespaces footnote ids ("fn-md-1" rather than "fn1") so they can't collide with heading slugs.
+  const env = { docId: 'md' };
   const { frontMatter, body } = splitFrontMatter(stripChatGptMarkers(src));
   const tokens = md.parse(body, env);
 
