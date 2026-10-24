@@ -3,6 +3,7 @@ import { applyI18n, t } from './i18n';
 import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
+import { mountTocPanel } from './core/toc-panel';
 import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
 import { onThemeChange } from './core/theme';
@@ -369,6 +370,7 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   document.querySelector('.brand')?.after(badge);
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
+mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl));
 enableImageZoom(contentEl);

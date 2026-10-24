@@ -7,6 +7,7 @@ import { addCopyButtons } from '../core/code-copy';
 import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom } from '../core/image-zoom';
 import { createToc } from '../core/toc';
+import { mountTocPanel } from '../core/toc-panel';
 import { mountFontSettings } from '../core/font-settings';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
@@ -66,6 +67,7 @@ function buildShell(): { content: HTMLElement; tocEl: HTMLElement; status: HTMLE
   layout.append(tocEl, content);
 
   document.body.replaceChildren(header, layout);
+  mountTocPanel(header, tocEl);
   document.body.removeAttribute('style');
   return { content, tocEl, status };
 }
