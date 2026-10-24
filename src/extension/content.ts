@@ -10,9 +10,11 @@ import { enableImageZoom } from '../core/image-zoom';
 import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
 import { mountFontSettings } from '../core/font-settings';
+import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
+import { createFileTree } from '../file-tree';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
-import { MSG_READ_SELF, type ReadSelfResponse } from './messages';
+import { MSG_LIST_SIBLINGS, MSG_READ_SELF, type ListSiblingsResponse, type ReadSelfResponse } from './messages';
 
 const POLL_MS = 1000;
 /** Background tabs still poll, less often, so the tab icon can flag changes. */
@@ -39,7 +41,39 @@ function fileName(): string {
   return decodeURIComponent(location.pathname.split('/').pop() ?? 'document.md');
 }
 
-function buildShell(): { content: HTMLElement; tocEl: HTMLElement; status: HTMLElement } {
+/** Lists the Markdown files in this file's folder and below, then offers them in the sidebar. */
+async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement): Promise<void> {
+  let res: ListSiblingsResponse | undefined;
+  try {
+    res = await chrome.runtime.sendMessage({ type: MSG_LIST_SIBLINGS });
+  } catch {
+    return; // no listing (e.g. file access off): the page works without the sidebar
+  }
+  if (!res?.ok || res.paths.length < 2) return;
+  // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
+  const rootUrl = new URL('../'.repeat(res.current.split('/').length - 1) || './', location.href);
+  const tree = createFileTree(filesEl, (path) => {
+    // Paths are relative to the root; encode each segment so names like "a#b.md" survive.
+    location.href = new URL(path.split('/').map(encodeURIComponent).join('/'), rootUrl).href;
+  });
+  tree.render(res.paths);
+  if (res.truncated) {
+    const note = document.createElement('p');
+    note.className = 'files-note';
+    note.textContent = t('filesTruncated');
+    filesEl.append(note);
+  }
+  tree.setActive(res.current); // not listed (e.g. below the depth limit): nothing is marked
+  mountFilesSidebar(filesToggle, filesEl).setAvailable(true);
+}
+
+function buildShell(): {
+  content: HTMLElement;
+  tocEl: HTMLElement;
+  filesEl: HTMLElement;
+  filesToggle: HTMLButtonElement;
+  status: HTMLElement;
+} {
   const style = document.createElement('style');
   style.textContent = css;
   const viewport = document.createElement('meta');
@@ -50,12 +84,19 @@ function buildShell(): { content: HTMLElement; tocEl: HTMLElement; status: HTMLE
 
   const header = document.createElement('header');
   header.className = 'toolbar';
+  // Same structure as index.html, so the viewer's sidebar styles apply; hidden until files are listed.
+  const filesEl = document.createElement('nav');
+  filesEl.className = 'files';
+  filesEl.id = 'md-files';
+  filesEl.setAttribute('aria-label', t('files'));
+  filesEl.hidden = true;
+  const filesToggle = createFilesToggle(filesEl);
   const brand = document.createElement('strong');
   brand.className = 'brand';
   brand.textContent = fileName();
   const status = document.createElement('span');
   status.className = 'status';
-  header.append(brand, status);
+  header.append(filesToggle, brand, status);
   mountFontSettings(header);
 
   const layout = document.createElement('div');
@@ -65,19 +106,19 @@ function buildShell(): { content: HTMLElement; tocEl: HTMLElement; status: HTMLE
   tocEl.setAttribute('aria-label', t('toc'));
   const content = document.createElement('main');
   content.className = 'content markdown-body';
-  layout.append(tocEl, content);
+  layout.append(filesEl, tocEl, content);
 
   document.body.replaceChildren(header, layout);
   mountTocPanel(header, tocEl);
   document.body.removeAttribute('style');
-  return { content, tocEl, status };
+  return { content, tocEl, filesEl, filesToggle, status };
 }
 
 async function main(): Promise<void> {
   const initial = readPlainTextSource();
   if (initial === null) return;
 
-  const { content, tocEl, status } = buildShell();
+  const { content, tocEl, filesEl, filesToggle, status } = buildShell();
   initFavicon();
   const toc = createToc(tocEl);
   let current = initial;
@@ -110,6 +151,7 @@ async function main(): Promise<void> {
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
   onThemeChange(() => void renderDiagrams(content));
   enableImageZoom(content);
+  void showSiblings(filesEl, filesToggle);
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
   try {

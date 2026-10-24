@@ -21,10 +21,13 @@ export function createSettingsStore<T>(key: string, normalize: (raw: unknown) =>
     };
   }
   const read = (): T => {
+    let raw: string | null = null;
     try {
-      return normalize(JSON.parse(localStorage.getItem(key) ?? 'null'));
+      raw = localStorage.getItem(key);
+      return normalize(JSON.parse(raw ?? 'null'));
     } catch {
-      return normalize(null);
+      // Not JSON: a value saved as a bare string before this store existed (e.g. the files sidebar).
+      return normalize(raw);
     }
   };
   return {

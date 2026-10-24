@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { extensionTest as test } from './fixtures';
@@ -194,4 +195,82 @@ test('saves a Mermaid diagram as SVG and PNG from the file page (no downloads pe
   const [png] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'PNG で保存' }).click()]);
   expect(png.suggestedFilename()).toBe('diagram-1.png');
   await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
+});
+
+/** Writes { relativePath: text } into a fresh temp folder. */
+async function makeFolder(files: Record<string, string>): Promise<string> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mdb-tree-'));
+  for (const [rel, text] of Object.entries(files)) {
+    await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await fs.writeFile(path.join(dir, rel), text);
+  }
+  return dir;
+}
+
+test('lists Markdown files of the folder and its subfolders in a sidebar', async ({ context }) => {
+  const dir = await makeFolder({
+    'README.md': '# Top',
+    'notes.md': '# Notes',
+    'image.txt': 'not markdown',
+    'sub dir/deep #1.md': '# Deep',
+    'node_modules/pkg/README.md': '# skip',
+    '.git/info.md': '# skip',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const sidebar = page.locator('.files');
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['deep #1.md', 'notes.md', 'README.md']);
+    await expect(sidebar.locator('summary')).toHaveText(['sub dir']);
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+
+    await sidebar.getByRole('button', { name: 'deep #1.md' }).click();
+    await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
+    await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
+    // The tab keeps its root: same list, with the subfolder file active.
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['deep #1.md', 'notes.md', 'README.md']);
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'sub dir/deep #1.md');
+    // Links resolve against the root, not the subfolder.
+    await sidebar.getByRole('button', { name: 'notes.md' }).click();
+    await expect(page).toHaveURL(/\/notes\.md$/);
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'notes.md');
+
+    // A file outside the root (here a sibling folder) starts a new root for the tab.
+    const elsewhere = await makeFolder({ 'x.md': '# X', 'y.md': '# Y' });
+    try {
+      await page.goto(fileUrl(elsewhere, 'x.md'));
+      await expect(sidebar.locator('.file-tree-file')).toHaveText(['x.md', 'y.md']);
+      await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'x.md');
+    } finally {
+      await fs.rm(elsewhere, { recursive: true, force: true });
+    }
+
+    // The toggle state is shared with other tabs through chrome.storage.sync.
+    await page.goto(fileUrl(dir, 'notes.md'));
+    await expect(page.locator('.files [aria-current="page"]')).toHaveAttribute('data-path', 'notes.md');
+    await page.getByRole('button', { name: 'ファイル一覧' }).click();
+    await expect(page.locator('.files')).toBeHidden();
+    const other = await context.newPage();
+    await other.goto(fileUrl(dir, 'README.md'));
+    await expect(other.getByRole('button', { name: 'ファイル一覧' })).toHaveAttribute('aria-expanded', 'false');
+    await expect(other.locator('.files')).toBeHidden();
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('shows no file sidebar for a folder with a single Markdown file', async ({ context }) => {
+  const dir = await makeFolder({ 'only.md': '# Only', 'other.txt': 'x' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'only.md'));
+    await expect(page.locator('.status')).toHaveText('自動更新 ON');
+    // The listing is requested after the first render; give it time to (not) show up.
+    await page.waitForTimeout(500);
+    await expect(page.locator('.files')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'ファイル一覧' })).toBeHidden();
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });

@@ -5,6 +5,7 @@ import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
 import { mountTocPanel } from './core/toc-panel';
 import { createFileTree } from './file-tree';
+import { mountFilesSidebar } from './core/files-sidebar';
 import { renderDiagrams } from './core/diagrams';
 import { renderMath } from './core/math';
 import { onThemeChange } from './core/theme';
@@ -143,34 +144,11 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
 
 // ---- file sidebar ----------------------------------------------------------
 
-const SIDEBAR_KEY = 'md-browser:files-sidebar';
-
-function loadSidebarOpen(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_KEY) !== 'closed';
-  } catch {
-    return true;
-  }
-}
-
-let sidebarOpen = loadSidebarOpen();
+const filesSidebar = mountFilesSidebar(filesToggle, filesEl);
 
 /** The sidebar is only offered when the workspace has more than one document. */
 function updateSidebar(): void {
-  const available = (ws?.docs.length ?? 0) > 1;
-  filesToggle.hidden = !available;
-  filesToggle.setAttribute('aria-expanded', String(sidebarOpen));
-  filesEl.hidden = !(available && sidebarOpen);
-}
-
-function toggleSidebar(): void {
-  sidebarOpen = !sidebarOpen;
-  try {
-    localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? 'open' : 'closed');
-  } catch {
-    // storage unavailable (e.g. blocked site data): keep the state for this session only
-  }
-  updateSidebar();
+  filesSidebar.setAvailable((ws?.docs.length ?? 0) > 1);
 }
 
 function startPolling(): void {
@@ -461,7 +439,6 @@ if (location.protocol === 'chrome-extension:') {
 $('open-file').addEventListener('click', pickFile);
 $('open-dir').addEventListener('click', pickDirectory);
 
-filesToggle.addEventListener('click', toggleSidebar);
 void restoreRecent();
 
 contentEl.addEventListener('click', (e) => {
