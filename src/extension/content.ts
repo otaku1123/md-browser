@@ -4,6 +4,7 @@ import { renderMarkdown } from '../core/render';
 import { renderDiagrams } from '../core/diagrams';
 import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
+import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom } from '../core/image-zoom';
 import { createToc } from '../core/toc';
 import { mountFontSettings } from '../core/font-settings';
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
     // Relative images/links resolve natively against the file:// URL.
     await renderDiagrams(staging.content);
     addCopyButtons(staging.content);
+    addHeadingLinks(staging.content, true);
     if (mine !== seq) return;
     const y = window.scrollY;
     content.replaceChildren(staging.content);

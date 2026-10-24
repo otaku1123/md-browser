@@ -304,6 +304,20 @@ test('copies code blocks to the clipboard', async ({ page, context }) => {
   );
 });
 
+test('copies a heading link to the clipboard', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openSampleFolder(page);
+  const heading = page.locator('.markdown-body h2').first();
+  const link = heading.locator('.heading-link');
+  await expect(link).toHaveCSS('opacity', '0');
+  await heading.hover();
+  await expect(link).toHaveCSS('opacity', '1');
+  const id = await heading.getAttribute('id');
+  await link.click();
+  await expect(link).toHaveClass(/done/);
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`#${id}`);
+});
+
 test('prints only the document, on white, even in dark mode', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await openSampleFolder(page);
