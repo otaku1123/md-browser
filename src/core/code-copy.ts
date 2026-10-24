@@ -1,9 +1,9 @@
 // Adds a "Copy" button to each code block. Diagram sources and front matter are skipped.
 import { t } from '../i18n';
 
-const RESET_MS = 1500;
+export const RESET_MS = 1500;
 
-async function writeClipboard(text: string): Promise<void> {
+export async function writeClipboard(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     return;
@@ -21,6 +21,33 @@ async function writeClipboard(text: string): Promise<void> {
   if (!ok) throw new Error('copy command failed');
 }
 
+/** A "Copy" button that copies getText() and briefly reports the result. */
+export function createCopyButton(getText: () => string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'copy-button';
+  button.textContent = t('copyCode');
+  button.setAttribute('aria-live', 'polite');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  button.addEventListener('click', async () => {
+    clearTimeout(timer);
+    try {
+      await writeClipboard(getText());
+      button.textContent = t('copied');
+      button.classList.remove('failed');
+    } catch {
+      button.textContent = t('copyFailed');
+      button.classList.add('failed');
+    }
+    button.classList.add('done');
+    timer = setTimeout(() => {
+      button.textContent = t('copyCode');
+      button.classList.remove('done', 'failed');
+    }, RESET_MS);
+  });
+  return button;
+}
+
 export function addCopyButtons(root: ParentNode): void {
   for (const code of root.querySelectorAll<HTMLElement>('pre > code')) {
     const pre = code.parentElement!;
@@ -29,29 +56,6 @@ export function addCopyButtons(root: ParentNode): void {
     const wrap = document.createElement('div');
     wrap.className = 'code-block';
     pre.replaceWith(wrap);
-
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'copy-button';
-    button.textContent = t('copyCode');
-    button.setAttribute('aria-live', 'polite');
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    button.addEventListener('click', async () => {
-      clearTimeout(timer);
-      try {
-        await writeClipboard((code.textContent ?? '').replace(/\n$/, ''));
-        button.textContent = t('copied');
-        button.classList.remove('failed');
-      } catch {
-        button.textContent = t('copyFailed');
-        button.classList.add('failed');
-      }
-      button.classList.add('done');
-      timer = setTimeout(() => {
-        button.textContent = t('copyCode');
-        button.classList.remove('done', 'failed');
-      }, RESET_MS);
-    });
-    wrap.append(pre, button);
+    wrap.append(pre, createCopyButton(() => (code.textContent ?? '').replace(/\n$/, '')));
   }
 }

@@ -154,8 +154,10 @@ body {
   border-color: transparent;
 }
 .toolbar .icon-button:hover { color: var(--fg); background: var(--bg); border-color: var(--border); }
-.toolbar .icon-button[aria-expanded="true"] { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
+.toolbar .icon-button:is([aria-expanded="true"], [aria-pressed="true"]) { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
 .toolbar .icon-button[hidden] { display: none; }
+/* TOC toggle sits at the right, next to the settings gear: no hamburger-style pull to the left. */
+.toolbar .icon-button:is(.toc-toggle, .source-toggle) { margin-left: 0; }
 .status {
   margin-left: auto;
   font-size: 12px;
@@ -179,13 +181,13 @@ body {
   .layout > .files { grid-area: files; }
   .layout > .toc { grid-area: toc; }
   .layout > .content { grid-area: content; }
-  /* Without headings, give the whole width to the document. */
-  .layout:has(> .toc.empty) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "content"; }
+  /* Without headings (or with the TOC hidden), give the whole width to the document. */
+  .layout:has(> .toc:is(.empty, .collapsed, .source-mode)) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "content"; }
   .layout:has(> .files:not([hidden])) {
     grid-template-columns: var(--files-w) minmax(0, 1fr) var(--toc-w);
     grid-template-areas: "files content toc";
   }
-  .layout:has(> .files:not([hidden])):has(> .toc.empty) {
+  .layout:has(> .files:not([hidden])):has(> .toc:is(.empty, .collapsed, .source-mode)) {
     grid-template-columns: var(--files-w) minmax(0, 1fr);
     grid-template-areas: "files content";
   }
@@ -201,7 +203,23 @@ body {
   font-size: 13px;
   line-height: 1.5;
 }
-.toc.empty { display: none; }
+.toc:is(.empty, .collapsed, .source-mode) { display: none; }
+/* Drag handle on the TOC's inner edge. Fixed so re-rendering the TOC never touches it; the
+   6px strip straddles the TOC border (centred on x = right edge - TOC width). */
+.toc-resizer {
+  position: fixed;
+  top: var(--toolbar-h);
+  right: calc(var(--toc-w) - 3px);
+  width: 6px;
+  height: calc(100vh - var(--toolbar-h));
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 5;
+}
+.toc-resizer:hover,
+.toc-resizer:focus-visible,
+.toc-resizer.dragging { background: var(--accent-soft); outline: none; box-shadow: inset -1px 0 0 var(--accent); }
+.toc-resizer[hidden] { display: none; }
 /* Wide screens: centre a short TOC vertically in its panel. "safe" falls back to the top when
    the list is taller than the panel, so a long TOC still starts at the top and scrolls. */
 @media (min-width: 801px) {
@@ -243,6 +261,7 @@ body {
 }
 .file-tree-file:hover { color: var(--fg); background: var(--bg-soft); }
 .file-tree-file.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.files-note { margin: 12px 8px 0; font-size: 12px; color: var(--fg-muted); }
 
 .toc ul { list-style: none; margin: 0; padding: 0; }
 .toc a {
@@ -277,7 +296,8 @@ body {
     border-left: none;
     border-bottom: 1px solid var(--border);
   }
-  .toc.empty { display: none; }
+  .toc:is(.empty, .collapsed, .source-mode) { display: none; }
+  .toc-resizer { display: none; }
   .files {
     position: static;
     height: auto;
@@ -335,6 +355,37 @@ body {
 }
 .image-zoom:focus { outline: none; }
 .image-zoom img { max-width: none; max-height: none; background: #fff; }
+/* Mermaid diagrams scale up to fit the window; the svg viewBox keeps them sharp. */
+.image-zoom svg.diagram-zoom-svg {
+  width: calc(100vw - 48px);
+  height: calc(100vh - 48px);
+  max-width: none;
+  background: var(--bg);
+  cursor: default;
+}
+.diagram-actions {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+.diagram-actions button {
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.diagram-actions button:hover { color: var(--fg); border-color: var(--accent); }
+.diagram-save-error { font-size: 12px; color: #fff; background: var(--error); border-radius: 6px; padding: 2px 8px; }
+.diagram-save-error:empty { display: none; }
 .markdown-body img.img-missing {
   display: inline-block;
   min-width: 120px;
@@ -349,6 +400,14 @@ body {
   color: var(--fg-muted);
   border-left: 4px solid var(--border);
 }
+.markdown-body .footnote-ref { font-size: 0.75em; }
+.markdown-body .footnote-ref a { text-decoration: none; }
+.markdown-body .footnotes-sep { margin: 2em 0 1em; border: none; border-top: 1px solid var(--border); }
+.markdown-body .footnotes { font-size: 0.875em; color: var(--fg-muted); }
+.markdown-body .footnotes ol { padding-left: 1.5em; }
+.markdown-body .footnotes li:target { background: var(--accent-soft); }
+.markdown-body .footnotes p { margin: 0.25em 0; }
+.markdown-body .footnote-backref { margin-left: 0.25em; text-decoration: none; }
 .markdown-body .front-matter {
   margin: 0 0 1.5em;
   border: 1px solid var(--border);
@@ -399,7 +458,7 @@ body {
 }
 .markdown-body pre code { padding: 0; background: none; font-size: 0.85em; }
 .markdown-body .code-block { position: relative; }
-.markdown-body .copy-button {
+:is(.markdown-body, .source-view) .copy-button {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -417,18 +476,86 @@ body {
 .markdown-body .code-block:hover .copy-button,
 .markdown-body .copy-button:focus-visible,
 .markdown-body .copy-button.done { opacity: 1; }
-.markdown-body .copy-button:hover { color: var(--fg); border-color: var(--accent); }
-.markdown-body .copy-button.done { color: var(--alert-tip); border-color: var(--alert-tip); }
-.markdown-body .copy-button.failed { color: var(--error); border-color: var(--error); }
+:is(.markdown-body, .source-view) .copy-button:hover { color: var(--fg); border-color: var(--accent); }
+:is(.markdown-body, .source-view) .copy-button.done { color: var(--alert-tip); border-color: var(--alert-tip); }
+:is(.markdown-body, .source-view) .copy-button.failed { color: var(--error); border-color: var(--error); }
 @media (hover: none) {
   .markdown-body .copy-button { opacity: 1; }
+}
+
+/* ---- Markdown source view (source-view.ts) ---- */
+.content[hidden] { display: none; }
+.source-block { position: relative; }
+.source-view .copy-button { opacity: 1; }
+.source-code {
+  margin: 0;
+  padding: 16px 0;
+  font-family: var(--font-code);
+  font-size: calc(var(--doc-font-size, 16px) * 0.85);
+  line-height: 1.45;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  /* Long lines wrap; continuation rows stay clear of the line-number gutter. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  counter-reset: source-line;
+  --source-gutter: calc(var(--source-digits, 3) * 1ch + 24px);
+}
+.source-line {
+  display: block;
+  position: relative;
+  padding: 0 16px 0 calc(var(--source-gutter) + 12px);
+  counter-increment: source-line;
+}
+/* Generated content is never part of a selection, so copied text has no line numbers. */
+.source-line::before {
+  content: counter(source-line);
+  position: absolute;
+  left: 0;
+  width: var(--source-gutter);
+  padding-right: 8px;
+  text-align: right;
+  color: var(--fg-muted);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+
+/* Heading permalink: revealed on heading hover / keyboard focus. */
+.markdown-body .heading-link {
+  margin-left: 0.4em;
+  font-size: 0.7em;
+  font-weight: normal;
+  text-decoration: none;
+  color: var(--fg-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.markdown-body :is(h1, h2, h3, h4, h5, h6):hover .heading-link,
+.markdown-body .heading-link:focus-visible,
+.markdown-body .heading-link.done { opacity: 1; }
+.markdown-body .heading-link::before { content: '🔗'; }
+.markdown-body .heading-link.done::before { content: '✓'; }
+.markdown-body .heading-link.failed::before { content: '✕'; }
+.markdown-body .heading-link:hover { color: var(--accent); }
+.markdown-body .heading-link.done { color: var(--alert-tip); }
+.markdown-body .heading-link.failed { color: var(--error); }
+@media (hover: none) {
+  .markdown-body .heading-link { opacity: 0.6; }
 }
 .markdown-body .task-list-item { list-style: none; }
 .markdown-body .task-list-item input { margin: 0 0.4em 0 -1.4em; }
 
+/* ---- math (KaTeX; it inherits the text colour, so dark mode needs nothing) ---- */
+.math-display { margin: 0 0 1em; overflow-x: auto; overflow-y: hidden; }
+.math-display .katex-display { margin: 0.5em 0; }
+
 /* ---- diagrams ---- */
 .diagram { margin: 0 0 1em; overflow-x: auto; text-align: center; }
 .diagram svg { max-width: 100%; height: auto; }
+/* Click to see it large (image-zoom.ts). */
+.diagram-mermaid:not(.diagram-error) { cursor: zoom-in; }
+.diagram-mermaid:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .diagram-print { display: none; }
 .diagram-error { text-align: left; }
 .diagram-error-message { color: var(--error); font-size: 13px; margin-bottom: 4px; }
@@ -437,18 +564,38 @@ body {
 /* ---- welcome ---- */
 .welcome { padding-top: 40px; }
 .welcome h1 { border-bottom: none; }
-.welcome .reopen {
-  margin: 0 0 16px;
-  padding: 6px 14px;
+.recent { margin: 0 0 20px; max-width: 560px; }
+.recent[hidden] { display: none; }
+.recent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.welcome .recent h2 { margin: 0; padding: 0; border: none; font-size: 14px; color: var(--fg-muted); }
+.recent ul { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.recent li { display: flex; align-items: stretch; }
+.recent li + li { border-top: 1px solid var(--border); }
+.recent button {
   font: inherit;
   font-size: 14px;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
+  color: inherit;
+  background: none;
+  border: none;
   cursor: pointer;
 }
-.welcome .reopen:hover { text-decoration: underline; }
+.recent-open {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 10px;
+  text-align: left;
+}
+.recent-open:hover, .recent-remove:hover { background: var(--accent-soft); }
+.recent-name { color: var(--accent); white-space: nowrap; }
+.recent-doc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-muted); font-size: 13px; }
+.recent-when { margin-left: auto; padding-left: 8px; white-space: nowrap; color: var(--fg-muted); font-size: 12px; }
+.recent-remove { padding: 0 12px; color: var(--fg-muted); font-size: 16px; }
+.recent-clear { padding: 2px 6px; color: var(--fg-muted); border-radius: 4px; }
+.recent-clear:hover { color: var(--accent); text-decoration: underline; }
+.recent button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* ---- highlight.js tokens ---- */
 .hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-type, .hljs-meta .hljs-keyword { color: var(--hl-keyword); }
@@ -544,9 +691,11 @@ body {
   .toolbar,
   .files,
   .toc,
+  .toc-resizer,
   .drop-overlay,
   .image-zoom,
-  .copy-button { display: none !important; }
+  .copy-button,
+  .heading-link { display: none !important; }
   body { background: #fff; }
   .layout { display: block; }
   .content { max-width: none; margin: 0; padding: 0; }
@@ -554,14 +703,17 @@ body {
   /* Overflowing content is clipped on paper, so wrap instead of scrolling. */
   .markdown-body pre { overflow: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
   .markdown-body table,
-  .diagram { overflow: visible; }
+  .diagram,
+  .math-display { overflow: visible; }
 
   /* Keep blocks whole where possible, and headings with the text that follows. */
   .markdown-body pre,
   .markdown-body blockquote,
   .markdown-body .markdown-alert,
+  .markdown-body .footnotes li,
   .markdown-body img,
-  .diagram { break-inside: avoid; }
+  .diagram,
+  .math-display { break-inside: avoid; }
   .markdown-body tr { break-inside: avoid; }
   .markdown-body thead { display: table-header-group; }
   .markdown-body h1, .markdown-body h2, .markdown-body h3,

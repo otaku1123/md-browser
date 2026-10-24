@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { readSampleFiles } from './fixtures';
 
@@ -43,9 +44,16 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
 
+test('typesets inline and display math with KaTeX', async ({ page }) => {
+  await openSampleFolder(page);
+  await expect(page.locator('.math-inline .katex')).toHaveCount(1);
+  await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  await expect(page.locator('.math .katex-error')).toHaveCount(0);
+});
+
 test('renders a folder: TOC, diagrams and relative images', async ({ page }) => {
   await openSampleFolder(page);
-  await expect(page.locator('.toc a')).toHaveCount(9);
+  await expect(page.locator('.toc a')).toHaveCount(11);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.markdown-alert')).toHaveCount(5);
   await expect(page.locator('details.front-matter')).not.toHaveAttribute('open');
@@ -57,6 +65,15 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('#files summary')).toHaveText(['docs']);
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
   await expect(page.locator('#workspace-name')).toHaveText('sample/');
+});
+
+test('jumps between a footnote reference and its note', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.locator('.footnote-ref a').first().click();
+  await expect(page.locator('.footnotes li').first()).toBeInViewport();
+  await expect(page).toHaveURL(/#fn-md-1$/);
+  await page.locator('.footnote-backref').first().click();
+  await expect(page.locator('.footnote-ref a').first()).toBeInViewport();
 });
 
 test('opens another folder in the same tab', async ({ page }) => {
@@ -100,11 +117,47 @@ test('offers a button when the permission must be asked again', async ({ page })
     FileSystemHandle.prototype.requestPermission = async () => ((asked = true), 'granted');
   });
   await page.reload();
-  const button = page.getByRole('button', { name: 'Reopen sample/' });
+  const button = page.getByRole('button', { name: /sample\// }).first();
   await expect(button).toBeVisible();
   await button.click();
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
-  await expect(button).toHaveCount(0); // the welcome screen is gone
+  await expect(page.locator('.welcome')).toHaveCount(0); // the welcome screen is gone
+});
+
+test('lists recent folders, most recent first, and removes them', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.locator('#files [data-path="docs/other.md"]').click();
+  await page.waitForTimeout(300);
+  // A second folder, opened later, goes on top.
+  await page.evaluate(() => {
+    window.showDirectoryPicker = async () => {
+      const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('other', { create: true });
+      const w = await (await dir.getFileHandle('notes.md', { create: true })).createWritable();
+      await w.write('# Notes');
+      await w.close();
+      return dir;
+    };
+  });
+  await page.getByRole('button', { name: 'Open folder' }).click();
+  await expect(page.locator('#workspace-name')).toHaveText('other/');
+  await page.waitForTimeout(300);
+  // Permission has lapsed after the reload: the list is shown instead of reopening.
+  await page.addInitScript(() => {
+    FileSystemHandle.prototype.queryPermission = async () => 'prompt';
+    FileSystemHandle.prototype.requestPermission = async () => 'granted';
+  });
+  await page.reload();
+  const rows = page.locator('.recent-open');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText('other/');
+  await expect(rows.nth(1)).toContainText('sample/');
+  await expect(rows.nth(1)).toContainText('docs/other.md');
+  await page.getByRole('button', { name: 'Remove other/ from the list' }).click();
+  await expect(rows).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator('.recent-open')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Clear' }).click();
+  await expect(page.locator('#recent')).toBeHidden();
 });
 
 test('follows relative links between documents', async ({ page }) => {
@@ -304,6 +357,20 @@ test('copies code blocks to the clipboard', async ({ page, context }) => {
   );
 });
 
+test('copies a heading link to the clipboard', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openSampleFolder(page);
+  const heading = page.locator('.markdown-body h2').first();
+  const link = heading.locator('.heading-link');
+  await expect(link).toHaveCSS('opacity', '0');
+  await heading.hover();
+  await expect(link).toHaveCSS('opacity', '1');
+  const id = await heading.getAttribute('id');
+  await link.click();
+  await expect(link).toHaveClass(/done/);
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`#${id}`);
+});
+
 test('prints only the document, on white, even in dark mode', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await openSampleFolder(page);
@@ -328,3 +395,179 @@ test('prints only the document, on white, even in dark mode', async ({ page }) =
   expect(style.contentWidth).toBe(style.layoutWidth);
 });
 
+test('toggles the TOC and keeps the choice across reloads', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const toggle = page.getByRole('button', { name: 'Table of contents' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.toc')).toBeVisible();
+  const before = (await page.locator('#content').boundingBox())!.width;
+  await toggle.click();
+  await expect(page.locator('.toc')).toBeHidden();
+  await expect(page.locator('.toc-resizer')).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect((await page.locator('#content').boundingBox())!.width).toBeGreaterThan(before);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Table of contents' })).toHaveAttribute('aria-expanded', 'false');
+  await page.getByRole('button', { name: 'Table of contents' }).click();
+  await expect(page.locator('.toc')).toBeVisible();
+});
+
+test('hides the TOC toggle when the document has no headings', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Table of contents' })).toBeHidden();
+  await expect(page.locator('.toc-resizer')).toBeHidden();
+});
+
+test('resizes the TOC by dragging, with the keyboard, and resets on double-click', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const toc = page.locator('.toc');
+  const handle = page.getByRole('separator', { name: 'Resize table of contents' });
+  const width = async () => Math.round((await toc.boundingBox())!.width);
+  expect(await width()).toBe(280);
+
+  const box = (await handle.boundingBox())!;
+  const y = box.y + 200;
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 100, y, { steps: 5 });
+  await page.mouse.up();
+  expect(await width()).toBeGreaterThan(340);
+  await expect(handle).toHaveAttribute('aria-valuenow', String(await width()));
+
+  await handle.focus();
+  const w = await width();
+  await page.keyboard.press('ArrowLeft');
+  expect(await width()).toBe(w + 16);
+  await page.keyboard.press('ArrowRight');
+  expect(await width()).toBe(w);
+  await page.keyboard.press('End');
+  expect(await width()).toBe(480);
+
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:toc-panel'))).toBe('{"open":true,"width":480}');
+  await handle.dblclick();
+  expect(await width()).toBe(280);
+});
+
+
+test('opens a Mermaid diagram large and saves it as SVG and PNG', async ({ page }) => {
+  await openSampleFolder(page);
+  const diagram = page.locator('.diagram-mermaid').first();
+  await expect(diagram.locator('svg')).toBeVisible();
+  await expect(diagram).toHaveAttribute('tabindex', '0');
+
+  await diagram.click();
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  await expect(zoom.locator('svg')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+
+  await diagram.focus();
+  await page.keyboard.press('Enter');
+  await expect(zoom).toBeVisible();
+
+  const [svgDownload] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'Save SVG' }).click()]);
+  expect(svgDownload.suggestedFilename()).toBe('diagram-1.svg');
+  expect(await readFile((await svgDownload.path())!, 'utf8')).toContain('xmlns="http://www.w3.org/2000/svg"');
+  await expect(zoom).toBeVisible(); // saving doesn't close it
+
+  const [pngDownload] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'Save PNG' }).click()]);
+  expect(pngDownload.suggestedFilename()).toBe('diagram-1.png');
+  expect((await readFile((await pngDownload.path())!)).subarray(1, 4).toString()).toBe('PNG');
+  await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
+});
+
+test('saves the second (sequence) diagram as PNG', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.locator('.diagram-mermaid').nth(1).click();
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  const [png] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'Save PNG' }).click()]);
+  expect(png.suggestedFilename()).toBe('diagram-2.png');
+  await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
+});
+
+test('keeps HTML labels on screen and opens a diagram with Space', async ({ page }) => {
+  await openSampleFolder(page);
+  const diagram = page.locator('.diagram-mermaid').first();
+  await expect(diagram.locator('svg foreignObject').first()).toBeAttached();
+  await diagram.focus();
+  await page.keyboard.press('Space');
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  await expect(zoom).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(diagram.locator('svg foreignObject').first()).toBeAttached();
+  await expect(page.locator('body > [id^="dmermaid-export"], body > #mermaid-export-1')).toHaveCount(0);
+});
+
+test('switches to the Markdown source and back, and starts each document in the preview', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const toggle = page.getByRole('button', { name: 'Markdown source' });
+  const source = page.locator('.source-view');
+  await page.evaluate(() => window.scrollTo(0, 600));
+  const previewY = await page.evaluate(() => window.scrollY);
+  expect(previewY).toBeGreaterThan(0);
+
+  await page.keyboard.press('ControlOrMeta+Shift+M');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(source).toBeVisible();
+  await expect(page.locator('#content')).toBeHidden();
+  await expect(page.locator('.toc')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Table of contents' })).toBeHidden();
+  await expect(source.locator('.source-line')).toHaveCount(108);
+  await expect(source.locator('.source-line').nth(1)).toHaveText('title: MD Browser サンプル\n');
+  const number = await source.locator('.source-line').nth(1).evaluate((el) => getComputedStyle(el, '::before').content);
+  expect(number).toBe('counter(source-line)');
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  // A copied selection keeps the line breaks and leaves out the numbers.
+  await page.evaluate(() => {
+    const lines = document.querySelectorAll('.source-line');
+    getSelection()!.setBaseAndExtent(lines[0], 0, lines[2], lines[2].childNodes.length);
+  });
+  await page.keyboard.press('ControlOrMeta+c');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('---\ntitle: MD Browser サンプル\ntags: [markdown, viewer]');
+  // The newline kept at each line's end adds no empty row.
+  const row = await source.locator('.source-line').first().evaluate((el) => ({
+    height: el.getBoundingClientRect().height,
+    lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+  }));
+  expect(row.height).toBeCloseTo(row.lineHeight, 0);
+  await source.locator('.copy-button').click();
+  await expect(source.locator('.copy-button')).toHaveText('Copied');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^---\ntitle: MD Browser サンプル\n[\s\S]*\n$/);
+
+  // Playwright scrolls before clicking, so the preview's position is set by the shortcut and checked after a click.
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#content')).toBeVisible();
+  await expect(page.locator('.toc')).toBeVisible();
+  await expect(source).toBeHidden();
+  expect(await page.evaluate(() => window.scrollY)).toBe(previewY);
+
+  // Another document opens in the preview.
+  await page.keyboard.press('ControlOrMeta+Shift+M');
+  await expect(source).toBeVisible();
+  await page.locator('#files').getByRole('button', { name: 'other.md' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  await expect(source).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('hides the source toggle on the welcome screen', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Markdown source' })).toBeHidden();
+  await page.keyboard.press('ControlOrMeta+Shift+M');
+  await expect(page.locator('.welcome')).toBeVisible();
+});
+
+test('updates the shown source when the file changes', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.getByRole('button', { name: 'Markdown source' }).click();
+  await page.evaluate(() => (window as unknown as { __appendToFile(r: string, t: string): Promise<void> }).__appendToFile('README.md', '\n## Added heading\n'));
+  await expect(page.locator('.source-line').last()).toHaveText('## Added heading');
+  await page.getByRole('button', { name: 'Markdown source' }).click();
+  await expect(page.locator('.markdown-body h2', { hasText: 'Added heading' })).toBeVisible();
+});

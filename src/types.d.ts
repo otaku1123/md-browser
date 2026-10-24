@@ -4,6 +4,12 @@ declare module 'markdown-it-task-lists' {
   export default taskLists;
 }
 
+declare module 'markdown-it-footnote' {
+  import type { PluginSimple } from 'markdown-it';
+  const footnote: PluginSimple;
+  export default footnote;
+}
+
 // File System Access API (Chromium only; not yet in lib.dom.d.ts)
 interface Window {
   showOpenFilePicker?: (options?: {

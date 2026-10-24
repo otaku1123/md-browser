@@ -63,6 +63,21 @@ describe('sanitizing', () => {
     }
   });
 
+  it('keeps heading ids that collide with document / form properties (#48)', () => {
+    const names = ['Title', 'Name', 'Length', 'Id', 'Action', 'Location', 'Cookie'];
+    const { html, toc } = renderMarkdown(names.map((n) => `## ${n}`).join('\n\n'));
+    const root = dom(html);
+    expect(toc.map((t) => t.id)).toEqual(names.map((n) => n.toLowerCase()));
+    for (const { id } of toc) expect(root.querySelector(`h2[id="${id}"]`)).not.toBeNull();
+  });
+
+  it('still drops clobbering ids and names on other elements', () => {
+    const root = dom(renderMarkdown('<img src="x.png" id="cookie" name="title">\n\n<p id="location">x</p>').html);
+    expect(root.querySelector('img')!.hasAttribute('id')).toBe(false);
+    expect(root.querySelector('img')!.hasAttribute('name')).toBe(false);
+    expect(root.querySelector('p')!.hasAttribute('id')).toBe(false);
+  });
+
   it('drops <form> but keeps its contents', () => {
     const root = dom(renderMarkdown('<form action="https://evil.example"><p>inside</p></form>').html);
     expect(root.querySelector('form')).toBeNull();
@@ -179,5 +194,84 @@ describe('front matter', () => {
     const start = performance.now();
     renderMarkdown(src);
     expect(performance.now() - start).toBeLessThan(3000);
+  });
+
+  describe('emoji shortcodes', () => {
+    it('renders known shortcodes as Unicode emoji', () => {
+      const { html } = renderMarkdown(':smile: :+1: :tada:\n');
+      expect(dom(html).textContent).toContain('😄 👍 🎉');
+    });
+
+    it('leaves unknown shortcodes as text', () => {
+      expect(dom(renderMarkdown(':notanemoji:\n').html).textContent).toContain(':notanemoji:');
+    });
+
+    it('does not convert inside inline code or fenced code', () => {
+      const d = dom(renderMarkdown('`:smile:`\n\n```\n:tada:\n```\n').html);
+      expect(d.querySelector('p code')!.textContent).toBe(':smile:');
+      expect(d.querySelector('pre code')!.textContent).toBe(':tada:\n');
+    });
+
+    it('does not convert times, URLs, Windows paths or text shortcuts', () => {
+      const src = '10:30:00 http://example.com C:\\Users\\me :) :-( :D ;)\n';
+      expect(dom(renderMarkdown(src).html).textContent).toContain(
+        '10:30:00 http://example.com C:\\Users\\me :) :-( :D ;)',
+      );
+    });
+
+    it('does not touch colons in front matter', () => {
+      const { html } = renderMarkdown('---\nmood: :smile:\n---\n\nbody\n');
+      expect(dom(html).querySelector('.front-matter')!.textContent).toContain('mood: :smile:');
+    });
+
+    it('shows the emoji in the TOC and keeps the heading id stable', () => {
+      const { html, toc } = renderMarkdown('## Done :tada:\n');
+      expect(toc).toHaveLength(1);
+      expect(toc[0].text).toBe('Done 🎉');
+      expect(toc[0].id).toBe('done');
+      expect(dom(html).querySelector('h2')!.id).toBe(toc[0].id);
+      expect(dom(html).querySelector('h2')!.textContent).toContain('🎉');
+    });
+  });
+});
+
+describe('footnotes', () => {
+  const src = 'Text[^1] and more[^note] again[^1].\n\n[^1]: First *note*.\n[^note]: Named.\n';
+
+  it('renders references and a footnote section with back-references', () => {
+    const root = dom(renderMarkdown(src).html);
+    const refs = root.querySelectorAll('sup.footnote-ref a');
+    expect(refs).toHaveLength(3);
+    const target = refs[0].getAttribute('href')!;
+    expect(root.querySelector(target)?.textContent).toContain('First note.');
+    expect(root.querySelectorAll('section.footnotes li')).toHaveLength(2);
+    expect(root.querySelector('hr.footnotes-sep')).not.toBeNull();
+  });
+
+  it('links every reference to the same note and back to each reference', () => {
+    const root = dom(renderMarkdown(src).html);
+    const refs = [...root.querySelectorAll('sup.footnote-ref a')];
+    expect(refs[0].getAttribute('href')).toBe(refs[2].getAttribute('href'));
+    expect(refs[0].id).not.toBe(refs[2].id);
+    const backrefs = [...root.querySelectorAll('li:first-child a.footnote-backref')].map((a) => a.getAttribute('href'));
+    expect(backrefs).toEqual([`#${refs[0].id}`, `#${refs[2].id}`]);
+  });
+
+  it('keeps ids and in-page links through sanitization', () => {
+    const root = dom(renderMarkdown(src).html);
+    for (const a of root.querySelectorAll('a.footnote-backref, sup.footnote-ref a')) {
+      // Attribute selector: ids like "fnref-md-1:1" contain a colon.
+      expect(root.querySelector(`[id="${a.getAttribute('href')!.slice(1)}"]`)).not.toBeNull();
+    }
+  });
+
+  it('leaves the table of contents alone', () => {
+    const { toc } = renderMarkdown('# Title\n\nText[^1]\n\n[^1]: Note\n');
+    expect(toc).toEqual([{ level: 1, text: 'Title', id: 'title' }]);
+  });
+
+  it('does not carry footnotes over to the next render', () => {
+    renderMarkdown(src);
+    expect(renderMarkdown('No notes here.\n').html).not.toContain('footnote');
   });
 });
