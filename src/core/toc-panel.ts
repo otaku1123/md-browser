@@ -2,6 +2,7 @@
 // lives in the settings store, so every tab and the viewer share it like the other display settings.
 import { t } from '../i18n';
 import { createSettingsStore } from './settings-store';
+import { TOC_SOURCE_CLASS } from './source-view';
 
 export const TOC_WIDTH_DEFAULT = 280;
 export const TOC_WIDTH_MIN = 160;
@@ -59,9 +60,10 @@ export function mountTocPanel(toolbar: HTMLElement, tocEl: HTMLElement): void {
   handle.setAttribute('aria-valuemax', String(TOC_WIDTH_MAX));
   tocEl.parentElement?.append(handle);
 
-  /** Pushes the current state into the DOM. The toggle only exists while the document has headings. */
+  /** Pushes the current state into the DOM. The toggle only exists while the document has headings
+   *  (and its source isn't shown instead, see source-view.ts). */
   function apply(): void {
-    const hasToc = !tocEl.classList.contains('empty');
+    const hasToc = !tocEl.classList.contains('empty') && !tocEl.classList.contains(TOC_SOURCE_CLASS);
     button.hidden = !hasToc;
     button.setAttribute('aria-expanded', String(current.open));
     tocEl.classList.toggle('collapsed', !current.open);

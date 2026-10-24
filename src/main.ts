@@ -4,6 +4,7 @@ import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
 import { mountTocPanel } from './core/toc-panel';
+import { mountSourceView } from './core/source-view';
 import { createFileTree } from './file-tree';
 import { mountFilesSidebar } from './core/files-sidebar';
 import { renderDiagrams } from './core/diagrams';
@@ -93,10 +94,12 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   releaseAssets = assets.release;
   if (currentDoc !== doc) {
     toc.reset();
+    sourceView.reset();
     if (recentHandle) void saveRecent({ handle: recentHandle, docPath: doc.path });
   }
   currentDoc = doc;
   lastStamp = content.stamp;
+  sourceView.setSource(content.text);
   toc.render(tocItems);
   window.scrollTo(0, opts.keepScroll ? scrollY : 0);
   fileTree.setActive(doc.path);
@@ -429,6 +432,7 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
+const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl));
 enableImageZoom(contentEl);

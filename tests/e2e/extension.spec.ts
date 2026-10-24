@@ -274,3 +274,37 @@ test('shows no file sidebar for a folder with a single Markdown file', async ({ 
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('switches a file tab to the Markdown source and follows saves', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page.locator('.status')).toHaveText('自動更新 ON');
+  const toggle = page.getByRole('button', { name: 'Markdown ソース' });
+  const source = page.locator('.source-view');
+
+  await page.keyboard.press('ControlOrMeta+Shift+M');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(source.locator('.source-line').first()).toHaveText('---\n');
+  await expect(page.locator('.markdown-body')).toBeHidden();
+  await expect(page.locator('.toc')).toBeHidden();
+  await expect(page.getByRole('button', { name: '目次' })).toBeHidden();
+
+  await page.evaluate(() => window.scrollTo(0, 300));
+  await fs.appendFile(path.join(workdir, 'README.md'), '\n## 追加した見出し\n');
+  await expect(source.locator('.source-line').last()).toHaveText('## 追加した見出し');
+  expect(await page.evaluate(() => window.scrollY)).toBe(300);
+
+  await toggle.click();
+  await expect(source).toBeHidden();
+  await expect(page.locator('.markdown-body h2', { hasText: '追加した見出し' })).toBeVisible();
+  await expect(page.locator('.toc a', { hasText: '追加した見出し' })).toBeVisible();
+});
+
+test('does not run scripts shown in the Markdown source', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'xss.md'));
+  await page.getByRole('button', { name: 'Markdown ソース' }).click();
+  await expect(page.locator('.source-view')).toContainText('<script>window.__xss = 4</script>');
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
+});
