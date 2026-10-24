@@ -163,3 +163,15 @@ test('toggles and resizes the TOC on a file tab, shared with other tabs', async 
   await expect(other.getByRole('button', { name: '目次' })).toHaveAttribute('aria-expanded', 'false');
   await expect(other.locator('.toc')).toBeHidden();
 });
+
+test('saves a Mermaid diagram as SVG and PNG from the file page (no downloads permission)', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await page.locator('.diagram-mermaid').first().click();
+  const zoom = page.getByRole('dialog');
+  const [svg] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'SVG で保存' }).click()]);
+  expect(svg.suggestedFilename()).toBe('diagram-1.svg');
+  const [png] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'PNG で保存' }).click()]);
+  expect(png.suggestedFilename()).toBe('diagram-1.png');
+  await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
+});
