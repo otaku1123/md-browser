@@ -180,6 +180,44 @@ describe('front matter', () => {
     renderMarkdown(src);
     expect(performance.now() - start).toBeLessThan(3000);
   });
+
+  describe('emoji shortcodes', () => {
+    it('renders known shortcodes as Unicode emoji', () => {
+      const { html } = renderMarkdown(':smile: :+1: :tada:\n');
+      expect(dom(html).textContent).toContain('😄 👍 🎉');
+    });
+
+    it('leaves unknown shortcodes as text', () => {
+      expect(dom(renderMarkdown(':notanemoji:\n').html).textContent).toContain(':notanemoji:');
+    });
+
+    it('does not convert inside inline code or fenced code', () => {
+      const d = dom(renderMarkdown('`:smile:`\n\n```\n:tada:\n```\n').html);
+      expect(d.querySelector('p code')!.textContent).toBe(':smile:');
+      expect(d.querySelector('pre code')!.textContent).toBe(':tada:\n');
+    });
+
+    it('does not convert times, URLs, Windows paths or text shortcuts', () => {
+      const src = '10:30:00 http://example.com C:\\Users\\me :) :-( :D ;)\n';
+      expect(dom(renderMarkdown(src).html).textContent).toContain(
+        '10:30:00 http://example.com C:\\Users\\me :) :-( :D ;)',
+      );
+    });
+
+    it('does not touch colons in front matter', () => {
+      const { html } = renderMarkdown('---\nmood: :smile:\n---\n\nbody\n');
+      expect(dom(html).querySelector('.front-matter')!.textContent).toContain('mood: :smile:');
+    });
+
+    it('shows the emoji in the TOC and keeps the heading id stable', () => {
+      const { html, toc } = renderMarkdown('## Done :tada:\n');
+      expect(toc).toHaveLength(1);
+      expect(toc[0].text).toBe('Done 🎉');
+      expect(toc[0].id).toBe('done');
+      expect(dom(html).querySelector('h2')!.id).toBe(toc[0].id);
+      expect(dom(html).querySelector('h2')!.textContent).toContain('🎉');
+    });
+  });
 });
 
 describe('footnotes', () => {

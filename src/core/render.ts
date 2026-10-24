@@ -1,5 +1,6 @@
 import MarkdownIt from 'markdown-it';
 import anchor from 'markdown-it-anchor';
+import { full as emoji } from 'markdown-it-emoji';
 import taskLists from 'markdown-it-task-lists';
 import footnote from 'markdown-it-footnote';
 import DOMPurify from 'dompurify';
@@ -53,7 +54,9 @@ const md = new MarkdownIt({
       ),
   })
   .use(taskLists, { enabled: false })
-  .use(footnote);
+  .use(footnote)
+  // :smile: -> emoji. Text shortcuts like ":)" are off: GitHub does not convert them.
+  .use(emoji, { shortcuts: {} });
 
 // GitHub alerts: a blockquote whose first line is only "[!NOTE]" (TIP, IMPORTANT, WARNING,
 // CAUTION; case-insensitive) becomes a callout. Anything else stays an ordinary blockquote.
@@ -162,7 +165,7 @@ export function renderMarkdown(src: string): RenderResult {
     const inline = tokens[i + 1];
     if (!id || !inline) continue;
     const text = (inline.children ?? [])
-      .filter((c) => c.type === 'text' || c.type === 'code_inline')
+      .filter((c) => c.type === 'text' || c.type === 'code_inline' || c.type === 'emoji')
       .map((c) => c.content)
       .join('');
     toc.push({ level: Number(t.tag.slice(1)), text, id: String(id) });
