@@ -499,3 +499,75 @@ test('keeps HTML labels on screen and opens a diagram with Space', async ({ page
   await expect(diagram.locator('svg foreignObject').first()).toBeAttached();
   await expect(page.locator('body > [id^="dmermaid-export"], body > #mermaid-export-1')).toHaveCount(0);
 });
+
+test('switches to the Markdown source and back, and starts each document in the preview', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const toggle = page.getByRole('button', { name: 'Markdown source' });
+  const source = page.locator('.source-view');
+  await page.evaluate(() => window.scrollTo(0, 600));
+  const previewY = await page.evaluate(() => window.scrollY);
+  expect(previewY).toBeGreaterThan(0);
+
+  await page.keyboard.press('ControlOrMeta+Shift+M');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(source).toBeVisible();
+  await expect(page.locator('#content')).toBeHidden();
+  await expect(page.locator('.toc')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Table of contents' })).toBeHidden();
+  await expect(source.locator('.source-line')).toHaveCount(108);
+  await expect(source.locator('.source-line').nth(1)).toHaveText('title: MD Browser サンプル\n');
+  const number = await source.locator('.source-line').nth(1).evaluate((el) => getComputedStyle(el, '::before').content);
+  expect(number).toBe('counter(source-line)');
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  // A copied selection keeps the line breaks and leaves out the numbers.
+  await page.evaluate(() => {
+    const lines = document.querySelectorAll('.source-line');
+    getSelection()!.setBaseAndExtent(lines[0], 0, lines[2], lines[2].childNodes.length);
+  });
+  await page.keyboard.press('ControlOrMeta+c');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('---\ntitle: MD Browser サンプル\ntags: [markdown, viewer]');
+  // The newline kept at each line's end adds no empty row.
+  const row = await source.locator('.source-line').first().evaluate((el) => ({
+    height: el.getBoundingClientRect().height,
+    lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+  }));
+  expect(row.height).toBeCloseTo(row.lineHeight, 0);
+  await source.locator('.copy-button').click();
+  await expect(source.locator('.copy-button')).toHaveText('Copied');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^---\ntitle: MD Browser サンプル\n[\s\S]*\n$/);
+
+  // Playwright scrolls before clicking, so the preview's position is set by the shortcut and checked after a click.
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#content')).toBeVisible();
+  await expect(page.locator('.toc')).toBeVisible();
+  await expect(source).toBeHidden();
+  expect(await page.evaluate(() => window.scrollY)).toBe(previewY);
+
+  // Another document opens in the preview.
+  await page.keyboard.press('ControlOrMeta+Shift+M');
+  await expect(source).toBeVisible();
+  await page.locator('#files').getByRole('button', { name: 'other.md' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  await expect(source).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('hides the source toggle on the welcome screen', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Markdown source' })).toBeHidden();
+  await page.keyboard.press('ControlOrMeta+Shift+M');
+  await expect(page.locator('.welcome')).toBeVisible();
+});
+
+test('updates the shown source when the file changes', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.getByRole('button', { name: 'Markdown source' }).click();
+  await page.evaluate(() => (window as unknown as { __appendToFile(r: string, t: string): Promise<void> }).__appendToFile('README.md', '\n## Added heading\n'));
+  await expect(page.locator('.source-line').last()).toHaveText('## Added heading');
+  await page.getByRole('button', { name: 'Markdown source' }).click();
+  await expect(page.locator('.markdown-body h2', { hasText: 'Added heading' })).toBeVisible();
+});

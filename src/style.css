@@ -154,10 +154,10 @@ body {
   border-color: transparent;
 }
 .toolbar .icon-button:hover { color: var(--fg); background: var(--bg); border-color: var(--border); }
-.toolbar .icon-button[aria-expanded="true"] { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
+.toolbar .icon-button:is([aria-expanded="true"], [aria-pressed="true"]) { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
 .toolbar .icon-button[hidden] { display: none; }
 /* TOC toggle sits at the right, next to the settings gear: no hamburger-style pull to the left. */
-.toolbar .icon-button.toc-toggle { margin-left: 0; }
+.toolbar .icon-button:is(.toc-toggle, .source-toggle) { margin-left: 0; }
 .status {
   margin-left: auto;
   font-size: 12px;
@@ -182,12 +182,12 @@ body {
   .layout > .toc { grid-area: toc; }
   .layout > .content { grid-area: content; }
   /* Without headings (or with the TOC hidden), give the whole width to the document. */
-  .layout:has(> .toc:is(.empty, .collapsed)) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "content"; }
+  .layout:has(> .toc:is(.empty, .collapsed, .source-mode)) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "content"; }
   .layout:has(> .files:not([hidden])) {
     grid-template-columns: var(--files-w) minmax(0, 1fr) var(--toc-w);
     grid-template-areas: "files content toc";
   }
-  .layout:has(> .files:not([hidden])):has(> .toc:is(.empty, .collapsed)) {
+  .layout:has(> .files:not([hidden])):has(> .toc:is(.empty, .collapsed, .source-mode)) {
     grid-template-columns: var(--files-w) minmax(0, 1fr);
     grid-template-areas: "files content";
   }
@@ -203,7 +203,7 @@ body {
   font-size: 13px;
   line-height: 1.5;
 }
-.toc:is(.empty, .collapsed) { display: none; }
+.toc:is(.empty, .collapsed, .source-mode) { display: none; }
 /* Drag handle on the TOC's inner edge. Fixed so re-rendering the TOC never touches it; the
    6px strip straddles the TOC border (centred on x = right edge - TOC width). */
 .toc-resizer {
@@ -296,7 +296,7 @@ body {
     border-left: none;
     border-bottom: 1px solid var(--border);
   }
-  .toc:is(.empty, .collapsed) { display: none; }
+  .toc:is(.empty, .collapsed, .source-mode) { display: none; }
   .toc-resizer { display: none; }
   .files {
     position: static;
@@ -458,7 +458,7 @@ body {
 }
 .markdown-body pre code { padding: 0; background: none; font-size: 0.85em; }
 .markdown-body .code-block { position: relative; }
-.markdown-body .copy-button {
+:is(.markdown-body, .source-view) .copy-button {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -476,11 +476,49 @@ body {
 .markdown-body .code-block:hover .copy-button,
 .markdown-body .copy-button:focus-visible,
 .markdown-body .copy-button.done { opacity: 1; }
-.markdown-body .copy-button:hover { color: var(--fg); border-color: var(--accent); }
-.markdown-body .copy-button.done { color: var(--alert-tip); border-color: var(--alert-tip); }
-.markdown-body .copy-button.failed { color: var(--error); border-color: var(--error); }
+:is(.markdown-body, .source-view) .copy-button:hover { color: var(--fg); border-color: var(--accent); }
+:is(.markdown-body, .source-view) .copy-button.done { color: var(--alert-tip); border-color: var(--alert-tip); }
+:is(.markdown-body, .source-view) .copy-button.failed { color: var(--error); border-color: var(--error); }
 @media (hover: none) {
   .markdown-body .copy-button { opacity: 1; }
+}
+
+/* ---- Markdown source view (source-view.ts) ---- */
+.content[hidden] { display: none; }
+.source-block { position: relative; }
+.source-view .copy-button { opacity: 1; }
+.source-code {
+  margin: 0;
+  padding: 16px 0;
+  font-family: var(--font-code);
+  font-size: calc(var(--doc-font-size, 16px) * 0.85);
+  line-height: 1.45;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  /* Long lines wrap; continuation rows stay clear of the line-number gutter. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  counter-reset: source-line;
+  --source-gutter: calc(var(--source-digits, 3) * 1ch + 24px);
+}
+.source-line {
+  display: block;
+  position: relative;
+  padding: 0 16px 0 calc(var(--source-gutter) + 12px);
+  counter-increment: source-line;
+}
+/* Generated content is never part of a selection, so copied text has no line numbers. */
+.source-line::before {
+  content: counter(source-line);
+  position: absolute;
+  left: 0;
+  width: var(--source-gutter);
+  padding-right: 8px;
+  text-align: right;
+  color: var(--fg-muted);
+  border-right: 1px solid var(--border);
+  user-select: none;
 }
 
 /* Heading permalink: revealed on heading hover / keyboard focus. */

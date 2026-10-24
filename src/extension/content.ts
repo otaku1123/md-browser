@@ -9,6 +9,7 @@ import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom } from '../core/image-zoom';
 import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
+import { mountSourceView } from '../core/source-view';
 import { mountFontSettings } from '../core/font-settings';
 import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
 import { createFileTree } from '../file-tree';
@@ -121,6 +122,7 @@ async function main(): Promise<void> {
   const { content, tocEl, filesEl, filesToggle, status } = buildShell();
   initFavicon();
   const toc = createToc(tocEl);
+  const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, content, tocEl, () => toc.update());
   let current = initial;
   let seq = 0;
 
@@ -138,6 +140,7 @@ async function main(): Promise<void> {
     if (mine !== seq) return;
     const y = window.scrollY;
     content.replaceChildren(staging.content);
+    sourceView.setSource(src);
     toc.render(items);
     if (keepScroll) window.scrollTo(0, y);
     else if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
