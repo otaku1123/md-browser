@@ -10,12 +10,14 @@ const THEME_DIRECTIVE: Record<Theme, string> = {
   light: '%%{init: {"theme": "default"}}%%\n',
   dark: '%%{init: {"theme": "dark"}}%%\n',
 };
+// HTML labels (<foreignObject>) taint a canvas, so PNG export draws a copy with SVG text labels.
+const NO_HTML_LABELS = '%%{init: {"htmlLabels": false, "flowchart": {"htmlLabels": false}}}%%\n';
 const FRONT_MATTER = /^\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 
 /** Adds the theme directive; Mermaid wants front matter (`---` … `---`) first, so it goes after that. */
-export function withTheme(source: string, theme: Theme): string {
+export function withTheme(source: string, theme: Theme, extra = ''): string {
   const fm = FRONT_MATTER.exec(source)?.[0] ?? '';
-  return fm + THEME_DIRECTIVE[theme] + source.slice(fm.length);
+  return fm + THEME_DIRECTIVE[theme] + extra + source.slice(fm.length);
 }
 
 /** Source and theme of every diagram drawn so far, so a theme change can redraw it. */
@@ -56,6 +58,10 @@ export async function renderDiagrams(root: ParentNode): Promise<void> {
         node.innerHTML = svg;
       }
       node.classList.remove('diagram-error');
+      // Click or Enter opens it large (image-zoom.ts).
+      node.tabIndex = 0;
+      node.setAttribute('role', 'button');
+      node.setAttribute('aria-label', t('diagramZoom'));
     } catch (err) {
       // mermaid leaves a stray error element in <body> on failure.
       for (const stray of [id, `${id}-print`]) {
@@ -63,6 +69,7 @@ export async function renderDiagrams(root: ParentNode): Promise<void> {
         document.getElementById(`d${stray}`)?.remove();
       }
       node.classList.add('diagram-error');
+      for (const attr of ['tabindex', 'role', 'aria-label']) node.removeAttribute(attr);
       const msg = document.createElement('div');
       msg.className = 'diagram-error-message';
       msg.textContent = t('mermaidFailed', { error: err instanceof Error ? err.message : String(err) });
@@ -70,5 +77,25 @@ export async function renderDiagrams(root: ParentNode): Promise<void> {
       pre.textContent = source;
       node.replaceChildren(msg, pre);
     }
+  }
+}
+
+/**
+ * Re-renders a drawn diagram in the current theme without HTML labels, for rasterizing to PNG.
+ * The on-screen copy keeps its HTML labels. Throws if a <foreignObject> is left anyway.
+ */
+export async function renderForExport(node: HTMLElement): Promise<SVGSVGElement> {
+  const source = drawn.get(node)?.source;
+  if (source === undefined) throw new Error('diagram not rendered');
+  const mermaid = await loadMermaid();
+  const id = `mermaid-export-${++renderSeq}`;
+  try {
+    const { svg } = await mermaid.render(id, withTheme(source, currentTheme(), NO_HTML_LABELS));
+    const out = new DOMParser().parseFromString(svg, 'text/html').querySelector('svg');
+    if (!out) throw new Error('no svg');
+    if (out.querySelector('foreignObject')) throw new Error('this diagram type uses HTML labels');
+    return out;
+  } finally {
+    for (const stray of [id, `d${id}`]) document.getElementById(stray)?.remove();
   }
 }

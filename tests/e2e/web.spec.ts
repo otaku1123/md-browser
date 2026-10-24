@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { readSampleFiles } from './fixtures';
 
@@ -406,3 +407,52 @@ test('resizes the TOC by dragging, with the keyboard, and resets on double-click
   expect(await width()).toBe(280);
 });
 
+
+test('opens a Mermaid diagram large and saves it as SVG and PNG', async ({ page }) => {
+  await openSampleFolder(page);
+  const diagram = page.locator('.diagram-mermaid').first();
+  await expect(diagram.locator('svg')).toBeVisible();
+  await expect(diagram).toHaveAttribute('tabindex', '0');
+
+  await diagram.click();
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  await expect(zoom.locator('svg')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+
+  await diagram.focus();
+  await page.keyboard.press('Enter');
+  await expect(zoom).toBeVisible();
+
+  const [svgDownload] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'Save SVG' }).click()]);
+  expect(svgDownload.suggestedFilename()).toBe('diagram-1.svg');
+  expect(await readFile((await svgDownload.path())!, 'utf8')).toContain('xmlns="http://www.w3.org/2000/svg"');
+  await expect(zoom).toBeVisible(); // saving doesn't close it
+
+  const [pngDownload] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'Save PNG' }).click()]);
+  expect(pngDownload.suggestedFilename()).toBe('diagram-1.png');
+  expect((await readFile((await pngDownload.path())!)).subarray(1, 4).toString()).toBe('PNG');
+  await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
+});
+
+test('saves the second (sequence) diagram as PNG', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.locator('.diagram-mermaid').nth(1).click();
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  const [png] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'Save PNG' }).click()]);
+  expect(png.suggestedFilename()).toBe('diagram-2.png');
+  await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
+});
+
+test('keeps HTML labels on screen and opens a diagram with Space', async ({ page }) => {
+  await openSampleFolder(page);
+  const diagram = page.locator('.diagram-mermaid').first();
+  await expect(diagram.locator('svg foreignObject').first()).toBeAttached();
+  await diagram.focus();
+  await page.keyboard.press('Space');
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  await expect(zoom).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(diagram.locator('svg foreignObject').first()).toBeAttached();
+  await expect(page.locator('body > [id^="dmermaid-export"], body > #mermaid-export-1')).toHaveCount(0);
+});
