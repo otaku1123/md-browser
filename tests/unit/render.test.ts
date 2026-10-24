@@ -63,6 +63,21 @@ describe('sanitizing', () => {
     }
   });
 
+  it('keeps heading ids that collide with document / form properties (#48)', () => {
+    const names = ['Title', 'Name', 'Length', 'Id', 'Action', 'Location', 'Cookie'];
+    const { html, toc } = renderMarkdown(names.map((n) => `## ${n}`).join('\n\n'));
+    const root = dom(html);
+    expect(toc.map((t) => t.id)).toEqual(names.map((n) => n.toLowerCase()));
+    for (const { id } of toc) expect(root.querySelector(`h2[id="${id}"]`)).not.toBeNull();
+  });
+
+  it('still drops clobbering ids and names on other elements', () => {
+    const root = dom(renderMarkdown('<img src="x.png" id="cookie" name="title">\n\n<p id="location">x</p>').html);
+    expect(root.querySelector('img')!.hasAttribute('id')).toBe(false);
+    expect(root.querySelector('img')!.hasAttribute('name')).toBe(false);
+    expect(root.querySelector('p')!.hasAttribute('id')).toBe(false);
+  });
+
   it('drops <form> but keeps its contents', () => {
     const root = dom(renderMarkdown('<form action="https://evil.example"><p>inside</p></form>').html);
     expect(root.querySelector('form')).toBeNull();

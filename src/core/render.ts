@@ -3,7 +3,7 @@ import anchor from 'markdown-it-anchor';
 import { full as emoji } from 'markdown-it-emoji';
 import taskLists from 'markdown-it-task-lists';
 import footnote from 'markdown-it-footnote';
-import DOMPurify from 'dompurify';
+import DOMPurify, { type UponSanitizeAttributeHookEvent } from 'dompurify';
 import hljs from 'highlight.js/lib/common';
 import { t } from '../i18n';
 
@@ -151,6 +151,12 @@ function splitFrontMatter(src: string): { frontMatter: string; body: string } {
   return { frontMatter: html, body: src.slice(m[0].length) };
 }
 
+const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+
+function keepHeadingId(node: Element, data: UponSanitizeAttributeHookEvent): void {
+  if (data.attrName === 'id' && HEADING_TAGS.has(node.nodeName.toLowerCase())) data.forceKeepAttr = true;
+}
+
 export function renderMarkdown(src: string): RenderResult {
   // docId namespaces footnote ids ("fn-md-1" rather than "fn1") so they can't collide with heading slugs.
   const env = { docId: 'md' };
@@ -172,10 +178,20 @@ export function renderMarkdown(src: string): RenderResult {
   }
 
   const raw = frontMatter + md.renderer.render(tokens, md.options, env);
-  const html = DOMPurify.sanitize(raw, {
-    ADD_ATTR: ['target'],
-    // No legitimate use in a preview; prevents phishing forms posting to external sites.
-    FORBID_TAGS: ['form'],
-  });
+  // DOMPurify drops ids that match document / form properties ("name", "title", "length", …) to
+  // stop DOM clobbering, which left those headings without the id the TOC links to. Heading
+  // elements can't clobber anything (only form, img, embed, object and iframe are exposed as
+  // named properties), so their ids are kept. Hook is scoped to this call: DOMPurify is global.
+  DOMPurify.addHook('uponSanitizeAttribute', keepHeadingId);
+  let html: string;
+  try {
+    html = DOMPurify.sanitize(raw, {
+      ADD_ATTR: ['target'],
+      // No legitimate use in a preview; prevents phishing forms posting to external sites.
+      FORBID_TAGS: ['form'],
+    });
+  } finally {
+    DOMPurify.removeHook('uponSanitizeAttribute', keepHeadingId);
+  }
   return { html, toc };
 }
