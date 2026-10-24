@@ -145,3 +145,21 @@ test('reports a missing file only after repeated failures, and recovers when it 
   await expect(page.locator('.status')).toHaveText('自動更新 ON');
   await expect(page.locator('link[rel="icon"]')).not.toHaveAttribute('href', /e5484d/);
 });
+
+test('toggles and resizes the TOC on a file tab, shared with other tabs', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  const toggle = page.getByRole('button', { name: '目次' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('separator', { name: '目次の幅を調整' }).focus();
+  await page.keyboard.press('End');
+  await expect(page.locator('.toc')).toHaveJSProperty('offsetWidth', 480);
+  await toggle.click();
+  await expect(page.locator('.toc')).toBeHidden();
+
+  // A second tab picks the saved choice up from chrome.storage.sync.
+  const other = await context.newPage();
+  await other.goto(fileUrl(workdir, 'README.md'));
+  await expect(other.getByRole('button', { name: '目次' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(other.locator('.toc')).toBeHidden();
+});

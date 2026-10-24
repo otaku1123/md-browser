@@ -156,6 +156,8 @@ body {
 .toolbar .icon-button:hover { color: var(--fg); background: var(--bg); border-color: var(--border); }
 .toolbar .icon-button[aria-expanded="true"] { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
 .toolbar .icon-button[hidden] { display: none; }
+/* TOC toggle sits at the right, next to the settings gear: no hamburger-style pull to the left. */
+.toolbar .icon-button.toc-toggle { margin-left: 0; }
 .status {
   margin-left: auto;
   font-size: 12px;
@@ -179,13 +181,13 @@ body {
   .layout > .files { grid-area: files; }
   .layout > .toc { grid-area: toc; }
   .layout > .content { grid-area: content; }
-  /* Without headings, give the whole width to the document. */
-  .layout:has(> .toc.empty) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "content"; }
+  /* Without headings (or with the TOC hidden), give the whole width to the document. */
+  .layout:has(> .toc:is(.empty, .collapsed)) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "content"; }
   .layout:has(> .files:not([hidden])) {
     grid-template-columns: var(--files-w) minmax(0, 1fr) var(--toc-w);
     grid-template-areas: "files content toc";
   }
-  .layout:has(> .files:not([hidden])):has(> .toc.empty) {
+  .layout:has(> .files:not([hidden])):has(> .toc:is(.empty, .collapsed)) {
     grid-template-columns: var(--files-w) minmax(0, 1fr);
     grid-template-areas: "files content";
   }
@@ -201,7 +203,23 @@ body {
   font-size: 13px;
   line-height: 1.5;
 }
-.toc.empty { display: none; }
+.toc:is(.empty, .collapsed) { display: none; }
+/* Drag handle on the TOC's inner edge. Fixed so re-rendering the TOC never touches it; the
+   6px strip straddles the TOC border (centred on x = right edge - TOC width). */
+.toc-resizer {
+  position: fixed;
+  top: var(--toolbar-h);
+  right: calc(var(--toc-w) - 3px);
+  width: 6px;
+  height: calc(100vh - var(--toolbar-h));
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 5;
+}
+.toc-resizer:hover,
+.toc-resizer:focus-visible,
+.toc-resizer.dragging { background: var(--accent-soft); outline: none; box-shadow: inset -1px 0 0 var(--accent); }
+.toc-resizer[hidden] { display: none; }
 /* Wide screens: centre a short TOC vertically in its panel. "safe" falls back to the top when
    the list is taller than the panel, so a long TOC still starts at the top and scrolls. */
 @media (min-width: 801px) {
@@ -277,7 +295,8 @@ body {
     border-left: none;
     border-bottom: 1px solid var(--border);
   }
-  .toc.empty { display: none; }
+  .toc:is(.empty, .collapsed) { display: none; }
+  .toc-resizer { display: none; }
   .files {
     position: static;
     height: auto;
@@ -575,6 +594,7 @@ body {
   .toolbar,
   .files,
   .toc,
+  .toc-resizer,
   .drop-overlay,
   .image-zoom,
   .copy-button,

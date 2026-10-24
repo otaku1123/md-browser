@@ -351,3 +351,58 @@ test('prints only the document, on white, even in dark mode', async ({ page }) =
   expect(style.contentWidth).toBe(style.layoutWidth);
 });
 
+test('toggles the TOC and keeps the choice across reloads', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const toggle = page.getByRole('button', { name: 'Table of contents' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.toc')).toBeVisible();
+  const before = (await page.locator('#content').boundingBox())!.width;
+  await toggle.click();
+  await expect(page.locator('.toc')).toBeHidden();
+  await expect(page.locator('.toc-resizer')).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect((await page.locator('#content').boundingBox())!.width).toBeGreaterThan(before);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Table of contents' })).toHaveAttribute('aria-expanded', 'false');
+  await page.getByRole('button', { name: 'Table of contents' }).click();
+  await expect(page.locator('.toc')).toBeVisible();
+});
+
+test('hides the TOC toggle when the document has no headings', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Table of contents' })).toBeHidden();
+  await expect(page.locator('.toc-resizer')).toBeHidden();
+});
+
+test('resizes the TOC by dragging, with the keyboard, and resets on double-click', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const toc = page.locator('.toc');
+  const handle = page.getByRole('separator', { name: 'Resize table of contents' });
+  const width = async () => Math.round((await toc.boundingBox())!.width);
+  expect(await width()).toBe(280);
+
+  const box = (await handle.boundingBox())!;
+  const y = box.y + 200;
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 100, y, { steps: 5 });
+  await page.mouse.up();
+  expect(await width()).toBeGreaterThan(340);
+  await expect(handle).toHaveAttribute('aria-valuenow', String(await width()));
+
+  await handle.focus();
+  const w = await width();
+  await page.keyboard.press('ArrowLeft');
+  expect(await width()).toBe(w + 16);
+  await page.keyboard.press('ArrowRight');
+  expect(await width()).toBe(w);
+  await page.keyboard.press('End');
+  expect(await width()).toBe(480);
+
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:toc-panel'))).toBe('{"open":true,"width":480}');
+  await handle.dblclick();
+  expect(await width()).toBe(280);
+});
+
