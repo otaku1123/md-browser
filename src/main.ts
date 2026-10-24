@@ -1,5 +1,5 @@
 import './style.css';
-import { applyI18n, t } from './i18n';
+import { applyI18n, lang, t } from './i18n';
 import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
 import { createToc } from './core/toc';
@@ -21,7 +21,7 @@ import {
   type DocEntry,
   type Workspace,
 } from './workspace';
-import { clearRecent, loadRecent, saveRecent, type Recent, type RecentHandle } from './recent';
+import { clearRecent, loadRecent, removeRecent, saveRecent, skipResume, type Recent, type RecentEntry, type RecentHandle } from './recent';
 
 const POLL_MS = 1000;
 /** Background tabs still poll, less often, so the tab icon can flag changes. */
@@ -120,11 +120,11 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   }
   ws = next;
   recentHandle = opts.handle ?? null;
-  // A newer open replaces the remembered one, even when it can't be remembered itself.
-  if (!recentHandle) void clearRecent();
-  // The button lives in the welcome screen, which is gone once a document has been shown.
-  const reopenButton = document.getElementById('reopen');
-  if (reopenButton) reopenButton.hidden = true;
+  // The history stays, but a reload must not bring back an older item over one that can't be remembered.
+  if (!recentHandle) void skipResume();
+  // The list lives in the welcome screen, which is gone once a document has been shown.
+  const recentEl = document.getElementById('recent');
+  if (recentEl) recentEl.hidden = true;
   const nameEl = $('workspace-name');
   nameEl.textContent = next.label;
   nameEl.title = next.label;
@@ -294,7 +294,7 @@ async function rescanFolder(): Promise<void> {
 
 // ---- reopening after a reload ------------------------------------------------
 
-function recentName(handle: RecentHandle): string {
+function recentName(handle: { kind: string; name: string }): string {
   return handle.kind === 'directory' ? `${handle.name}/` : handle.name;
 }
 
@@ -309,27 +309,105 @@ async function reopen({ handle, docPath }: Recent): Promise<void> {
     }
   } catch (err) {
     setStatus(t('reopenFailed', { name: recentName(handle), error: errMsg(err) }), 'error');
-    void clearRecent();
+    await removeRecent(handle);
   }
 }
 
 /**
- * Reopens the last file / folder. Chrome often keeps the read permission across a reload;
- * otherwise asking again needs a click, so offer a button instead.
+ * Reopens the most recent file / folder when the last open could be remembered. Chrome often keeps
+ * the read permission across a reload; otherwise asking again needs a click, so the list is offered.
  */
 async function restoreRecent(): Promise<void> {
-  const recent = await loadRecent();
-  if (!recent || ws) return;
-  const state = await recent.handle.queryPermission({ mode: 'read' }).catch(() => 'denied' as const);
-  if (state === 'granted') return reopen(recent);
-  if (state !== 'prompt') return;
-  const button = $<HTMLButtonElement>('reopen');
-  button.textContent = t('reopen', { name: recentName(recent.handle) });
-  button.hidden = false;
-  button.onclick = async () => {
-    const answer = await recent.handle.requestPermission({ mode: 'read' }).catch(() => 'denied' as const);
-    if (answer === 'granted') await reopen(recent);
+  const { entries, resume } = await loadRecent();
+  if (!entries.length || ws) return;
+  if (resume) {
+    const state = await entries[0].handle.queryPermission({ mode: 'read' }).catch(() => 'denied' as const);
+    if (state === 'granted') return reopen(entries[0]);
+  }
+  renderRecent(entries);
+}
+
+async function refreshRecent(): Promise<void> {
+  renderRecent((await loadRecent()).entries);
+}
+
+function formatWhen(time: number): string {
+  if (!time) return '';
+  const minutes = Math.round((Date.now() - time) / 60000);
+  const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' });
+  if (minutes < 60) return rtf.format(-Math.max(minutes, 0), 'minute');
+  if (minutes < 60 * 24) return rtf.format(-Math.round(minutes / 60), 'hour');
+  if (minutes < 60 * 24 * 7) return rtf.format(-Math.round(minutes / (60 * 24)), 'day');
+  return new Date(time).toLocaleDateString(lang);
+}
+
+/**
+ * Clicking is a user gesture, so the read permission can be asked for here. A refused or dismissed
+ * prompt keeps the entry (the user may try again); only a failed open (e.g. file gone) removes it.
+ */
+async function openRecent(entry: RecentEntry): Promise<void> {
+  const answer = await entry.handle.requestPermission({ mode: 'read' }).catch(() => 'denied' as const);
+  if (answer === 'granted') await reopen(entry);
+  else setStatus(t('recentDenied', { name: recentName(entry) }), 'error');
+  if (!ws) await refreshRecent();
+}
+
+function renderRecent(entries: RecentEntry[]): void {
+  const el = $<HTMLElement>('recent');
+  if (ws || entries.length === 0) {
+    el.hidden = true;
+    return;
+  }
+  const head = document.createElement('div');
+  head.className = 'recent-head';
+  const title = document.createElement('h2');
+  title.textContent = t('recent');
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'recent-clear';
+  clear.textContent = t('recentClear');
+  clear.onclick = async () => {
+    await clearRecent();
+    await refreshRecent();
   };
+  head.append(title, clear);
+
+  const list = document.createElement('ul');
+  for (const entry of entries) {
+    const item = document.createElement('li');
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'recent-open';
+    const parts: [string, string][] = [
+      ['recent-icon', entry.kind === 'directory' ? '📁' : '📄'],
+      ['recent-name', recentName(entry)],
+      ['recent-doc', entry.docPath ?? ''],
+      ['recent-when', formatWhen(entry.openedAt)],
+    ];
+    for (const [cls, text] of parts) {
+      if (!text) continue;
+      const span = document.createElement('span');
+      span.className = cls;
+      span.textContent = text;
+      if (cls === 'recent-icon') span.setAttribute('aria-hidden', 'true');
+      open.append(span);
+    }
+    open.onclick = () => void openRecent(entry);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'recent-remove';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', t('recentRemove', { name: recentName(entry) }));
+    remove.title = remove.getAttribute('aria-label') ?? '';
+    remove.onclick = async () => {
+      await removeRecent(entry.handle);
+      await refreshRecent();
+    };
+    item.append(open, remove);
+    list.append(item);
+  }
+  el.replaceChildren(head, list);
+  el.hidden = false;
 }
 
 // ---- helpers ---------------------------------------------------------------
