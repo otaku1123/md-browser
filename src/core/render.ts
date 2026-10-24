@@ -6,6 +6,7 @@ import footnote from 'markdown-it-footnote';
 import DOMPurify, { type UponSanitizeAttributeHookEvent } from 'dompurify';
 import hljs from 'highlight.js/lib/common';
 import { t } from '../i18n';
+import { mathPlaceholder, mathPlugin } from './math';
 
 export interface TocItem {
   level: number;
@@ -55,6 +56,7 @@ const md = new MarkdownIt({
   })
   .use(taskLists, { enabled: false })
   .use(footnote)
+  .use(mathPlugin)
   // :smile: -> emoji. Text shortcuts like ":)" are off: GitHub does not convert them.
   .use(emoji, { shortcuts: {} });
 
@@ -101,6 +103,7 @@ const defaultFence = md.renderer.rules.fence!;
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
   const lang = token.info.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+  if (lang === 'math') return mathPlaceholder(token.content.trim(), true) + '\n';
   if (DIAGRAM_LANGS.has(lang)) {
     // Source goes in text content, not an attribute: DOMPurify drops attributes containing "-->".
     return `<div class="diagram diagram-${lang}"><pre class="diagram-source">${escapeHtml(token.content)}</pre></div>\n`;
@@ -171,7 +174,7 @@ export function renderMarkdown(src: string): RenderResult {
     const inline = tokens[i + 1];
     if (!id || !inline) continue;
     const text = (inline.children ?? [])
-      .filter((c) => c.type === 'text' || c.type === 'code_inline' || c.type === 'emoji')
+      .filter((c) => c.type === 'text' || c.type === 'code_inline' || c.type === 'emoji' || c.type === 'math_inline')
       .map((c) => c.content)
       .join('');
     toc.push({ level: Number(t.tag.slice(1)), text, id: String(id) });

@@ -2,6 +2,7 @@
 import css from '../style.css?inline';
 import { renderMarkdown } from '../core/render';
 import { renderDiagrams } from '../core/diagrams';
+import { renderMath } from '../core/math';
 import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
 import { addHeadingLinks } from '../core/heading-link';
@@ -90,6 +91,7 @@ async function main(): Promise<void> {
     staging.innerHTML = html;
     // Relative images/links resolve natively against the file:// URL.
     await renderDiagrams(staging.content);
+    await renderMath(staging.content);
     addCopyButtons(staging.content);
     addHeadingLinks(staging.content, true);
     if (mine !== seq) return;

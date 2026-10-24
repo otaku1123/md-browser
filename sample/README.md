@@ -73,6 +73,14 @@ sequenceDiagram
   B-->>U: 自動で再描画
 ```
 
+## 数式
+
+インライン数式は $E = mc^2$ のように書き、独立した式は次のように書きます。
+
+$$
+\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
+$$
+
 ## PlantUML（未対応）
 
 ```plantuml
