@@ -10,7 +10,7 @@ test('renders a local .md file in place', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
-  await expect(page.locator('.toc a')).toHaveCount(10);
+  await expect(page.locator('.toc a')).toHaveCount(11);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.plantuml-note')).toBeVisible();
   await expect(page.locator('.markdown-alert')).toHaveCount(5);
@@ -20,6 +20,26 @@ test('renders a local .md file in place', async ({ context, workdir }) => {
   await expect(page.locator('.status')).toHaveText('自動更新 ON');
   // Relative images resolve natively against the file URL.
   await expect(page.locator('img[alt="diagram"]')).toHaveJSProperty('naturalWidth', 240);
+});
+
+test('typesets math with KaTeX and its fonts on a file:// page', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  const problems: string[] = [];
+  page.on('console', (m) => m.type() === 'error' && problems.push(m.text()));
+  page.on('pageerror', (e) => problems.push(e.message));
+  page.on('requestfailed', (r) => problems.push(`${r.url()} ${r.failure()?.errorText}`));
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page.locator('.math-inline .katex')).toHaveCount(1);
+  await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  // The lazily loaded stylesheet applies and its woff2 files actually load.
+  await expect(page.locator('.math-display .katex')).toHaveCSS('font-size', /^(?!16px$)/);
+  const loaded = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return Array.from(document.fonts).filter((f) => f.family.startsWith('KaTeX') && f.status === 'loaded').length;
+  });
+  expect(loaded).toBeGreaterThan(0);
+  // The sample deliberately links one missing image.
+  expect(problems.filter((p) => !p.includes('not-found.png') && !/ERR_FILE_NOT_FOUND/.test(p))).toEqual([]);
 });
 
 test('re-renders when the file is saved', async ({ context, workdir }) => {

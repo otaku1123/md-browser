@@ -507,6 +507,10 @@ body {
 .markdown-body .task-list-item { list-style: none; }
 .markdown-body .task-list-item input { margin: 0 0.4em 0 -1.4em; }
 
+/* ---- math (KaTeX; it inherits the text colour, so dark mode needs nothing) ---- */
+.math-display { margin: 0 0 1em; overflow-x: auto; overflow-y: hidden; }
+.math-display .katex-display { margin: 0.5em 0; }
+
 /* ---- diagrams ---- */
 .diagram { margin: 0 0 1em; overflow-x: auto; text-align: center; }
 .diagram svg { max-width: 100%; height: auto; }
@@ -660,7 +664,8 @@ body {
   /* Overflowing content is clipped on paper, so wrap instead of scrolling. */
   .markdown-body pre { overflow: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
   .markdown-body table,
-  .diagram { overflow: visible; }
+  .diagram,
+  .math-display { overflow: visible; }
 
   /* Keep blocks whole where possible, and headings with the text that follows. */
   .markdown-body pre,
@@ -668,7 +673,8 @@ body {
   .markdown-body .markdown-alert,
   .markdown-body .footnotes li,
   .markdown-body img,
-  .diagram { break-inside: avoid; }
+  .diagram,
+  .math-display { break-inside: avoid; }
   .markdown-body tr { break-inside: avoid; }
   .markdown-body thead { display: table-header-group; }
   .markdown-body h1, .markdown-body h2, .markdown-body h3,

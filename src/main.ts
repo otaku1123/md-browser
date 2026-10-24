@@ -6,6 +6,7 @@ import { createToc } from './core/toc';
 import { mountTocPanel } from './core/toc-panel';
 import { createFileTree } from './file-tree';
 import { renderDiagrams } from './core/diagrams';
+import { renderMath } from './core/math';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
 import { addHeadingLinks } from './core/heading-link';
@@ -77,6 +78,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   const assets = workspace.assetResolver(doc);
   await resolveImages(staging.content, assets.resolve);
   await renderDiagrams(staging.content);
+  await renderMath(staging.content);
   addCopyButtons(staging.content);
   addHeadingLinks(staging.content, false);
   if (seq !== renderSeq) {

@@ -44,9 +44,16 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
 
+test('typesets inline and display math with KaTeX', async ({ page }) => {
+  await openSampleFolder(page);
+  await expect(page.locator('.math-inline .katex')).toHaveCount(1);
+  await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  await expect(page.locator('.math .katex-error')).toHaveCount(0);
+});
+
 test('renders a folder: TOC, diagrams and relative images', async ({ page }) => {
   await openSampleFolder(page);
-  await expect(page.locator('.toc a')).toHaveCount(10);
+  await expect(page.locator('.toc a')).toHaveCount(11);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.markdown-alert')).toHaveCount(5);
   await expect(page.locator('details.front-matter')).not.toHaveAttribute('open');
