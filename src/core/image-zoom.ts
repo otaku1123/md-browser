@@ -1,6 +1,6 @@
 // Click an image in the document to see it at full size in an overlay (the image size setting may
 // shrink it). The overlay scrolls when the image is larger than the window; a click or Esc closes it.
-// Mermaid diagrams open the same way, scaled to fit the window, with Save SVG / Save PNG buttons.
+// Diagrams (Mermaid, PlantUML) open the same way, scaled to fit the window, with Save SVG / Save PNG buttons.
 // An overlay rather than a new tab: viewer images are blob: URLs that are revoked on re-render.
 import { t } from '../i18n';
 import { renderForExport } from './diagrams';
@@ -126,13 +126,13 @@ export function enableImageZoom(content: HTMLElement): void {
       open(target);
       return;
     }
-    const diagram = target.closest?.<HTMLElement>('.diagram-mermaid:not(.diagram-error)');
+    const diagram = target.closest?.<HTMLElement>('.diagram:not(.diagram-error)');
     if (!diagram || target !== diagram) return;
     e.preventDefault();
     openDiagram(diagram, indexOf(content, diagram));
   });
   content.addEventListener('click', (e) => {
-    const diagram = (e.target as Element).closest?.<HTMLElement>('.diagram-mermaid:not(.diagram-error)');
+    const diagram = (e.target as Element).closest?.<HTMLElement>('.diagram:not(.diagram-error)');
     if (diagram && content.contains(diagram)) {
       openDiagram(diagram, indexOf(content, diagram));
       return;
@@ -145,5 +145,5 @@ export function enableImageZoom(content: HTMLElement): void {
 }
 
 function indexOf(content: HTMLElement, diagram: HTMLElement): number {
-  return Array.from(content.querySelectorAll('.diagram-mermaid')).indexOf(diagram) + 1;
+  return Array.from(content.querySelectorAll('.diagram')).indexOf(diagram) + 1;
 }

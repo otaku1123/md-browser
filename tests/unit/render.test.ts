@@ -36,10 +36,11 @@ describe('renderMarkdown', () => {
     expect(root.querySelector('.diagram-mermaid .diagram-source')?.textContent).toContain('A --> B');
   });
 
-  it('labels PlantUML blocks as unsupported and shows the source', () => {
-    const root = dom(renderMarkdown('```plantuml\n@startuml\nA -> B\n@enduml\n```\n').html);
-    expect(root.querySelector('.plantuml-note')).not.toBeNull();
-    expect(root.querySelector('pre code')?.textContent).toContain('A -> B');
+  it('keeps PlantUML source (plantuml / puml / uml) as text for the diagram renderer', () => {
+    for (const lang of ['plantuml', 'puml', 'uml']) {
+      const root = dom(renderMarkdown(`\`\`\`${lang}\n@startuml\nA -> B\n@enduml\n\`\`\`\n`).html);
+      expect(root.querySelector('.diagram-plantuml .diagram-source')?.textContent).toContain('A -> B');
+    }
   });
 });
 

@@ -14,7 +14,7 @@ test('renders a local .md file in place', async ({ context, workdir }) => {
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
   await expect(page.locator('.toc a')).toHaveCount(11);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
-  await expect(page.locator('.plantuml-note')).toBeVisible();
+  await expect(page.locator('.diagram-plantuml svg')).toHaveCount(2);
   await expect(page.locator('.markdown-alert')).toHaveCount(5);
   await expect(page.locator('details.front-matter')).not.toHaveAttribute('open');
   await expect(page.locator('details.front-matter code')).toContainText('tags: [markdown, viewer]');
@@ -137,7 +137,7 @@ test('shares the theme between file tabs', async ({ context, workdir }) => {
 test('adds copy buttons to code blocks', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));
-  await expect(page.locator('.code-block .copy-button')).toHaveCount(2);
+  await expect(page.locator('.code-block .copy-button')).toHaveCount(1); // ts; diagrams have none
   const button = page.locator('.code-block .copy-button').first();
   await page.locator('.code-block').first().hover();
   await button.click();

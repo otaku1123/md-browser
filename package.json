@@ -19,6 +19,7 @@
   "type": "module",
   "private": true,
   "dependencies": {
+    "@plantuml/core": "^1.2026.9",
     "dompurify": "^3.4.17",
     "highlight.js": "^11.12.0",
     "katex": "^0.18.10",
