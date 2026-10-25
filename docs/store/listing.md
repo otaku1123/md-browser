@@ -23,7 +23,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.6.0.zip` |
+| アップロードするファイル | `release/md-browser-1.7.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -49,7 +49,7 @@ Open any .md file from your computer (drag it into Chrome or open file:///…/RE
 FEATURES
 • GitHub-style rendering: tables, task lists, syntax-highlighted code blocks
 • Sidebar table of contents that follows your scroll position; hide it or drag to resize
-• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open
+• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
 • PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
@@ -59,6 +59,7 @@ FEATURES
 • Switch to the raw Markdown source (button or Ctrl/⌘+Shift+M), with line numbers
 • Display settings: theme (system / light / dark), text size, content width, image size, and fonts for body text and code
 • Click an image to see it at full size
+• Works from the keyboard and with screen readers: a skip link to the document, and Enter opens diagrams and images
 • Relative images and links to other .md files just work
 • Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars
 • Tab icon shows which tabs are rendered by MD Browser, and marks files that changed (or can't be read) while the tab was in the background
@@ -86,7 +87,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 主な機能
 • GitHub 風の表示：表・タスクリスト・シンタックスハイライト付きコードブロック
 • スクロール位置に連動する目次サイドバー（表示の切り替え、ドラッグで幅を変更）
-• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける
+• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能）
 • Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
 • PlantUML 図（ブラウザ内で描画し、PlantUML のサーバーには送信しません）
 • KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
@@ -96,6 +97,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • 元の Markdown テキスト表示への切り替え（ボタンまたは Ctrl/⌘+Shift+M、行番号付き）
 • 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、画像サイズ、本文とコードのフォント
 • 画像をクリックすると原寸で表示
+• キーボードやスクリーンリーダーでも操作しやすい（本文へのスキップリンク、Enter で図や画像を拡大）
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
 • 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）
 • タブのアイコンで MD Browser が表示しているタブがひと目でわかり、裏のタブでファイルが更新された（または読めなくなった）ことも表示
@@ -144,7 +146,7 @@ The content script runs only on local Markdown files (file:///*.md, *.markdown, 
 ### storage 権限が必要な理由（Permission justification: storage）
 
 ```text
-Stores the user's display preferences (theme, text size, content width, image size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and the table of contents width) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. Only these preferences and folder locations are stored; no file contents or personal data are saved.
+Stores the user's display preferences (theme, text size, content width, image size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. Only these preferences and folder locations are stored; no file contents or personal data are saved.
 ```
 
 ### リモートコード（Remote code）
