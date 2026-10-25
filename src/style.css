@@ -20,7 +20,7 @@
   --hl-keyword: #cf222e;
   --hl-string: #0a3069;
   --hl-number: #0550ae;
-  --hl-comment: #6e7781;
+  --hl-comment: #59636e;
   --hl-title: #8250df;
   --hl-attr: #953800;
 
@@ -407,7 +407,9 @@ body {
 .markdown-body .footnotes ol { padding-left: 1.5em; }
 .markdown-body .footnotes li:target { background: var(--accent-soft); }
 .markdown-body .footnotes p { margin: 0.25em 0; }
-.markdown-body .footnote-backref { margin-left: 0.25em; text-decoration: none; }
+/* Muted footnote text is too close to the link colour: underline links so colour isn't the only cue. */
+.markdown-body .footnotes a { text-decoration: underline; }
+.markdown-body .footnote-backref { margin-left: 0.25em; }
 .markdown-body .front-matter {
   margin: 0 0 1.5em;
   border: 1px solid var(--border);
@@ -664,9 +666,9 @@ body {
   border-radius: 6px;
 }
 .font-settings-row input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.choice-options { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.choice-options { display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .choice-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-.choice-options input { margin: 0; accent-color: var(--accent); }
+.choice-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .font-settings-hint { margin: 0 0 10px; font-size: 12px; color: var(--fg-muted); }
 /* Not a display setting (and not reset with them): set apart from the rows above. */
 .scan-limit-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }

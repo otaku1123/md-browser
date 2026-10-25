@@ -482,6 +482,44 @@ test('resizes the TOC by dragging, with the keyboard, and resets on double-click
 });
 
 
+test('keeps keyboard focus inside the diagram dialog and closes it with Esc', async ({ page }) => {
+  await openSampleFolder(page);
+  const diagram = page.locator('.diagram-mermaid').first();
+  await diagram.focus();
+  await page.keyboard.press('Enter');
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  await expect(zoom).toBeVisible();
+  for (const name of ['Save SVG', 'Save PNG', 'Save SVG']) {
+    await page.keyboard.press('Tab');
+    await expect(zoom.getByRole('button', { name })).toBeFocused();
+  }
+  await page.keyboard.press('Shift+Tab');
+  await expect(zoom.getByRole('button', { name: 'Save PNG' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+  await expect(diagram).toBeFocused();
+});
+
+test('opens a document image at full size from the keyboard', async ({ page }) => {
+  await openSampleFolder(page);
+  const img = page.getByRole('button', { name: 'diagram (Enter to open at full size)' });
+  await img.focus();
+  await page.keyboard.press('Enter');
+  const zoom = page.getByRole('dialog', { name: 'diagram' });
+  await expect(zoom).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(zoom).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+  await expect(img).toBeFocused();
+});
+
+test('names task list checkboxes after their items', async ({ page }) => {
+  await openSampleFolder(page);
+  await expect(page.getByRole('checkbox', { name: '完了したタスク' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: '未完了のタスク' })).not.toBeChecked();
+});
+
 test('opens a Mermaid diagram large and saves it as SVG and PNG', async ({ page }) => {
   await openSampleFolder(page);
   const diagram = page.locator('.diagram-mermaid').first();
