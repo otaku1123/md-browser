@@ -124,12 +124,14 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 ### 単一用途の説明（Single purpose）
 
 ```text
-Render local Markdown (.md) files opened in Chrome as formatted documents with a table of contents and Mermaid diagrams, and re-render them when the file changes.
+Render local Markdown (.md) files opened in Chrome as formatted documents with a table of contents and Mermaid diagrams, and re-render them when the file changes. It can also list the other Markdown files in the same folder in a sidebar.
 ```
 
-### ホスト権限が必要な理由（Host permission justification）
+### ホスト権限（Host permissions）
 
-content_scripts の `file:///*.md` などへのマッチが、ホスト権限として扱われる。
+manifest の `permissions` は `storage` だけで、`host_permissions` はない。content_scripts の `file:///*.md` などへのマッチでは、ダッシュボードにホスト権限の説明欄は表示されない（1.6.0 の提出時に確認）。file:// の読み込みは、詳細説明の PRIVACY 節とプライバシーポリシーで開示している。
+
+審査で理由を聞かれたときは、次の文面で返信する。
 
 ```text
 The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders and node_modules are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. No file contents other than the viewed file are read, no other pages are accessed, and no network requests are made by the extension.
@@ -177,6 +179,6 @@ To test: install the extension, enable "Allow access to file URLs" on the extens
 
 | 症状 | 対処 |
 |---|---|
-| 審査で「権限の説明不足」として却下された | 「ホスト権限が必要な理由」の文面に、file:// だけに限定していること、通信をしないことを明記して再提出する |
+| 審査で「権限の説明不足」として却下された | 「ホスト権限」節の文面（file:// だけに限定していること、通信をしないこと）で返信し、必要なら詳細説明の PRIVACY 節にも追記して再提出する |
 | 「説明文がキーワードの羅列」と指摘された | 機能の箇条書きを減らし、文章での説明を増やす |
 | アップロード時に manifest エラーが出る | `version` が前回より大きいか、`_locales` の文字数が上限内（名前 75 文字、説明 132 文字）かを確認する |
