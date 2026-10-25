@@ -51,6 +51,7 @@ FEATURES
 • Sidebar table of contents that follows your scroll position; hide it or drag to resize
 • Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
+• PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
 • Live reload: save the file in your editor and the page re-renders within about a second, keeping your scroll position
 • GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
@@ -87,6 +88,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • スクロール位置に連動する目次サイドバー（表示の切り替え、ドラッグで幅を変更）
 • 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける
 • Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
+• PlantUML 図（ブラウザ内で描画し、PlantUML のサーバーには送信しません）
 • KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
 • 自動更新：エディタで保存すると約 1 秒で再描画（スクロール位置を保持）
 • GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示
