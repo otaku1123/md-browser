@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 import { katexWoff2Only } from './scripts/vite-katex-woff2';
+import { thirdPartyNotices } from './scripts/vite-third-party-notices';
 
 // Builds the Chrome extension into dist-extension/ (load it via chrome://extensions → "Load unpacked").
 export default defineConfig({
-  plugins: [katexWoff2Only()],
+  plugins: [katexWoff2Only(), thirdPartyNotices()],
   // Relative URLs so chunks resolve against chrome-extension://<id>/ even when imported from a file:// page.
   base: './',
   publicDir: 'extension/public',

@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import { katexWoff2Only } from './scripts/vite-katex-woff2';
+import { thirdPartyNotices } from './scripts/vite-third-party-notices';
 
 // Content-Security-Policy for the web viewer, as a <meta> tag (GitHub Pages can't send headers).
 // Defence in depth behind DOMPurify: Markdown may contain raw HTML, but no script can run.
@@ -28,7 +29,7 @@ function contentSecurityPolicy(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [katexWoff2Only(), contentSecurityPolicy()],
+  plugins: [katexWoff2Only(), contentSecurityPolicy(), thirdPartyNotices()],
   // Relative asset URLs so the build works under a sub-path (GitHub Pages: /md-browser/).
   base: './',
   build: {
