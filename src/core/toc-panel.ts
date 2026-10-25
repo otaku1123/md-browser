@@ -58,7 +58,8 @@ export function mountTocPanel(toolbar: HTMLElement, tocEl: HTMLElement): void {
   handle.setAttribute('aria-controls', tocEl.id);
   handle.setAttribute('aria-valuemin', String(TOC_WIDTH_MIN));
   handle.setAttribute('aria-valuemax', String(TOC_WIDTH_MAX));
-  tocEl.parentElement?.append(handle);
+  // Inside the TOC's <nav>, so it belongs to that landmark; toc.ts re-renders only the list.
+  tocEl.append(handle);
 
   /** Pushes the current state into the DOM. The toggle only exists while the document has headings
    *  (and its source isn't shown instead, see source-view.ts). */

@@ -168,6 +168,22 @@ body {
   min-width: 0;
 }
 .status.error { color: var(--error); }
+/* Off-screen above the toolbar until focused with Tab. */
+.skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  padding: 4px 12px;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transform: translateY(-200%);
+}
+.skip-link:focus { transform: none; }
+/* Focused by the skip link only to move on from there: no ring around the whole document. */
+.content:focus { outline: none; }
 
 /* ---- layout ---- */
 .layout {
@@ -204,7 +220,7 @@ body {
   line-height: 1.5;
 }
 .toc:is(.empty, .collapsed, .source-mode) { display: none; }
-/* Drag handle on the TOC's inner edge. Fixed so re-rendering the TOC never touches it; the
+/* Drag handle on the TOC's inner edge. Fixed, so it stays put while the TOC scrolls; the
    6px strip straddles the TOC border (centred on x = right edge - TOC width). */
 .toc-resizer {
   position: fixed;

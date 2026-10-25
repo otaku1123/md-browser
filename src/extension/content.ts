@@ -7,6 +7,7 @@ import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
 import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom, prepareImageZoom } from '../core/image-zoom';
+import { mountSkipLink } from '../core/skip-link';
 import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
 import { mountSourceView } from '../core/source-view';
@@ -112,6 +113,7 @@ function buildShell(): {
 
   document.body.replaceChildren(header, layout);
   mountTocPanel(header, tocEl);
+  mountSkipLink(header);
   document.body.removeAttribute('style');
   return { content, tocEl, filesEl, filesToggle, status };
 }

@@ -642,6 +642,26 @@ test('updates the shown source when the file changes', async ({ page }) => {
   await expect(page.locator('.markdown-body h2', { hasText: 'Added heading' })).toBeVisible();
 });
 
+test('skips from the toolbar to the document, or to its source', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.reload(); // reopens the folder, with focus back at the start of the page
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await page.keyboard.press('Tab');
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeInViewport();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+  await expect(page).not.toHaveURL(/#/);
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.querySelector('main')!.contains(document.activeElement))).toBe(true);
+
+  await page.locator('.source-toggle').click();
+  await skip.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('main', { name: 'Markdown source' })).toBeFocused();
+});
+
 test('passes the axe accessibility checks on the welcome screen and a document', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto('/');
