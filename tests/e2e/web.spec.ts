@@ -36,6 +36,33 @@ async function openSampleFolder(page: Page): Promise<void> {
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
 }
 
+// The build ships a Content-Security-Policy (vite.config.ts); every test must run without violating it.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const violations: string[] = [];
+    Object.assign(window, { __cspViolations: violations });
+    document.addEventListener('securitypolicyviolation', (e) => violations.push(`${e.effectiveDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber}:${e.columnNumber} ${e.sample}`));
+  });
+});
+
+test.afterEach(async ({ page }) => {
+  const violations = await page.evaluate(() => (window as unknown as { __cspViolations?: string[] }).__cspViolations ?? []);
+  expect(violations).toEqual([]);
+});
+
+test('ships a Content-Security-Policy that blocks inline scripts', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /script-src 'self'/);
+  const ran = await page.evaluate(() => {
+    const s = document.createElement('script');
+    s.textContent = 'window.__inlineRan = true';
+    document.head.append(s);
+    return (window as unknown as { __inlineRan?: boolean }).__inlineRan === true;
+  });
+  expect(ran).toBe(false);
+  await page.evaluate(() => ((window as unknown as { __cspViolations: string[] }).__cspViolations.length = 0));
+});
+
 test('shows the welcome screen in the browser language', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Open file' })).toBeVisible();
@@ -192,6 +219,10 @@ test('does not execute scripts embedded in Markdown', async ({ page }) => {
   await expect(page.locator('a[href^="javascript:" i]')).toHaveCount(0);
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
+  // DOMPurify parses the raw HTML with DOMParser, which inherits the CSP: Chrome reports the
+  // onerror / onload attributes there before DOMPurify strips them. Nothing else may be blocked.
+  const violations = await page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations.splice(0));
+  for (const v of violations) expect(v).toMatch(/^script-src-attr inline /);
 });
 
 test('remembers font settings across reloads', async ({ page }) => {
