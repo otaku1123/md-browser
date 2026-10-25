@@ -1,6 +1,6 @@
 {
   "name": "md-browser",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "",
   "scripts": {
     "dev": "vite",
@@ -19,6 +19,7 @@
   "type": "module",
   "private": true,
   "dependencies": {
+    "@plantuml/core": "^1.2026.9",
     "dompurify": "^3.4.17",
     "highlight.js": "^11.12.0",
     "katex": "^0.18.10",
@@ -30,6 +31,7 @@
     "mermaid": "^12.2.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.64.1",
     "@types/chrome": "^0.3.5",
     "@types/markdown-it": "^14.2.0",

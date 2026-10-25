@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
+import { expectAccessible } from './a11y';
 import { readSampleFiles } from './fixtures';
 
 // The folder picker can't be driven by Playwright, so stand it in with an OPFS folder
@@ -35,6 +36,33 @@ async function openSampleFolder(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Open folder' }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
 }
+
+// The build ships a Content-Security-Policy (vite.config.ts); every test must run without violating it.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const violations: string[] = [];
+    Object.assign(window, { __cspViolations: violations });
+    document.addEventListener('securitypolicyviolation', (e) => violations.push(`${e.effectiveDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber}:${e.columnNumber} ${e.sample}`));
+  });
+});
+
+test.afterEach(async ({ page }) => {
+  const violations = await page.evaluate(() => (window as unknown as { __cspViolations?: string[] }).__cspViolations ?? []);
+  expect(violations).toEqual([]);
+});
+
+test('ships a Content-Security-Policy that blocks inline scripts', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /script-src 'self'/);
+  const ran = await page.evaluate(() => {
+    const s = document.createElement('script');
+    s.textContent = 'window.__inlineRan = true';
+    document.head.append(s);
+    return (window as unknown as { __inlineRan?: boolean }).__inlineRan === true;
+  });
+  expect(ran).toBe(false);
+  await page.evaluate(() => ((window as unknown as { __cspViolations: string[] }).__cspViolations.length = 0));
+});
 
 test('shows the welcome screen in the browser language', async ({ page }) => {
   await page.goto('/');
@@ -192,6 +220,10 @@ test('does not execute scripts embedded in Markdown', async ({ page }) => {
   await expect(page.locator('a[href^="javascript:" i]')).toHaveCount(0);
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
+  // DOMPurify parses the raw HTML with DOMParser, which inherits the CSP: Chrome reports the
+  // onerror / onload attributes there before DOMPurify strips them. Nothing else may be blocked.
+  const violations = await page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations.splice(0));
+  for (const v of violations) expect(v).toMatch(/^script-src-attr inline /);
 });
 
 test('remembers font settings across reloads', async ({ page }) => {
@@ -347,7 +379,7 @@ test('remembers the theme across reloads', async ({ page }) => {
 test('copies code blocks to the clipboard', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await openSampleFolder(page);
-  await expect(page.locator('.code-block .copy-button')).toHaveCount(2); // ts + plantuml; not mermaid
+  await expect(page.locator('.code-block .copy-button')).toHaveCount(1); // ts; diagrams have none
   const block = page.locator('.code-block').first();
   await block.hover();
   await block.locator('.copy-button').click();
@@ -374,11 +406,11 @@ test('copies a heading link to the clipboard', async ({ page, context }) => {
 test('prints only the document, on white, even in dark mode', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await openSampleFolder(page);
-  await expect(page.locator('.diagram-screen svg')).toHaveCount(2);
+  await expect(page.locator('.diagram-mermaid .diagram-screen svg')).toHaveCount(2);
   await expect(page.locator('.diagram-print').first()).toBeHidden();
   await page.emulateMedia({ media: 'print', colorScheme: 'dark' });
   for (const sel of ['.toolbar', '#files', '.toc', '.diagram-screen']) await expect(page.locator(sel).first()).toBeHidden();
-  await expect(page.locator('.diagram-print svg')).toHaveCount(2);
+  await expect(page.locator('.diagram-print svg')).toHaveCount(4); // 2 Mermaid + 2 PlantUML
   await expect(page.locator('.diagram-print').first()).toBeVisible();
   const style = await page.evaluate(() => {
     const body = getComputedStyle(document.body);
@@ -451,6 +483,79 @@ test('resizes the TOC by dragging, with the keyboard, and resets on double-click
 });
 
 
+test('resizes the file list, keeps the handle across documents, and resets on double-click', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  const handle = page.getByRole('separator', { name: 'Resize file list' });
+  const width = async () => Math.round((await files.boundingBox())!.width);
+  expect(await width()).toBe(240);
+
+  const box = (await handle.boundingBox())!;
+  const y = box.y + 200;
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 100, y, { steps: 5 });
+  await page.mouse.up();
+  expect(await width()).toBeGreaterThan(300);
+  await expect(handle).toHaveAttribute('aria-valuenow', String(await width()));
+
+  await handle.focus();
+  const w = await width();
+  await page.keyboard.press('ArrowRight');
+  expect(await width()).toBe(w + 16);
+  await page.keyboard.press('ArrowLeft');
+  expect(await width()).toBe(w);
+  await page.keyboard.press('Home');
+  expect(await width()).toBe(160);
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:files-sidebar'))).toBe('{"open":true,"width":160}');
+
+  // Opening another document re-renders the list; the handle stays.
+  await files.locator('[data-path="docs/other.md"]').click();
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(handle).toBeVisible();
+  await handle.dblclick();
+  expect(await width()).toBe(240);
+});
+
+test('keeps keyboard focus inside the diagram dialog and closes it with Esc', async ({ page }) => {
+  await openSampleFolder(page);
+  const diagram = page.locator('.diagram-mermaid').first();
+  await diagram.focus();
+  await page.keyboard.press('Enter');
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  await expect(zoom).toBeVisible();
+  for (const name of ['Save SVG', 'Save PNG', 'Save SVG']) {
+    await page.keyboard.press('Tab');
+    await expect(zoom.getByRole('button', { name })).toBeFocused();
+  }
+  await page.keyboard.press('Shift+Tab');
+  await expect(zoom.getByRole('button', { name: 'Save PNG' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+  await expect(diagram).toBeFocused();
+});
+
+test('opens a document image at full size from the keyboard', async ({ page }) => {
+  await openSampleFolder(page);
+  const img = page.getByRole('button', { name: 'diagram (Enter to open at full size)' });
+  await img.focus();
+  await page.keyboard.press('Enter');
+  const zoom = page.getByRole('dialog', { name: 'diagram' });
+  await expect(zoom).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(zoom).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+  await expect(img).toBeFocused();
+});
+
+test('names task list checkboxes after their items', async ({ page }) => {
+  await openSampleFolder(page);
+  await expect(page.getByRole('checkbox', { name: '完了したタスク' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: '未完了のタスク' })).not.toBeChecked();
+});
+
 test('opens a Mermaid diagram large and saves it as SVG and PNG', async ({ page }) => {
   await openSampleFolder(page);
   const diagram = page.locator('.diagram-mermaid').first();
@@ -516,7 +621,7 @@ test('switches to the Markdown source and back, and starts each document in the 
   await expect(page.locator('#content')).toBeHidden();
   await expect(page.locator('.toc')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Table of contents' })).toBeHidden();
-  await expect(source.locator('.source-line')).toHaveCount(108);
+  await expect(source.locator('.source-line')).toHaveCount(122);
   await expect(source.locator('.source-line').nth(1)).toHaveText('title: MD Browser サンプル\n');
   const number = await source.locator('.source-line').nth(1).evaluate((el) => getComputedStyle(el, '::before').content);
   expect(number).toBe('counter(source-line)');
@@ -570,4 +675,104 @@ test('updates the shown source when the file changes', async ({ page }) => {
   await expect(page.locator('.source-line').last()).toHaveText('## Added heading');
   await page.getByRole('button', { name: 'Markdown source' }).click();
   await expect(page.locator('.markdown-body h2', { hasText: 'Added heading' })).toBeVisible();
+});
+
+test('skips from the toolbar to the document, or to its source', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.reload(); // reopens the folder, with focus back at the start of the page
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await page.keyboard.press('Tab');
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeInViewport();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+  await expect(page).not.toHaveURL(/#/);
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.querySelector('main')!.contains(document.activeElement))).toBe(true);
+
+  await page.locator('.source-toggle').click();
+  await skip.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('main', { name: 'Markdown source' })).toBeFocused();
+});
+
+test('passes the axe accessibility checks on the welcome screen and a document', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto('/');
+  await expectAccessible(page);
+  await openSampleFolder(page);
+  await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
+  await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  await expectAccessible(page);
+});
+
+test('passes the axe accessibility checks in dark mode, settings and dialogs', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openSampleFolder(page);
+  await expect(page.locator('.diagram-mermaid .diagram-screen svg')).toHaveCount(2);
+  await expectAccessible(page);
+  await page.locator('.font-settings-toggle').click();
+  await expectAccessible(page);
+  await page.locator('.font-settings-toggle').click();
+  await page.locator('.diagram-mermaid').first().click();
+  await expect(page.getByRole('dialog').locator('svg')).toBeVisible();
+  await expectAccessible(page);
+  await page.keyboard.press('Escape');
+});
+
+test('passes the axe accessibility checks in the Markdown source view', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  await page.locator('.source-toggle').click();
+  await expect(page.locator('.source-code')).toBeVisible();
+  // The source has no rendered headings.
+  await expectAccessible(page, ['page-has-heading-one']);
+});
+
+test('renders PlantUML diagrams offline, in both themes', async ({ page }) => {
+  const offsite: string[] = [];
+  page.on('request', (r) => {
+    if (!/^(http:\/\/localhost:4179\/|blob:|data:)/.test(r.url())) offsite.push(r.url());
+  });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  const diagrams = page.locator('.diagram-plantuml');
+  await expect(diagrams.locator('svg')).toHaveCount(2);
+  await expect(diagrams.nth(0)).toContainText('Hello');
+  await expect(diagrams.nth(1)).toContainText('信号'); // @startuml left out
+  await expect(diagrams.nth(0)).toHaveAttribute('role', 'button');
+
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: 'Dark' }).check();
+  await expect(diagrams.locator('.diagram-screen svg')).toHaveCount(2);
+  await expect(diagrams.locator('.diagram-print svg')).toHaveCount(2);
+
+  // The standard library is not bundled: PlantUML reports it instead of fetching it.
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile: (rel: string, text: string) => Promise<void> }).__appendToFile(
+      'README.md',
+      '\n```plantuml\n!include <C4/C4_Context>\nPerson(u, "User")\n```\n',
+    ),
+  );
+  await expect(diagrams).toHaveCount(3);
+  await expect(diagrams.nth(2)).toContainText('cannot include <C4/C4_Context>');
+  expect(offsite).toEqual([]);
+});
+
+test('opens a PlantUML diagram large and saves it as SVG and PNG', async ({ page }) => {
+  await openSampleFolder(page);
+  const diagram = page.locator('.diagram-plantuml').first();
+  await expect(diagram.locator('svg')).toBeVisible();
+  await diagram.click();
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  await expect(zoom.locator('svg')).toBeVisible();
+
+  const [svgDownload] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'Save SVG' }).click()]);
+  expect(svgDownload.suggestedFilename()).toBe('diagram-3.svg'); // after the two Mermaid diagrams
+  expect(await readFile((await svgDownload.path())!, 'utf8')).toContain('Hello');
+  const [pngDownload] = await Promise.all([page.waitForEvent('download'), zoom.getByRole('button', { name: 'Save PNG' }).click()]);
+  expect(pngDownload.suggestedFilename()).toBe('diagram-3.png');
+  expect((await readFile((await pngDownload.path())!)).subarray(1, 4).toString()).toBe('PNG');
+  await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
 });

@@ -36,7 +36,7 @@ Markdown ファイルをブラウザでプレビューする静的 Web アプリ
 - 表示設定（ツールバーの歯車ボタン）: テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、本文・コードのフォント名。拡張機能は `chrome.storage.sync`、Web 版は `localStorage` に保存し、他のタブにも即時反映
 - 印刷 / PDF 出力（ツールバーや目次を除き、白背景・ライト配色で出力）
 - 再読み込み後に前回のファイル / フォルダを復元（Web 版・ビューアー）。開く前の画面に「最近開いたもの」（最大10件、×で削除・「クリア」で全削除）を表示し、権限が切れていてもクリックで開き直せる
-- PlantUML: 未対応（ソースをコードとして表示）
+- PlantUML 図（` ```plantuml ` / `puml` / `uml`。公式のブラウザ版エンジンを同梱し、使うときだけ遅延ロード。外部サーバーには送らない。標準ライブラリ・スプライト・絵文字は同梱していないため使えない）。クリックで拡大表示し、SVG / PNG で保存可能
 
 ## 開発
 
@@ -99,6 +99,10 @@ npm run build:ext   # dist-extension/ に出力
 ```sh
 npm run pack:ext    # release/md-browser-<version>.zip を作成
 ```
+
+`main` 上のコミットに `v<version>` タグを付けて push すると、Release ワークフローが同じ zip を作って GitHub Release に添付する。
+
+同梱しているライブラリのライセンス表記は、ビルド時に `THIRD_PARTY_NOTICES.txt`（拡張機能は zip の直下、Web 版はサイトの直下）として自動生成される（`scripts/vite-third-party-notices.ts`）。実際にバンドルされたパッケージだけが載る。
 
 提出画面に入力する内容（説明文・権限が必要な理由・プライバシー）は [docs/store/listing.md](docs/store/listing.md) にまとめてある。プライバシーポリシーは https://otaku1123.github.io/md-browser/privacy.html で公開している。
 

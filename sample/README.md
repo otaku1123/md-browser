@@ -81,12 +81,26 @@ $$
 \int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
 $$
 
-## PlantUML（未対応）
+## PlantUML
 
 ```plantuml
 @startuml
 Alice -> Bob: Hello
+Bob --> Alice: Hi
 @enduml
+```
+
+`@startuml` は省略できます。タイミング図の例:
+
+```puml
+robust "信号" as S
+concise "状態" as C
+@0
+S is Low
+C is Idle
+@100
+S is High
+C is Busy
 ```
 
 ## 画像

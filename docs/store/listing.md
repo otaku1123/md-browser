@@ -7,21 +7,23 @@
 - Chrome ウェブストアのデベロッパー登録が済んでいる（登録料 $5、一度だけ）
 - Google アカウントで 2 段階認証が有効になっている
 - リリース PR（`develop` → `main`）がマージ済み
-- **`main` ブランチで** `npm run pack:ext` を実行し、`release/md-browser-<version>.zip` を作成済み（`develop` には未リリースの変更が入るため使わない）
-  ```sh
-  git switch main && git pull --ff-only && npm run pack:ext
-  ```
 - 提出するコミットに `v<version>` タグを付けて push 済み（ストアの版とコードを対応づけるため）
   ```sh
-  git tag v<version> origin/main && git push origin v<version>
+  git fetch && git tag -a v<version> origin/main -m "Release <version>" && git push origin v<version>
   ```
+- タグの push で動く Release ワークフロー（`.github/workflows/release.yml`）が成功し、GitHub Release に `md-browser-<version>.zip` が添付されている。それを `release/` にダウンロード済み
+  ```sh
+  gh release download v<version> -p '*.zip' -D release
+  ```
+  - ワークフローは、タグと `package.json`・manifest のバージョンが一致しない場合や、タグが `main` 上にない場合に失敗する（`develop` には未リリースの変更が入るため）
+  - 手元で作る場合は、`main` ブランチで `npm run pack:ext` を実行する
 - GitHub Pages に `privacy.html` がデプロイ済み（`main` に push すれば自動でデプロイされる）
 
 ## 1. パッケージ
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.6.0.zip` |
+| アップロードするファイル | `release/md-browser-1.7.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -47,8 +49,9 @@ Open any .md file from your computer (drag it into Chrome or open file:///…/RE
 FEATURES
 • GitHub-style rendering: tables, task lists, syntax-highlighted code blocks
 • Sidebar table of contents that follows your scroll position; hide it or drag to resize
-• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open
+• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
+• PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
 • Live reload: save the file in your editor and the page re-renders within about a second, keeping your scroll position
 • GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
@@ -56,6 +59,7 @@ FEATURES
 • Switch to the raw Markdown source (button or Ctrl/⌘+Shift+M), with line numbers
 • Display settings: theme (system / light / dark), text size, content width, image size, and fonts for body text and code
 • Click an image to see it at full size
+• Works from the keyboard and with screen readers: a skip link to the document, and Enter opens diagrams and images
 • Relative images and links to other .md files just work
 • Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars
 • Tab icon shows which tabs are rendered by MD Browser, and marks files that changed (or can't be read) while the tab was in the background
@@ -83,8 +87,9 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 主な機能
 • GitHub 風の表示：表・タスクリスト・シンタックスハイライト付きコードブロック
 • スクロール位置に連動する目次サイドバー（表示の切り替え、ドラッグで幅を変更）
-• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける
+• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能）
 • Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
+• PlantUML 図（ブラウザ内で描画し、PlantUML のサーバーには送信しません）
 • KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
 • 自動更新：エディタで保存すると約 1 秒で再描画（スクロール位置を保持）
 • GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示
@@ -92,6 +97,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • 元の Markdown テキスト表示への切り替え（ボタンまたは Ctrl/⌘+Shift+M、行番号付き）
 • 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、画像サイズ、本文とコードのフォント
 • 画像をクリックすると原寸で表示
+• キーボードやスクリーンリーダーでも操作しやすい（本文へのスキップリンク、Enter で図や画像を拡大）
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
 • 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）
 • タブのアイコンで MD Browser が表示しているタブがひと目でわかり、裏のタブでファイルが更新された（または読めなくなった）ことも表示
@@ -124,12 +130,14 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 ### 単一用途の説明（Single purpose）
 
 ```text
-Render local Markdown (.md) files opened in Chrome as formatted documents with a table of contents and Mermaid diagrams, and re-render them when the file changes.
+Render local Markdown (.md) files opened in Chrome as formatted documents with a table of contents and Mermaid diagrams, and re-render them when the file changes. It can also list the other Markdown files in the same folder in a sidebar.
 ```
 
-### ホスト権限が必要な理由（Host permission justification）
+### ホスト権限（Host permissions）
 
-content_scripts の `file:///*.md` などへのマッチが、ホスト権限として扱われる。
+manifest の `permissions` は `storage` だけで、`host_permissions` はない。content_scripts の `file:///*.md` などへのマッチでは、ダッシュボードにホスト権限の説明欄は表示されない（1.6.0 の提出時に確認）。file:// の読み込みは、詳細説明の PRIVACY 節とプライバシーポリシーで開示している。
+
+審査で理由を聞かれたときは、次の文面で返信する。
 
 ```text
 The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders and node_modules are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. No file contents other than the viewed file are read, no other pages are accessed, and no network requests are made by the extension.
@@ -138,7 +146,7 @@ The content script runs only on local Markdown files (file:///*.md, *.markdown, 
 ### storage 権限が必要な理由（Permission justification: storage）
 
 ```text
-Stores the user's display preferences (theme, text size, content width, image size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and the table of contents width) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. Only these preferences and folder locations are stored; no file contents or personal data are saved.
+Stores the user's display preferences (theme, text size, content width, image size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. Only these preferences and folder locations are stored; no file contents or personal data are saved.
 ```
 
 ### リモートコード（Remote code）
@@ -177,6 +185,6 @@ To test: install the extension, enable "Allow access to file URLs" on the extens
 
 | 症状 | 対処 |
 |---|---|
-| 審査で「権限の説明不足」として却下された | 「ホスト権限が必要な理由」の文面に、file:// だけに限定していること、通信をしないことを明記して再提出する |
+| 審査で「権限の説明不足」として却下された | 「ホスト権限」節の文面（file:// だけに限定していること、通信をしないこと）で返信し、必要なら詳細説明の PRIVACY 節にも追記して再提出する |
 | 「説明文がキーワードの羅列」と指摘された | 機能の箇条書きを減らし、文章での説明を増やす |
 | アップロード時に manifest エラーが出る | `version` が前回より大きいか、`_locales` の文字数が上限内（名前 75 文字、説明 132 文字）かを確認する |

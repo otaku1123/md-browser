@@ -1,15 +1,22 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mountFilesSidebar, normalizeFilesSidebar } from '../../src/core/files-sidebar';
+import { FILES_WIDTH_DEFAULT, FILES_WIDTH_MIN, mountFilesSidebar, normalizeFilesSidebar } from '../../src/core/files-sidebar';
 
 const KEY = 'md-browser:files-sidebar';
 
 describe('normalizeFilesSidebar', () => {
-  it('is open unless saved as closed (boolean or the earlier bare string)', () => {
-    expect(normalizeFilesSidebar(null)).toBe(true);
-    expect(normalizeFilesSidebar(true)).toBe(true);
-    expect(normalizeFilesSidebar('open')).toBe(true);
-    expect(normalizeFilesSidebar(false)).toBe(false);
-    expect(normalizeFilesSidebar('closed')).toBe(false);
+  it('reads the earlier open-only values (boolean or bare string) at the default width', () => {
+    const at = (open: boolean) => ({ open, width: FILES_WIDTH_DEFAULT });
+    expect(normalizeFilesSidebar(null)).toEqual(at(true));
+    expect(normalizeFilesSidebar(true)).toEqual(at(true));
+    expect(normalizeFilesSidebar('open')).toEqual(at(true));
+    expect(normalizeFilesSidebar(false)).toEqual(at(false));
+    expect(normalizeFilesSidebar('closed')).toEqual(at(false));
+  });
+
+  it('keeps a stored choice and clamps the width', () => {
+    expect(normalizeFilesSidebar({ open: false, width: 300 })).toEqual({ open: false, width: 300 });
+    expect(normalizeFilesSidebar({ width: 1 })).toEqual({ open: true, width: FILES_WIDTH_MIN });
+    expect(normalizeFilesSidebar({ open: true, width: 'x' })).toEqual({ open: true, width: FILES_WIDTH_DEFAULT });
   });
 });
 
@@ -32,7 +39,7 @@ describe('mountFilesSidebar (localStorage)', () => {
     expect(files.hidden).toBe(true);
     toggle.click();
     expect(files.hidden).toBe(false);
-    expect(localStorage.getItem(KEY)).toBe('true');
+    expect(localStorage.getItem(KEY)).toBe(`{"open":true,"width":${FILES_WIDTH_DEFAULT}}`);
   });
 
   it('hides both the toggle and the list when not available', () => {

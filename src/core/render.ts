@@ -19,9 +19,8 @@ export interface RenderResult {
   toc: TocItem[];
 }
 
-const DIAGRAM_LANGS = new Set(['mermaid']);
-// PlantUML is not rendered yet; shown as a labelled code block.
-const PLANTUML_LANGS = new Set(['plantuml', 'puml', 'uml']);
+// Fence language -> diagram kind, drawn after sanitizing by diagrams.ts.
+const DIAGRAM_KINDS: Record<string, string> = { mermaid: 'mermaid', plantuml: 'plantuml', puml: 'plantuml', uml: 'plantuml' };
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -54,7 +53,8 @@ const md = new MarkdownIt({
           .replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, ''),
       ),
   })
-  .use(taskLists, { enabled: false })
+  // label: the item text becomes the checkbox's accessible name.
+  .use(taskLists, { enabled: false, label: true })
   .use(footnote)
   .use(mathPlugin)
   // :smile: -> emoji. Text shortcuts like ":)" are off: GitHub does not convert them.
@@ -104,12 +104,10 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
   const lang = token.info.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
   if (lang === 'math') return mathPlaceholder(token.content.trim(), true) + '\n';
-  if (DIAGRAM_LANGS.has(lang)) {
+  const kind = Object.hasOwn(DIAGRAM_KINDS, lang) ? DIAGRAM_KINDS[lang] : undefined;
+  if (kind) {
     // Source goes in text content, not an attribute: DOMPurify drops attributes containing "-->".
-    return `<div class="diagram diagram-${lang}"><pre class="diagram-source">${escapeHtml(token.content)}</pre></div>\n`;
-  }
-  if (PLANTUML_LANGS.has(lang)) {
-    return `<div class="plantuml-placeholder"><div class="plantuml-note">${escapeHtml(t('plantumlNote'))}</div>${defaultFence(tokens, idx, options, env, self)}</div>`;
+    return `<div class="diagram diagram-${kind}"><pre class="diagram-source">${escapeHtml(token.content)}</pre></div>\n`;
   }
   return defaultFence(tokens, idx, options, env, self);
 };

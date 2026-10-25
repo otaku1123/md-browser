@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { expectAccessible } from './a11y';
 import { extensionTest as test } from './fixtures';
 
 const fileUrl = (dir: string, rel: string) => pathToFileURL(path.join(dir, rel)).href;
@@ -13,7 +14,7 @@ test('renders a local .md file in place', async ({ context, workdir }) => {
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
   await expect(page.locator('.toc a')).toHaveCount(11);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
-  await expect(page.locator('.plantuml-note')).toBeVisible();
+  await expect(page.locator('.diagram-plantuml svg')).toHaveCount(2);
   await expect(page.locator('.markdown-alert')).toHaveCount(5);
   await expect(page.locator('details.front-matter')).not.toHaveAttribute('open');
   await expect(page.locator('details.front-matter code')).toContainText('tags: [markdown, viewer]');
@@ -136,7 +137,7 @@ test('shares the theme between file tabs', async ({ context, workdir }) => {
 test('adds copy buttons to code blocks', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));
-  await expect(page.locator('.code-block .copy-button')).toHaveCount(2);
+  await expect(page.locator('.code-block .copy-button')).toHaveCount(1); // ts; diagrams have none
   const button = page.locator('.code-block .copy-button').first();
   await page.locator('.code-block').first().hover();
   await button.click();
@@ -307,4 +308,15 @@ test('does not run scripts shown in the Markdown source', async ({ context, work
   await expect(page.locator('.source-view')).toContainText('<script>window.__xss = 4</script>');
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
+});
+
+test('passes the axe accessibility checks on a file page and the viewer', async ({ context, workdir, extensionId }) => {
+  const page = await context.newPage();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
+  await expectAccessible(page);
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await expect(page.locator('.toolbar')).toBeVisible();
+  await expectAccessible(page);
 });

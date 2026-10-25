@@ -12,7 +12,8 @@ import { renderMath } from './core/math';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
 import { addHeadingLinks } from './core/heading-link';
-import { enableImageZoom } from './core/image-zoom';
+import { enableImageZoom, prepareImageZoom } from './core/image-zoom';
+import { mountSkipLink } from './core/skip-link';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
@@ -82,6 +83,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   await renderDiagrams(staging.content);
   await renderMath(staging.content);
   addCopyButtons(staging.content);
+  prepareImageZoom(staging.content);
   addHeadingLinks(staging.content, false);
   if (seq !== renderSeq) {
     assets.release();
@@ -432,6 +434,7 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
+mountSkipLink(document.querySelector<HTMLElement>('.toolbar')!);
 const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl));

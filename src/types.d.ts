@@ -4,6 +4,19 @@ declare module 'markdown-it-task-lists' {
   export default taskLists;
 }
 
+// @plantuml/core ships no types: the two exports from its README, and its side-effect scripts.
+declare module '@plantuml/core' {
+  export function render(lines: string[], targetId: string, options?: { dark?: boolean }): void;
+  export function renderToString(
+    lines: string[],
+    onSuccess: (svg: string) => void,
+    onError: (message: string) => void,
+    options?: { dark?: boolean; maxSvgSize?: number },
+  ): void;
+}
+declare module '@plantuml/core/themes.js';
+declare module '@plantuml/core/openiconic.js';
+
 declare module 'markdown-it-footnote' {
   import type { PluginSimple } from 'markdown-it';
   const footnote: PluginSimple;

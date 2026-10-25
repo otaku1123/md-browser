@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { renderPlantUml } from './plantuml';
 import { currentTheme, type Theme } from './theme';
 
 type MermaidApi = typeof import('mermaid').default;
@@ -32,27 +33,33 @@ function loadMermaid(): Promise<MermaidApi> {
   return mermaidPromise;
 }
 
+const isPlantUml = (node: HTMLElement) => node.classList.contains('diagram-plantuml');
+
+/** SVG markup for one diagram in the given theme. */
+async function draw(node: HTMLElement, source: string, theme: Theme, id: string): Promise<string> {
+  if (isPlantUml(node)) return renderPlantUml(source, theme === 'dark');
+  const mermaid = await loadMermaid();
+  return (await mermaid.render(id, withTheme(source, theme))).svg;
+}
+
 /**
- * Draws the Mermaid diagrams in root in the theme shown now. Diagrams already drawn in that
- * theme are skipped, so calling it again after a theme change redraws only what changed.
+ * Draws the Mermaid and PlantUML diagrams in root in the theme shown now. Diagrams already drawn
+ * in that theme are skipped, so calling it again after a theme change redraws only what changed.
  */
 export async function renderDiagrams(root: ParentNode): Promise<void> {
-  const nodes = Array.from(root.querySelectorAll<HTMLElement>('.diagram-mermaid')).filter(
+  const nodes = Array.from(root.querySelectorAll<HTMLElement>('.diagram-mermaid, .diagram-plantuml')).filter(
     (node) => drawn.get(node)?.theme !== currentTheme(),
   );
-  if (nodes.length === 0) return;
-
-  const mermaid = await loadMermaid();
   for (const node of nodes) {
     const source = drawn.get(node)?.source ?? node.querySelector('.diagram-source')?.textContent ?? '';
     const theme = currentTheme();
     drawn.set(node, { source, theme });
     const id = `mermaid-${++renderSeq}`;
     try {
-      const { svg } = await mermaid.render(id, withTheme(source, theme));
+      const svg = await draw(node, source, theme, id);
       if (theme === 'dark') {
         // Paper is white: keep a light-theme copy that only the print stylesheet shows.
-        const { svg: light } = await mermaid.render(`${id}-print`, withTheme(source, 'light'));
+        const light = await draw(node, source, 'light', `${id}-print`);
         node.innerHTML = `<div class="diagram-screen">${svg}</div><div class="diagram-print">${light}</div>`;
       } else {
         node.innerHTML = svg;
@@ -72,7 +79,8 @@ export async function renderDiagrams(root: ParentNode): Promise<void> {
       for (const attr of ['tabindex', 'role', 'aria-label']) node.removeAttribute(attr);
       const msg = document.createElement('div');
       msg.className = 'diagram-error-message';
-      msg.textContent = t('mermaidFailed', { error: err instanceof Error ? err.message : String(err) });
+      const error = err instanceof Error ? err.message : String(err);
+      msg.textContent = t(isPlantUml(node) ? 'plantumlFailed' : 'mermaidFailed', { error });
       const pre = document.createElement('pre');
       pre.textContent = source;
       node.replaceChildren(msg, pre);
@@ -87,6 +95,12 @@ export async function renderDiagrams(root: ParentNode): Promise<void> {
 export async function renderForExport(node: HTMLElement): Promise<SVGSVGElement> {
   const source = drawn.get(node)?.source;
   if (source === undefined) throw new Error('diagram not rendered');
+  // PlantUML draws plain SVG text, so the on-screen copy rasterizes as it is.
+  if (isPlantUml(node)) {
+    const svg = node.querySelector<SVGSVGElement>('.diagram-screen svg, :scope > svg');
+    if (!svg) throw new Error('diagram not rendered');
+    return svg;
+  }
   const mermaid = await loadMermaid();
   const id = `mermaid-export-${++renderSeq}`;
   try {
