@@ -7,14 +7,16 @@
 - Chrome ウェブストアのデベロッパー登録が済んでいる（登録料 $5、一度だけ）
 - Google アカウントで 2 段階認証が有効になっている
 - リリース PR（`develop` → `main`）がマージ済み
-- **`main` ブランチで** `npm run pack:ext` を実行し、`release/md-browser-<version>.zip` を作成済み（`develop` には未リリースの変更が入るため使わない）
-  ```sh
-  git switch main && git pull --ff-only && npm run pack:ext
-  ```
 - 提出するコミットに `v<version>` タグを付けて push 済み（ストアの版とコードを対応づけるため）
   ```sh
-  git tag v<version> origin/main && git push origin v<version>
+  git fetch && git tag -a v<version> origin/main -m "Release <version>" && git push origin v<version>
   ```
+- タグの push で動く Release ワークフロー（`.github/workflows/release.yml`）が成功し、GitHub Release に `md-browser-<version>.zip` が添付されている。それを `release/` にダウンロード済み
+  ```sh
+  gh release download v<version> -p '*.zip' -D release
+  ```
+  - ワークフローは、タグと `package.json`・manifest のバージョンが一致しない場合や、タグが `main` 上にない場合に失敗する（`develop` には未リリースの変更が入るため）
+  - 手元で作る場合は、`main` ブランチで `npm run pack:ext` を実行する
 - GitHub Pages に `privacy.html` がデプロイ済み（`main` に push すれば自動でデプロイされる）
 
 ## 1. パッケージ

@@ -100,6 +100,8 @@ npm run build:ext   # dist-extension/ に出力
 npm run pack:ext    # release/md-browser-<version>.zip を作成
 ```
 
+`main` 上のコミットに `v<version>` タグを付けて push すると、Release ワークフローが同じ zip を作って GitHub Release に添付する。
+
 提出画面に入力する内容（説明文・権限が必要な理由・プライバシー）は [docs/store/listing.md](docs/store/listing.md) にまとめてある。プライバシーポリシーは https://otaku1123.github.io/md-browser/privacy.html で公開している。
 
 画面の文言は、ブラウザの言語設定に合わせて日本語と英語で切り替わる（`src/i18n.ts`）。
