@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
+import { expectAccessible } from './a11y';
 import { readSampleFiles } from './fixtures';
 
 // The folder picker can't be driven by Playwright, so stand it in with an OPFS folder
@@ -639,4 +640,37 @@ test('updates the shown source when the file changes', async ({ page }) => {
   await expect(page.locator('.source-line').last()).toHaveText('## Added heading');
   await page.getByRole('button', { name: 'Markdown source' }).click();
   await expect(page.locator('.markdown-body h2', { hasText: 'Added heading' })).toBeVisible();
+});
+
+test('passes the axe accessibility checks on the welcome screen and a document', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto('/');
+  await expectAccessible(page);
+  await openSampleFolder(page);
+  await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
+  await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  await expectAccessible(page);
+});
+
+test('passes the axe accessibility checks in dark mode, settings and dialogs', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openSampleFolder(page);
+  await expect(page.locator('.diagram-screen svg')).toHaveCount(2);
+  await expectAccessible(page);
+  await page.locator('.font-settings-toggle').click();
+  await expectAccessible(page);
+  await page.locator('.font-settings-toggle').click();
+  await page.locator('.diagram-mermaid').first().click();
+  await expect(page.getByRole('dialog').locator('svg')).toBeVisible();
+  await expectAccessible(page);
+  await page.keyboard.press('Escape');
+});
+
+test('passes the axe accessibility checks in the Markdown source view', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  await page.locator('.source-toggle').click();
+  await expect(page.locator('.source-code')).toBeVisible();
+  // The source has no rendered headings.
+  await expectAccessible(page, ['page-has-heading-one']);
 });

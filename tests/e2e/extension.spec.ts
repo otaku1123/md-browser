@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { expectAccessible } from './a11y';
 import { extensionTest as test } from './fixtures';
 
 const fileUrl = (dir: string, rel: string) => pathToFileURL(path.join(dir, rel)).href;
@@ -307,4 +308,15 @@ test('does not run scripts shown in the Markdown source', async ({ context, work
   await expect(page.locator('.source-view')).toContainText('<script>window.__xss = 4</script>');
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
+});
+
+test('passes the axe accessibility checks on a file page and the viewer', async ({ context, workdir, extensionId }) => {
+  const page = await context.newPage();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
+  await expectAccessible(page);
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await expect(page.locator('.toolbar')).toBeVisible();
+  await expectAccessible(page);
 });
