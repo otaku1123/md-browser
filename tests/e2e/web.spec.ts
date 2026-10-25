@@ -483,6 +483,41 @@ test('resizes the TOC by dragging, with the keyboard, and resets on double-click
 });
 
 
+test('resizes the file list, keeps the handle across documents, and resets on double-click', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  const handle = page.getByRole('separator', { name: 'Resize file list' });
+  const width = async () => Math.round((await files.boundingBox())!.width);
+  expect(await width()).toBe(240);
+
+  const box = (await handle.boundingBox())!;
+  const y = box.y + 200;
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 100, y, { steps: 5 });
+  await page.mouse.up();
+  expect(await width()).toBeGreaterThan(300);
+  await expect(handle).toHaveAttribute('aria-valuenow', String(await width()));
+
+  await handle.focus();
+  const w = await width();
+  await page.keyboard.press('ArrowRight');
+  expect(await width()).toBe(w + 16);
+  await page.keyboard.press('ArrowLeft');
+  expect(await width()).toBe(w);
+  await page.keyboard.press('Home');
+  expect(await width()).toBe(160);
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:files-sidebar'))).toBe('{"open":true,"width":160}');
+
+  // Opening another document re-renders the list; the handle stays.
+  await files.locator('[data-path="docs/other.md"]').click();
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(handle).toBeVisible();
+  await handle.dblclick();
+  expect(await width()).toBe(240);
+});
+
 test('keeps keyboard focus inside the diagram dialog and closes it with Esc', async ({ page }) => {
   await openSampleFolder(page);
   const diagram = page.locator('.diagram-mermaid').first();

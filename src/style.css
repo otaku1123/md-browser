@@ -220,22 +220,24 @@ body {
   line-height: 1.5;
 }
 .toc:is(.empty, .collapsed, .source-mode) { display: none; }
-/* Drag handle on the TOC's inner edge. Fixed, so it stays put while the TOC scrolls; the
-   6px strip straddles the TOC border (centred on x = right edge - TOC width). */
-.toc-resizer {
+/* Drag handles on the inner edge of the TOC and the file list (panel-resizer.ts). Fixed, so they
+   stay put while the panel scrolls; the 6px strip straddles the panel border. */
+.panel-resizer {
   position: fixed;
   top: var(--toolbar-h);
-  right: calc(var(--toc-w) - 3px);
   width: 6px;
   height: calc(100vh - var(--toolbar-h));
   cursor: col-resize;
   touch-action: none;
   z-index: 5;
 }
-.toc-resizer:hover,
-.toc-resizer:focus-visible,
-.toc-resizer.dragging { background: var(--accent-soft); outline: none; box-shadow: inset -1px 0 0 var(--accent); }
-.toc-resizer[hidden] { display: none; }
+.toc-resizer { right: calc(var(--toc-w) - 3px); }
+.files-resizer { left: calc(var(--files-w) - 3px); }
+.panel-resizer:hover,
+.panel-resizer:focus-visible,
+.panel-resizer.dragging { background: var(--accent-soft); outline: none; box-shadow: inset -1px 0 0 var(--accent); }
+.files-resizer:is(:hover, :focus-visible, .dragging) { box-shadow: inset 1px 0 0 var(--accent); }
+.panel-resizer[hidden] { display: none; }
 /* Wide screens: centre a short TOC vertically in its panel. "safe" falls back to the top when
    the list is taller than the panel, so a long TOC still starts at the top and scrolls. */
 @media (min-width: 801px) {
@@ -313,7 +315,7 @@ body {
     border-bottom: 1px solid var(--border);
   }
   .toc:is(.empty, .collapsed, .source-mode) { display: none; }
-  .toc-resizer { display: none; }
+  .panel-resizer { display: none; }
   .files {
     position: static;
     height: auto;
@@ -709,7 +711,7 @@ body {
   .toolbar,
   .files,
   .toc,
-  .toc-resizer,
+  .panel-resizer,
   .drop-overlay,
   .image-zoom,
   .copy-button,

@@ -1,13 +1,13 @@
 // Show/hide toggle and drag-to-resize handle for the right-hand TOC. The choice (open + width)
 // lives in the settings store, so every tab and the viewer share it like the other display settings.
 import { t } from '../i18n';
+import { clampWidth, createPanelResizer } from './panel-resizer';
 import { createSettingsStore } from './settings-store';
 import { TOC_SOURCE_CLASS } from './source-view';
 
 export const TOC_WIDTH_DEFAULT = 280;
 export const TOC_WIDTH_MIN = 160;
 export const TOC_WIDTH_MAX = 480;
-const KEY_STEP = 16;
 
 export interface TocPanelSettings {
   open: boolean;
@@ -15,9 +15,7 @@ export interface TocPanelSettings {
 }
 
 export function clampTocWidth(v: unknown): number {
-  const n = typeof v === 'number' ? v : NaN;
-  if (!Number.isFinite(n)) return TOC_WIDTH_DEFAULT;
-  return Math.min(TOC_WIDTH_MAX, Math.max(TOC_WIDTH_MIN, Math.round(n)));
+  return clampWidth(v, TOC_WIDTH_MIN, TOC_WIDTH_MAX, TOC_WIDTH_DEFAULT);
 }
 
 /** Unset or malformed: shown at the default width. */
@@ -49,15 +47,22 @@ export function mountTocPanel(toolbar: HTMLElement, tocEl: HTMLElement): void {
   if (gear) gear.before(button);
   else toolbar.append(button);
 
-  const handle = document.createElement('div');
-  handle.className = 'toc-resizer';
-  handle.tabIndex = 0;
-  handle.setAttribute('role', 'separator');
-  handle.setAttribute('aria-orientation', 'vertical');
-  handle.setAttribute('aria-label', t('tocResize'));
-  handle.setAttribute('aria-controls', tocEl.id);
-  handle.setAttribute('aria-valuemin', String(TOC_WIDTH_MIN));
-  handle.setAttribute('aria-valuemax', String(TOC_WIDTH_MAX));
+  const resizer = createPanelResizer({
+    panel: tocEl,
+    edge: 'left',
+    className: 'toc-resizer',
+    label: t('tocResize'),
+    min: TOC_WIDTH_MIN,
+    max: TOC_WIDTH_MAX,
+    reset: TOC_WIDTH_DEFAULT,
+    width: () => current.width,
+    onResize: (width) => {
+      current = { ...current, width };
+      apply();
+    },
+    onCommit: (width) => commit({ ...current, width }),
+  });
+  const handle = resizer.el;
   // Inside the TOC's <nav>, so it belongs to that landmark; toc.ts re-renders only the list.
   tocEl.append(handle);
 
@@ -70,7 +75,7 @@ export function mountTocPanel(toolbar: HTMLElement, tocEl: HTMLElement): void {
     tocEl.classList.toggle('collapsed', !current.open);
     handle.hidden = !hasToc || !current.open;
     document.documentElement.style.setProperty('--toc-w', `${current.width}px`);
-    handle.setAttribute('aria-valuenow', String(current.width));
+    resizer.sync();
   }
 
   function commit(next: TocPanelSettings): void {
@@ -80,40 +85,6 @@ export function mountTocPanel(toolbar: HTMLElement, tocEl: HTMLElement): void {
   }
 
   button.addEventListener('click', () => commit({ ...current, open: !current.open }));
-
-  handle.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    handle.focus();
-    handle.setPointerCapture(e.pointerId);
-    handle.classList.add('dragging');
-  });
-  handle.addEventListener('pointermove', (e) => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
-    // The TOC hugs the right edge of the layout, so its width is the distance from the pointer to it.
-    const right = tocEl.parentElement!.getBoundingClientRect().right;
-    current = { ...current, width: clampTocWidth(right - e.clientX) };
-    apply();
-  });
-  const endDrag = (e: PointerEvent): void => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
-    handle.releasePointerCapture(e.pointerId);
-    handle.classList.remove('dragging');
-    void store.save(current);
-  };
-  handle.addEventListener('pointerup', endDrag);
-  handle.addEventListener('pointercancel', endDrag);
-  handle.addEventListener('dblclick', () => commit({ ...current, width: TOC_WIDTH_DEFAULT }));
-  handle.addEventListener('keydown', (e) => {
-    // The handle sits on the TOC's left edge: moving it left widens the panel.
-    if (e.key === 'ArrowLeft') commit({ ...current, width: clampTocWidth(current.width + KEY_STEP) });
-    else if (e.key === 'ArrowRight') commit({ ...current, width: clampTocWidth(current.width - KEY_STEP) });
-    else if (e.key === 'Home') commit({ ...current, width: TOC_WIDTH_MIN });
-    else if (e.key === 'End') commit({ ...current, width: TOC_WIDTH_MAX });
-    else if (e.key === 'Enter') commit({ ...current, width: TOC_WIDTH_DEFAULT });
-    else return;
-    e.preventDefault();
-  });
 
   // The TOC toggles its `empty` class on every render; follow it without touching the render call sites.
   new MutationObserver(apply).observe(tocEl, { attributes: true, attributeFilter: ['class'] });

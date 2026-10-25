@@ -1,3 +1,5 @@
+import { PANEL_RESIZER_CLASS } from './core/panel-resizer';
+
 export interface FileTreeController {
   /** Renders workspace-relative paths (e.g. "docs/guide.md") as a collapsible folder tree. */
   render(paths: string[]): void;
@@ -70,7 +72,8 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void):
       active = null;
       const list = renderDir(buildTree(paths));
       list.className = 'file-tree';
-      el.replaceChildren(list);
+      // Keep the resize handle (files-sidebar.ts), which lives in the sidebar too.
+      el.replaceChildren(list, ...el.querySelectorAll(`:scope > .${PANEL_RESIZER_CLASS}`));
     },
     setActive(path) {
       const btn = buttons.get(path);
