@@ -14,8 +14,9 @@ export function createToc(tocEl: HTMLElement): TocController {
   let pinnedTarget: string | null = null;
 
   function render(items: TocItem[]): void {
+    // Only the list: the resize handle (toc-panel.ts) lives in the TOC too.
+    tocEl.querySelector(':scope > ul')?.remove();
     if (items.length === 0) {
-      tocEl.replaceChildren();
       tocEl.classList.add('empty');
       return;
     }
@@ -32,7 +33,7 @@ export function createToc(tocEl: HTMLElement): TocController {
       li.append(a);
       list.append(li);
     }
-    tocEl.replaceChildren(list);
+    tocEl.prepend(list);
   }
 
   function update(): void {

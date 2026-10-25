@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
+import { expectAccessible } from './a11y';
 import { readSampleFiles } from './fixtures';
 
 // The folder picker can't be driven by Playwright, so stand it in with an OPFS folder
@@ -482,6 +483,79 @@ test('resizes the TOC by dragging, with the keyboard, and resets on double-click
 });
 
 
+test('resizes the file list, keeps the handle across documents, and resets on double-click', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  const handle = page.getByRole('separator', { name: 'Resize file list' });
+  const width = async () => Math.round((await files.boundingBox())!.width);
+  expect(await width()).toBe(240);
+
+  const box = (await handle.boundingBox())!;
+  const y = box.y + 200;
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 100, y, { steps: 5 });
+  await page.mouse.up();
+  expect(await width()).toBeGreaterThan(300);
+  await expect(handle).toHaveAttribute('aria-valuenow', String(await width()));
+
+  await handle.focus();
+  const w = await width();
+  await page.keyboard.press('ArrowRight');
+  expect(await width()).toBe(w + 16);
+  await page.keyboard.press('ArrowLeft');
+  expect(await width()).toBe(w);
+  await page.keyboard.press('Home');
+  expect(await width()).toBe(160);
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:files-sidebar'))).toBe('{"open":true,"width":160}');
+
+  // Opening another document re-renders the list; the handle stays.
+  await files.locator('[data-path="docs/other.md"]').click();
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(handle).toBeVisible();
+  await handle.dblclick();
+  expect(await width()).toBe(240);
+});
+
+test('keeps keyboard focus inside the diagram dialog and closes it with Esc', async ({ page }) => {
+  await openSampleFolder(page);
+  const diagram = page.locator('.diagram-mermaid').first();
+  await diagram.focus();
+  await page.keyboard.press('Enter');
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  await expect(zoom).toBeVisible();
+  for (const name of ['Save SVG', 'Save PNG', 'Save SVG']) {
+    await page.keyboard.press('Tab');
+    await expect(zoom.getByRole('button', { name })).toBeFocused();
+  }
+  await page.keyboard.press('Shift+Tab');
+  await expect(zoom.getByRole('button', { name: 'Save PNG' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+  await expect(diagram).toBeFocused();
+});
+
+test('opens a document image at full size from the keyboard', async ({ page }) => {
+  await openSampleFolder(page);
+  const img = page.getByRole('button', { name: 'diagram (Enter to open at full size)' });
+  await img.focus();
+  await page.keyboard.press('Enter');
+  const zoom = page.getByRole('dialog', { name: 'diagram' });
+  await expect(zoom).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(zoom).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+  await expect(img).toBeFocused();
+});
+
+test('names task list checkboxes after their items', async ({ page }) => {
+  await openSampleFolder(page);
+  await expect(page.getByRole('checkbox', { name: '完了したタスク' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: '未完了のタスク' })).not.toBeChecked();
+});
+
 test('opens a Mermaid diagram large and saves it as SVG and PNG', async ({ page }) => {
   await openSampleFolder(page);
   const diagram = page.locator('.diagram-mermaid').first();
@@ -601,4 +675,57 @@ test('updates the shown source when the file changes', async ({ page }) => {
   await expect(page.locator('.source-line').last()).toHaveText('## Added heading');
   await page.getByRole('button', { name: 'Markdown source' }).click();
   await expect(page.locator('.markdown-body h2', { hasText: 'Added heading' })).toBeVisible();
+});
+
+test('skips from the toolbar to the document, or to its source', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.reload(); // reopens the folder, with focus back at the start of the page
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await page.keyboard.press('Tab');
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeInViewport();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+  await expect(page).not.toHaveURL(/#/);
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.querySelector('main')!.contains(document.activeElement))).toBe(true);
+
+  await page.locator('.source-toggle').click();
+  await skip.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('main', { name: 'Markdown source' })).toBeFocused();
+});
+
+test('passes the axe accessibility checks on the welcome screen and a document', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto('/');
+  await expectAccessible(page);
+  await openSampleFolder(page);
+  await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
+  await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  await expectAccessible(page);
+});
+
+test('passes the axe accessibility checks in dark mode, settings and dialogs', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openSampleFolder(page);
+  await expect(page.locator('.diagram-screen svg')).toHaveCount(2);
+  await expectAccessible(page);
+  await page.locator('.font-settings-toggle').click();
+  await expectAccessible(page);
+  await page.locator('.font-settings-toggle').click();
+  await page.locator('.diagram-mermaid').first().click();
+  await expect(page.getByRole('dialog').locator('svg')).toBeVisible();
+  await expectAccessible(page);
+  await page.keyboard.press('Escape');
+});
+
+test('passes the axe accessibility checks in the Markdown source view', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  await page.locator('.source-toggle').click();
+  await expect(page.locator('.source-code')).toBeVisible();
+  // The source has no rendered headings.
+  await expectAccessible(page, ['page-has-heading-one']);
 });

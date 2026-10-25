@@ -10,6 +10,7 @@ let overlay: HTMLElement | null = null;
 let returnFocus: HTMLElement | null = null;
 
 function close(): void {
+  document.removeEventListener('keydown', onKeydown, true);
   overlay?.remove();
   overlay = null;
   returnFocus?.focus();
@@ -28,12 +29,46 @@ function show(label: string, children: Node[]): HTMLElement {
   overlay.tabIndex = -1;
   overlay.append(...children);
   overlay.addEventListener('click', close);
-  overlay.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') close();
-  });
+  // On the document, not the overlay: Esc must close it wherever focus is.
+  document.addEventListener('keydown', onKeydown, true);
   document.body.append(overlay);
   overlay.focus();
   return overlay;
+}
+
+// The dialog is modal: Tab cycles through its buttons (or stays on the overlay) instead of
+// reaching the page behind it.
+function onKeydown(e: KeyboardEvent): void {
+  if (!overlay) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    close();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  e.preventDefault();
+  const items = Array.from(overlay.querySelectorAll<HTMLElement>('button'));
+  if (!items.length) {
+    overlay.focus();
+    return;
+  }
+  const i = items.indexOf(document.activeElement as HTMLElement);
+  const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : (i + 1) % items.length;
+  items[next].focus();
+}
+
+function zoomable(img: HTMLImageElement | null, content: HTMLElement): img is HTMLImageElement {
+  return !!img && !img.closest('a') && !img.classList.contains('img-missing') && content.contains(img);
+}
+
+/** Makes document images reachable with Tab, like diagrams; call on each render's new content. */
+export function prepareImageZoom(root: ParentNode): void {
+  for (const img of root.querySelectorAll<HTMLImageElement>('img:not(.img-missing)')) {
+    if (img.closest('a, .diagram')) continue; // links keep working as links; diagrams open as a whole
+    img.tabIndex = 0;
+    img.setAttribute('role', 'button');
+    img.setAttribute('aria-label', t('imageZoomOpen', { alt: img.alt || t('imageZoom') }));
+  }
 }
 
 function open(img: HTMLImageElement): void {
@@ -84,8 +119,15 @@ function openDiagram(node: HTMLElement, index: number): void {
 /** Opens document images (not linked ones, which keep working as links) at full size on click. */
 export function enableImageZoom(content: HTMLElement): void {
   content.addEventListener('keydown', (e) => {
-    const diagram = (e.target as Element).closest?.<HTMLElement>('.diagram-mermaid:not(.diagram-error)');
-    if ((e.key !== 'Enter' && e.key !== ' ') || !diagram || e.target !== diagram) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const target = e.target as Element;
+    if (target instanceof HTMLImageElement && zoomable(target, content)) {
+      e.preventDefault();
+      open(target);
+      return;
+    }
+    const diagram = target.closest?.<HTMLElement>('.diagram-mermaid:not(.diagram-error)');
+    if (!diagram || target !== diagram) return;
     e.preventDefault();
     openDiagram(diagram, indexOf(content, diagram));
   });
@@ -95,8 +137,8 @@ export function enableImageZoom(content: HTMLElement): void {
       openDiagram(diagram, indexOf(content, diagram));
       return;
     }
-    const img = (e.target as Element).closest?.('img');
-    if (!img || img.closest('a') || img.classList.contains('img-missing') || !content.contains(img)) return;
+    const img = (e.target as Element).closest?.('img') ?? null;
+    if (!zoomable(img, content)) return;
     e.preventDefault();
     open(img);
   });

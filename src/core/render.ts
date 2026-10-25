@@ -54,7 +54,8 @@ const md = new MarkdownIt({
           .replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, ''),
       ),
   })
-  .use(taskLists, { enabled: false })
+  // label: the item text becomes the checkbox's accessible name.
+  .use(taskLists, { enabled: false, label: true })
   .use(footnote)
   .use(mathPlugin)
   // :smile: -> emoji. Text shortcuts like ":)" are off: GitHub does not convert them.

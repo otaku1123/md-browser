@@ -6,7 +6,8 @@ import { renderMath } from '../core/math';
 import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
 import { addHeadingLinks } from '../core/heading-link';
-import { enableImageZoom } from '../core/image-zoom';
+import { enableImageZoom, prepareImageZoom } from '../core/image-zoom';
+import { mountSkipLink } from '../core/skip-link';
 import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
 import { mountSourceView } from '../core/source-view';
@@ -97,6 +98,7 @@ function buildShell(): {
   brand.textContent = fileName();
   const status = document.createElement('span');
   status.className = 'status';
+  status.setAttribute('role', 'status');
   header.append(filesToggle, brand, status);
   mountFontSettings(header);
 
@@ -111,6 +113,7 @@ function buildShell(): {
 
   document.body.replaceChildren(header, layout);
   mountTocPanel(header, tocEl);
+  mountSkipLink(header);
   document.body.removeAttribute('style');
   return { content, tocEl, filesEl, filesToggle, status };
 }
@@ -136,6 +139,7 @@ async function main(): Promise<void> {
     await renderDiagrams(staging.content);
     await renderMath(staging.content);
     addCopyButtons(staging.content);
+    prepareImageZoom(staging.content);
     addHeadingLinks(staging.content, true);
     if (mine !== seq) return;
     const y = window.scrollY;

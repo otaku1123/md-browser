@@ -67,6 +67,7 @@ export function mountSourceView(
   const pane = document.createElement('section');
   pane.className = 'content source-view';
   pane.setAttribute('aria-label', t('sourceView'));
+  pane.setAttribute('role', 'main'); // stands in for the hidden <main> while shown
   pane.hidden = true;
   const code = document.createElement('code');
   code.className = 'hljs language-markdown';
