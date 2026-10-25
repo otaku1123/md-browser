@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { packageDir } from '../../scripts/vite-third-party-notices';
+import { packageDir } from '../../scripts/package-dir';
 
 describe('packageDir', () => {
   it('finds the package folder of bundled modules, scoped or not, nested or not', () => {
