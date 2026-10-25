@@ -24,7 +24,7 @@
   <body>
     <main>
       <h1>Privacy Policy</h1>
-      <p class="meta">MD Browser (web app and Chrome extension) · Last updated: 2026-10-25</p>
+      <p class="meta">MD Browser (web app and Chrome extension) · Last updated: 2026-10-26</p>
 
       <h2>Summary</h2>
       <p>MD Browser does not collect, store, transmit, sell, or share any personal data or file contents. All processing happens locally in your browser.</p>
@@ -36,7 +36,7 @@
       </ul>
 
       <h2>Settings</h2>
-      <p>Only your preferences are saved: theme, text size, content width, image size, the font names you entered (for the document body and for code), whether the table of contents and the file sidebar are shown, the table of contents width, and the viewer's folder scan limit (how many entries to look through when opening a folder). The extension saves them with <code>chrome.storage.sync</code>, so Chrome may sync them across your signed-in browsers; the web app saves them in your browser's <code>localStorage</code>. While you browse local files, the extension also keeps, per tab in <code>chrome.storage.session</code>, the folder the file sidebar was opened from, so the list stays the same when you move into a subfolder; it is cleared when the tab or the browser is closed.</p>
+      <p>Only your preferences are saved: theme, text size, content width, image size, the font names you entered (for the document body and for code), whether the table of contents and the file sidebar are shown and how wide they are, and the viewer's folder scan limit (how many entries to look through when opening a folder). The extension saves them with <code>chrome.storage.sync</code>, so Chrome may sync them across your signed-in browsers; the web app saves them in your browser's <code>localStorage</code>. While you browse local files, the extension also keeps, per tab in <code>chrome.storage.session</code>, the folder the file sidebar was opened from, so the list stays the same when you move into a subfolder; it is cleared when the tab or the browser is closed.</p>
       <p>To reopen your work after a reload, the viewer and the web app also keep, in your browser's IndexedDB, references to up to 10 recently opened files or folders, with their names, when they were opened, and the name of the document that was showing. These stay in your browser and are never synced or sent anywhere; reading the file or folder again still requires the permission you gave in the browser, which you can revoke at any time in the site settings. No file contents or personal data are saved.</p>
 
       <h2>What we do not do</h2>
@@ -44,6 +44,7 @@
         <li>No analytics, tracking, advertising, or telemetry.</li>
         <li>No accounts, cookies, or remote servers operated by us.</li>
         <li>No remote code: all code is bundled in the extension package.</li>
+        <li>Diagrams (Mermaid, PlantUML) and math are drawn inside your browser; nothing is sent to a diagram server such as plantuml.com.</li>
       </ul>
 
       <h2>Third-party content in your documents</h2>
@@ -56,7 +57,7 @@
 
       <h1 lang="ja">プライバシーポリシー</h1>
       <div lang="ja">
-        <p class="meta">MD Browser（Web アプリおよび Chrome 拡張機能）· 最終更新日: 2026-10-25</p>
+        <p class="meta">MD Browser（Web アプリおよび Chrome 拡張機能）· 最終更新日: 2026-10-26</p>
 
         <h2>概要</h2>
         <p>MD Browser は、個人データやファイルの内容を収集・保存・送信・販売・共有しません。すべての処理はお使いのブラウザ内で完結します。</p>
@@ -68,7 +69,7 @@
         </ul>
 
         <h2>設定の保存</h2>
-        <p>保存するのは設定（テーマ、文字サイズ、本文幅、画像サイズ、入力したフォント名 2 つ（本文用とコード用）、目次とファイル一覧の表示・非表示、目次の幅、ビューアーのフォルダ走査上限（フォルダを開くときに調べる件数））だけです。拡張機能は <code>chrome.storage.sync</code> に保存するため、Chrome にログインしている場合はブラウザ間で同期されることがあります。Web アプリはブラウザの <code>localStorage</code> に保存します。ローカルファイルを表示している間、拡張機能はタブごとに、ファイル一覧の起点にしたフォルダを <code>chrome.storage.session</code> に保持します（サブフォルダに移っても同じ一覧を表示するため）。タブまたはブラウザを閉じると消えます。</p>
+        <p>保存するのは設定（テーマ、文字サイズ、本文幅、画像サイズ、入力したフォント名 2 つ（本文用とコード用）、目次とファイル一覧の表示・非表示と幅、ビューアーのフォルダ走査上限（フォルダを開くときに調べる件数））だけです。拡張機能は <code>chrome.storage.sync</code> に保存するため、Chrome にログインしている場合はブラウザ間で同期されることがあります。Web アプリはブラウザの <code>localStorage</code> に保存します。ローカルファイルを表示している間、拡張機能はタブごとに、ファイル一覧の起点にしたフォルダを <code>chrome.storage.session</code> に保持します（サブフォルダに移っても同じ一覧を表示するため）。タブまたはブラウザを閉じると消えます。</p>
         <p>また、再読み込み後に作業を再開できるよう、ビューアーと Web アプリは、最近開いたファイル・フォルダ（最大 10 件）への参照と、その名前・開いた日時・表示していた文書の名前をブラウザの IndexedDB に保存します。これらはブラウザ内にだけ残り、同期や送信はされません。ファイル・フォルダを再び読み込むには、ブラウザで与えた許可が必要です（サイトの設定からいつでも取り消せます）。ファイルの内容や個人データは保存しません。</p>
 
         <h2>行わないこと</h2>
@@ -76,6 +77,7 @@
           <li>アクセス解析・トラッキング・広告・テレメトリは一切行いません。</li>
           <li>アカウント・Cookie・当方が運営するサーバーはありません。</li>
           <li>リモートコードは使用しません。すべてのコードは拡張機能のパッケージに含まれています。</li>
+          <li>図（Mermaid・PlantUML）と数式はブラウザ内で描画します。plantuml.com などの描画サーバーには送信しません。</li>
         </ul>
 
         <h2>ドキュメント内の外部コンテンツ</h2>
