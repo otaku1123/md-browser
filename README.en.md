@@ -26,6 +26,8 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 - Images with relative paths (when a folder is opened)
 - Auto-reload when the local file changes (1 s polling, Chrome / Edge)
 - Relative links to other `.md` files in the folder
+- Hide folders you don't need from the file sidebar (the eye button next to a folder name). Hidden folders are not scanned at all, so opening is faster; show them again from "Hidden folders" below the list. Saved per folder, only in this browser
+- When a folder is opened, names starting with `.` and `node_modules`, `bower_components`, `vendor`, `dist`, `build`, `out`, `target`, `coverage`, `venv` and `__pycache__` are skipped (web app and extension alike)
 - Display settings (gear button): theme (system / light / dark), text size, content width, body and code fonts. Stored in `chrome.storage.sync` (extension) or `localStorage` (web) and applied to other tabs immediately
 - Print / PDF output without the toolbar and sidebars, in light colors on white
 - Restores the last file / folder after a reload (web app and viewer). The start screen lists up to 10 recently opened items
@@ -47,7 +49,7 @@ Open a file or a folder with the buttons, or drop it onto the page.
 
 - Opening `file:///…/*.md` renders the file in place (TOC, diagrams, relative images, links to other Markdown files)
 - Saving the file re-renders it in about a second, keeping the scroll position
-- Lists Markdown files in the same folder and its subfolders in a left sidebar (when there are two or more; `.git`, `node_modules` and names starting with `.` are skipped)
+- Lists Markdown files in the same folder and its subfolders in a left sidebar (when there are two or more; names starting with `.` and `node_modules`, `bower_components`, `vendor`, `dist`, `build`, `out`, `target`, `coverage`, `venv` and `__pycache__` are skipped). Folders can be hidden with the button next to their name (saved per root folder in `chrome.storage.local`, not synced)
 - Clicking the toolbar icon opens the same viewer as the web app inside the extension
 
 ### Install from the Chrome Web Store
@@ -70,7 +72,7 @@ Expected result: the file is rendered with a table of contents, and "Auto-reload
 
 - A `file://` page cannot re-read itself because of CORS, so the extension's service worker reads the file and hands it to the page
 - The service worker only reads the `.md` file that the requesting tab itself has open
-- The file list is read only from the folder of the file the tab first opened and below (from Chrome's folder listing page; never parent folders; up to 4 levels, 500 files and 200 folders)
+- The file list is read only from the folder of the file the tab first opened and below (from Chrome's folder listing page; never parent folders; up to 4 levels, 500 files and 200 folders). Excluded and user-hidden folders are never listed. Hide / show requests get the same tab check, and the page sends only a path relative to the root
 
 ## Development
 
