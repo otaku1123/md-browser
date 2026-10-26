@@ -28,7 +28,8 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 - Relative links to other `.md` files in the folder
 - Hide folders you don't need from the file sidebar (the eye button next to a folder name). Hidden folders are not scanned at all, so opening is faster; show them again from "Hidden folders" below the list. Saved per folder, only in this browser
 - When a folder is opened, names starting with `.` and `node_modules`, `bower_components`, `vendor`, `dist`, `build`, `out`, `target`, `coverage`, `venv` and `__pycache__` are skipped (web app and extension alike)
-- Display settings (gear button): theme (system / light / dark), text size, content width, body and code fonts. Stored in `chrome.storage.sync` (extension) or `localStorage` (web) and applied to other tabs immediately
+- Display settings (gear button): theme (system / light / dark), text size, content width, image and diagram size (50–200% of their own size, never wider than the text), body and code fonts. Stored in `chrome.storage.sync` (extension) or `localStorage` (web) and applied to other tabs immediately
+- Resize single images and diagrams: hover (or focus with the keyboard) to show "− / n% / +" at the top right (25–300%; "n%" goes back to the display setting; always shown on touch screens). Saved per document, only in this browser (by file URL on `file://` pages, by opened folder name + path in the web app and viewer; not synced)
 - Print / PDF output without the toolbar and sidebars, in light colors on white
 - Restores the last file / folder after a reload (web app and viewer). The start screen lists up to 10 recently opened items
 - Japanese and English UI, following the browser language
