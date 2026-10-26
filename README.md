@@ -1,5 +1,7 @@
 # MD Browser
 
+日本語 | [English](README.en.md)
+
 Markdown ファイルをブラウザでプレビューする静的 Web アプリ。
 
 **公開版:** https://otaku1123.github.io/md-browser/
