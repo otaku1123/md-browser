@@ -63,7 +63,7 @@ describe('parseListing', () => {
 
 describe('isSkipped / folderOf', () => {
   it('skips hidden entries and node_modules', () => {
-    for (const name of ['.git', '.github', '.notes.md', 'node_modules']) expect(isSkipped(name)).toBe(true);
+    for (const name of ['.git', '.github', '.notes.md', 'node_modules', 'vendor', 'dist', 'target', '__pycache__', 'a/b']) expect(isSkipped(name)).toBe(true);
     for (const name of ['docs', 'README.md', 'node_modules2']) expect(isSkipped(name)).toBe(false);
   });
 
@@ -166,5 +166,18 @@ describe('listMarkdownTree', () => {
     const { fetchText } = fakeFs({ [ROOT]: [['gone', true], ['a.md', false]] });
     expect(await listMarkdownTree(ROOT, fetchText)).toEqual({ paths: ['a.md'], truncated: false });
     await expect(listMarkdownTree('file:///nope/', fetchText)).rejects.toThrow('not found');
+  });
+
+  it('never reads hidden folders (decoded, root-relative) or anything below them', async () => {
+    const { fetched, fetchText } = fakeFs({
+      [ROOT]: [['README.md', false], ['my src', true], ['docs', true]],
+      [`${ROOT}my%20src/`]: [['a.md', false]],
+      [`${ROOT}docs/`]: [['old', true], ['oldies', true], ['b.md', false]],
+      [`${ROOT}docs/old/`]: [['c.md', false]],
+      [`${ROOT}docs/oldies/`]: [['d.md', false]],
+    });
+    const res = await listMarkdownTree(ROOT, fetchText, undefined, ['my src', 'docs/old']);
+    expect(res).toEqual({ paths: ['README.md', 'docs/b.md', 'docs/oldies/d.md'], truncated: false });
+    expect(fetched).toEqual([ROOT, `${ROOT}docs/`, `${ROOT}docs/oldies/`]);
   });
 });

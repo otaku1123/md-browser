@@ -261,6 +261,62 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
   }
 });
 
+test('hides folders from the file sidebar per root folder, and shows them again', async ({ context }) => {
+  const dir = await makeFolder({
+    'README.md': '# Top',
+    'notes.md': '# Notes',
+    'src/b.md': '# B',
+    'src/gen/a.md': '# A',
+    'vendor/v.md': '# skip (default exclusion)',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const sidebar = page.locator('.files');
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['a.md', 'b.md', 'notes.md', 'README.md']);
+
+    await sidebar.getByRole('button', { name: '「src/gen」を一覧から隠す' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['b.md', 'notes.md', 'README.md']);
+    await expect(sidebar.locator('.files-hidden summary')).toHaveText('非表示のフォルダ（1）');
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+
+    // Remembered for the root folder: another file of it lists the same.
+    await page.goto(fileUrl(dir, 'notes.md'));
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'notes.md');
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['b.md', 'notes.md', 'README.md']);
+    // Hiding the parent replaces the folder below it.
+    await sidebar.getByRole('button', { name: '「src」を一覧から隠す' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['notes.md', 'README.md']);
+    await sidebar.locator('.files-hidden summary').click();
+    await expect(sidebar.locator('.files-hidden-name')).toHaveText(['src']);
+    await expectAccessible(page);
+
+    await sidebar.getByRole('button', { name: '「src」を一覧に表示' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['a.md', 'b.md', 'notes.md', 'README.md']);
+    await expect(sidebar.locator('.files-hidden')).toHaveCount(0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('keeps the file sidebar while folders are hidden, even with one file left', async ({ context }) => {
+  const dir = await makeFolder({ 'only.md': '# Only', 'sub/x.md': '# X' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'only.md'));
+    const sidebar = page.locator('.files');
+    await sidebar.getByRole('button', { name: '「sub」を一覧から隠す' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['only.md']);
+    await page.reload();
+    await expect(sidebar.locator('.files-hidden summary')).toHaveText('非表示のフォルダ（1）');
+    await sidebar.locator('.files-hidden summary').click();
+    await sidebar.getByRole('button', { name: '「sub」を一覧に表示' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['x.md', 'only.md']);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('shows no file sidebar for a folder with a single Markdown file', async ({ context }) => {
   const dir = await makeFolder({ 'only.md': '# Only', 'other.txt': 'x' });
   try {
