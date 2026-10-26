@@ -280,6 +280,59 @@ body {
 .file-tree-file:hover { color: var(--fg); background: var(--bg-soft); }
 .file-tree-file.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .files-note { margin: 12px 8px 0; font-size: 12px; color: var(--fg-muted); }
+/* Hide button: a sibling of the folder's <details> (a button inside <summary> would be nested
+   interactive content), laid over the right end of the summary row. Shown on hover / focus,
+   always on touch screens where there is no hover. */
+.file-tree-dir { position: relative; }
+.file-tree-dir:has(> .file-tree-hide) > details > summary { padding-right: 28px; }
+.file-tree-hide {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.file-tree-dir:has(> details > summary:hover) > .file-tree-hide,
+.file-tree-hide:hover,
+.file-tree-hide:focus-visible { opacity: 1; }
+.file-tree-hide:hover { color: var(--fg); background: var(--bg); }
+@media (hover: none) {
+  .file-tree-hide { opacity: 1; }
+}
+.files-hidden {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+.files-hidden li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0 2px 20px;
+}
+.files-hidden-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.files-hidden-show {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.files-hidden-show:hover { background: var(--bg-soft); }
 
 .toc ul { list-style: none; margin: 0; padding: 0; }
 .toc a {

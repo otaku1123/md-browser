@@ -135,6 +135,36 @@ test('reopens the last folder and document after a reload', async ({ page }) => 
   await expect(page.locator('.welcome')).toHaveCount(0);
 });
 
+test('hides a folder from the sidebar, remembers it, and shows it again', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  await files.locator('[data-path="docs/other.md"]').click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  // Hiding the open document's folder falls back to the README.
+  await files.getByRole('button', { name: 'Hide "docs" from the list' }).click();
+  await expect(files.locator('.file-tree-file')).toHaveText(['README.md', 'xss.md']);
+  await expect(files.locator('.file-tree summary')).toHaveCount(0);
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  const section = files.locator('.files-hidden');
+  await expect(section.locator('summary')).toHaveText('Hidden folders (1)');
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:hidden-dirs'))).toBe('{"sample":["docs"]}');
+
+  await page.waitForTimeout(300); // the remembered document is saved asynchronously
+  await page.reload();
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(files.locator('.file-tree-file')).toHaveText(['README.md', 'xss.md']);
+  await section.locator('summary').click();
+  await expectAccessible(page);
+  await section.getByRole('button', { name: 'Show "docs" in the list' }).click();
+  await expect(files.locator('.file-tree-file')).toHaveCount(3);
+  await expect(files.locator('.file-tree summary')).toHaveText(['docs']);
+  await expect(section).toHaveCount(0);
+  // The open document stays.
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:hidden-dirs'))).toBe('{}');
+});
+
 test('offers a button when the permission must be asked again', async ({ page }) => {
   await openSampleFolder(page);
   await page.waitForTimeout(300);
@@ -704,6 +734,9 @@ test('passes the axe accessibility checks on the welcome screen and a document',
   await openSampleFolder(page);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  await expectAccessible(page);
+  // The folder rows' hide buttons, shown on focus.
+  await page.locator('#files .file-tree-hide').first().focus();
   await expectAccessible(page);
 });
 

@@ -16,6 +16,8 @@ import { enableImageZoom, prepareImageZoom } from './core/image-zoom';
 import { mountSkipLink } from './core/skip-link';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
+import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
+import { loadHiddenDirs, saveHiddenDirs } from './core/hidden-dirs-store';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
   fromDirectoryHandle,
@@ -41,10 +43,14 @@ const filesEl = $<HTMLElement>('files');
 const filesToggle = $<HTMLButtonElement>('toggle-files');
 const overlay = $<HTMLElement>('drop-overlay');
 const toc = createToc(tocEl);
-const fileTree = createFileTree(filesEl, (path) => {
-  const doc = ws?.docs.find((d) => d.path === path);
-  if (doc && doc !== currentDoc) void showDoc(doc, { keepScroll: false });
-});
+const fileTree = createFileTree(
+  filesEl,
+  (path) => {
+    const doc = ws?.docs.find((d) => d.path === path);
+    if (doc && doc !== currentDoc) void showDoc(doc, { keepScroll: false });
+  },
+  { onHide: (dir) => queueSetHidden(dir, true), onUnhide: (dir) => queueSetHidden(dir, false) },
+);
 
 let ws: Workspace | null = null;
 let currentDoc: DocEntry | null = null;
@@ -137,23 +143,65 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   nameEl.textContent = next.label;
   nameEl.title = next.label;
   nameEl.hidden = false;
-  fileTree.render(next.docs.map((d) => d.path));
-  updateSidebar();
-  const initial =
-    next.docs.find((d) => d.path === opts.docPath) ??
-    next.docs.find((d) => /^(readme|index)\.md$/i.test(d.path)) ??
-    next.docs[0];
-  await showDoc(initial, { keepScroll: false });
+  renderFileTree();
+  await showDoc(startDoc(next, opts.docPath), { keepScroll: false });
   startPolling();
+}
+
+function startDoc(next: Workspace, docPath?: string): DocEntry {
+  return (
+    next.docs.find((d) => d.path === docPath) ??
+    next.docs.find((d) => /^(readme|index)\.md$/i.test(d.path)) ??
+    next.docs[0]
+  );
 }
 
 // ---- file sidebar ----------------------------------------------------------
 
 const filesSidebar = mountFilesSidebar(filesToggle, filesEl);
 
-/** The sidebar is only offered when the workspace has more than one document. */
+function renderFileTree(): void {
+  // null: this workspace can't hide folders (single file, plain dropped files), so no hide buttons.
+  fileTree.render(ws?.docs.map((d) => d.path) ?? [], ws?.rescan ? (ws.hiddenDirs ?? []) : null);
+  updateSidebar();
+}
+
+/** The sidebar is offered when there is more than one document, or hidden folders to show again. */
 function updateSidebar(): void {
-  filesSidebar.setAvailable((ws?.docs.length ?? 0) > 1);
+  filesSidebar.setAvailable((ws?.docs.length ?? 0) > 1 || (ws?.hiddenDirs?.length ?? 0) > 0);
+}
+
+let hiddenQueue = Promise.resolve();
+
+/** One change at a time, so quick clicks each build on the previous list. */
+function queueSetHidden(dir: string, hide: boolean): void {
+  hiddenQueue = hiddenQueue.then(() => setHidden(dir, hide));
+}
+
+/** Hides (or shows again) a folder: lists the workspace again without it and remembers the choice. */
+async function setHidden(dir: string, hide: boolean): Promise<void> {
+  const current = ws;
+  if (!current?.rescan || current.folder === undefined) return;
+  const old = current.hiddenDirs ?? [];
+  const hidden = hide ? addHiddenDir(old, dir) : removeHiddenDir(old, dir);
+  setStatus(t('scanning', { name: current.folder }));
+  try {
+    const next = await current.rescan(hidden);
+    if (ws !== current) return; // another folder was opened meanwhile
+    if (next.docs.length === 0) {
+      setStatus(t('hideLeavesNothing', { name: dir }), 'error');
+      return;
+    }
+    await saveHiddenDirs(current.folder, hidden);
+    ws = next;
+    renderFileTree();
+    // Stay on the open document (same scroll, source view, recent entry) while it is still listed.
+    const same = currentDoc && next.docs.find((d) => d.path === currentDoc!.path);
+    if (same) currentDoc = same;
+    await showDoc(same || startDoc(next), { keepScroll: !!same });
+  } catch (err) {
+    setStatus(errMsg(err), 'error');
+  }
 }
 
 function startPolling(): void {
@@ -187,9 +235,17 @@ async function poll(): Promise<void> {
 
 // ---- opening files --------------------------------------------------------
 
-/** Scans a folder with the limit from the settings panel. */
+/** Scans a folder with the limit from the settings panel, leaving out the folders hidden in it. */
 async function scanFolder(dir: FileSystemDirectoryHandle): Promise<Workspace> {
-  return fromDirectoryHandle(dir, await scanLimitStore().load());
+  const [limit, hidden] = await Promise.all([scanLimitStore().load(), loadHiddenDirs(dir.name)]);
+  return fromDirectoryHandle(dir, limit, hidden);
+}
+
+/** fromFiles(), with the folders hidden in a picked folder left out. */
+async function filesWorkspace(files: File[]): Promise<Workspace> {
+  const all = fromFiles(files);
+  const hidden = all.folder !== undefined ? await loadHiddenDirs(all.folder) : [];
+  return hidden.length && all.rescan ? all.rescan(hidden) : all;
 }
 
 const MD_ACCEPT = { 'text/markdown': ['.md', '.markdown', '.mdown', '.mkd'] };
@@ -207,7 +263,7 @@ async function pickFile(): Promise<void> {
     return;
   }
   const files = await pickWithInput(false);
-  if (files.length) await openWorkspace(fromFiles(files));
+  if (files.length) await openWorkspace(await filesWorkspace(files));
 }
 
 async function pickDirectory(): Promise<void> {
@@ -222,7 +278,7 @@ async function pickDirectory(): Promise<void> {
     return;
   }
   const files = await pickWithInput(true);
-  if (files.length) await openWorkspace(fromFiles(files));
+  if (files.length) await openWorkspace(await filesWorkspace(files));
 }
 
 /** Fallback for browsers without the File System Access API (no auto-reload). */
@@ -262,7 +318,7 @@ async function handleDrop(e: DragEvent): Promise<void> {
     await openWorkspace(fromFileHandle(mdHandle), { handle: mdHandle });
     return;
   }
-  if (files.length) await openWorkspace(fromFiles(files));
+  if (files.length) await openWorkspace(await filesWorkspace(files));
 }
 
 /** Scans the open folder again (after the scan limit changed), staying on the current document. */

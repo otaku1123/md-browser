@@ -37,4 +37,56 @@ describe('createFileTree', () => {
     expect(btn.hasAttribute('aria-current')).toBe(false);
     expect(el.querySelectorAll('.active')).toHaveLength(1);
   });
+
+  it('offers no hide buttons without onHide, or when render() gets null', () => {
+    const { el } = setup();
+    expect(el.querySelector('.file-tree-hide')).toBeNull();
+    const other = document.createElement('nav');
+    const tree = createFileTree(other, vi.fn(), { onHide: vi.fn(), onUnhide: vi.fn() });
+    tree.render(['docs/a.md', 'b.md'], null);
+    expect(other.querySelector('.file-tree-hide')).toBeNull();
+    expect(other.querySelector('.files-hidden')).toBeNull();
+  });
+
+  it('puts a hide button beside each folder (outside <summary>) and reports its path', () => {
+    const el = document.createElement('nav');
+    const onOpen = vi.fn();
+    const onHide = vi.fn();
+    const tree = createFileTree(el, onOpen, { onHide, onUnhide: vi.fn() });
+    tree.render(['README.md', 'docs/guide.md', 'docs/api/ref.md']);
+    const buttons = [...el.querySelectorAll<HTMLButtonElement>('.file-tree-hide')];
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Hide "docs" from the list', 'Hide "docs/api" from the list']);
+    expect(el.querySelector('summary .file-tree-hide, summary button')).toBeNull();
+    expect(buttons[0].parentElement!.querySelector(':scope > details > summary')!.textContent).toBe('docs');
+    buttons[1].click();
+    expect(onHide).toHaveBeenCalledWith('docs/api');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('lists hidden folders with a button that shows them again', () => {
+    const el = document.createElement('nav');
+    const onUnhide = vi.fn();
+    const tree = createFileTree(el, vi.fn(), { onHide: vi.fn(), onUnhide });
+    tree.render(['README.md', 'b.md'], ['docs', 'src/gen']);
+    const section = el.querySelector('details.files-hidden')!;
+    expect(section.querySelector('summary')!.textContent).toBe('Hidden folders (2)');
+    expect([...section.querySelectorAll('.files-hidden-name')].map((n) => n.textContent)).toEqual(['docs', 'src/gen']);
+    section.querySelector<HTMLButtonElement>('button[aria-label=\'Show "src/gen" in the list\']')!.click();
+    expect(onUnhide).toHaveBeenCalledWith('src/gen');
+    tree.render(['README.md', 'b.md'], []);
+    expect(el.querySelector('.files-hidden')).toBeNull();
+  });
+
+  it('keeps the active document marked across a re-render, and the resize handle', () => {
+    const el = document.createElement('nav');
+    const handle = document.createElement('div');
+    handle.className = 'panel-resizer';
+    el.append(handle);
+    const tree = createFileTree(el, vi.fn(), { onHide: vi.fn(), onUnhide: vi.fn() });
+    tree.render(['a.md', 'docs/b.md', 'src/c.md']);
+    tree.setActive('a.md');
+    tree.render(['a.md', 'docs/b.md'], ['src']);
+    expect(el.querySelector('[aria-current="page"]')!.getAttribute('data-path')).toBe('a.md');
+    expect(el.lastElementChild).toBe(handle);
+  });
 });

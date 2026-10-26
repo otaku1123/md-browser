@@ -1,5 +1,6 @@
 // Lists the Markdown files below a file:// folder from Chrome's directory listing pages.
 // Pure apart from the injected fetch, so the walk can be unit-tested.
+import { isDefaultSkippedDir, isHiddenDir } from '../core/hidden-dirs';
 
 export interface ListingRow {
   name: string;
@@ -49,8 +50,9 @@ const MD_NAME = /\.(md|markdown|mdown|mkd)$/i;
 
 export const isMarkdownFile = (name: string) => MD_NAME.test(name);
 
-/** Hidden entries (.git, .github, …) and node_modules are never read or listed. */
-export const isSkipped = (name: string) => name.startsWith('.') || name === 'node_modules' || name.includes('/');
+/** Hidden entries (.git, .github, …) and dependency / build folders (the viewer's scan rules)
+ *  are never read or listed; neither are names containing '/', which no real entry has. */
+export const isSkipped = (name: string) => isDefaultSkippedDir(name) || name.includes('/');
 
 /** The folder holding a file:// document, with a trailing slash. */
 export function folderOf(fileUrl: string): string {
@@ -79,6 +81,8 @@ export async function listMarkdownTree(
   rootUrl: string,
   fetchText: (url: string) => Promise<string>,
   limits: WalkLimits = WALK_LIMITS,
+  /** Root-relative folders the user hid ("docs/old"): never fetched. */
+  hidden: readonly string[] = [],
 ): Promise<WalkResult> {
   const paths: string[] = [];
   let truncated = false;
@@ -102,6 +106,7 @@ export async function listMarkdownTree(
     for (const row of rows) {
       if (isSkipped(row.name)) continue;
       if (row.isDir) {
+        if (isHiddenDir(dir.prefix + row.name, hidden)) continue;
         if (dir.depth >= limits.maxDepth) truncated = true;
         // Built from the name, not Chrome's url, so the child is always directly below this folder.
         else queue.push({ url: `${dir.url}${encodeURIComponent(row.name)}/`, prefix: `${dir.prefix}${row.name}/`, depth: dir.depth + 1 });

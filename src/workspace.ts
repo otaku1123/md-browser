@@ -1,5 +1,6 @@
 import { resolvePath, type AssetResolver } from './core/assets';
 import { SCAN_LIMIT_DEFAULT } from './core/scan-limit';
+import { isDefaultSkippedDir, isHiddenDir } from './core/hidden-dirs';
 
 export interface DocEntry {
   /** Path relative to the workspace root, e.g. "docs/guide.md". */
@@ -22,6 +23,12 @@ export interface Workspace {
   watchable: boolean;
   /** Set when the folder scan stopped at this entry limit, so some (deeper) documents are missing. */
   truncatedAt?: number;
+  /** Folders the user hid from the list, in the same coordinates as doc paths ("docs/old"). */
+  hiddenDirs?: string[];
+  /** Name the hidden-folder list is remembered under (the opened folder's name). */
+  folder?: string;
+  /** The same folder listed again without `hidden` (folders only: a single file has none). */
+  rescan?(hidden: string[]): Promise<Workspace>;
   read(doc: DocEntry): Promise<DocContent>;
   /** Cheap change check (no content read). */
   stat(doc: DocEntry): Promise<string>;
@@ -30,14 +37,9 @@ export interface Workspace {
 }
 
 const MD_EXT = /\.(md|markdown|mdown|mkd)$/i;
-const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', 'dist', 'build']);
 
 export function isMarkdownName(name: string): boolean {
   return MD_EXT.test(name);
-}
-
-function isSkippedDir(name: string): boolean {
-  return name.startsWith('.') || SKIP_DIRS.has(name);
 }
 
 function stampOf(file: File): string {
@@ -85,6 +87,7 @@ export function fromFileHandle(handle: FileSystemFileHandle): Workspace {
 async function scanDirectory(
   dir: FileSystemDirectoryHandle,
   limit: number,
+  hidden: readonly string[] = [],
 ): Promise<{ docs: DocEntry[]; truncated: boolean }> {
   const found: DocEntry[] = [];
   const queue: [FileSystemDirectoryHandle, string][] = [[dir, '']];
@@ -98,7 +101,9 @@ async function scanDirectory(
         break scan;
       }
       if (entry.kind === 'directory') {
-        if (!isSkippedDir(entry.name)) queue.push([entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`]);
+        // Hidden folders are never entered, so they cost no reads and nothing of the limit.
+        const path = `${prefix}${entry.name}`;
+        if (!isDefaultSkippedDir(entry.name) && !isHiddenDir(path, hidden)) queue.push([entry as FileSystemDirectoryHandle, `${path}/`]);
       } else if (isMarkdownName(entry.name)) {
         found.push({ path: `${prefix}${entry.name}` });
       }
@@ -118,13 +123,17 @@ async function getFileByPath(root: FileSystemDirectoryHandle, path: string): Pro
 export async function fromDirectoryHandle(
   root: FileSystemDirectoryHandle,
   limit = SCAN_LIMIT_DEFAULT,
+  hidden: string[] = [],
 ): Promise<Workspace> {
-  const { docs, truncated } = await scanDirectory(root, limit);
+  const { docs, truncated } = await scanDirectory(root, limit, hidden);
   return {
     label: `${root.name}/`,
     docs,
     watchable: true,
     truncatedAt: truncated ? limit : undefined,
+    hiddenDirs: hidden,
+    folder: root.name,
+    rescan: (next) => fromDirectoryHandle(root, limit, next),
     async read(doc) {
       const file = await getFileByPath(root, doc.path);
       return { text: await file.text(), stamp: stampOf(file) };
@@ -139,22 +148,29 @@ export async function fromDirectoryHandle(
 /**
  * Applies the same directory exclusions as scanDirectory() to a webkitRelativePath.
  * The first segment is the picked folder itself, which (like the scan root) is never skipped.
+ * `hidden` uses the same coordinates as the path (picked folder first), as the tree shows them.
  */
-function inSkippedDir(path: string): boolean {
-  return path.split('/').slice(1, -1).some(isSkippedDir);
+function inSkippedDir(path: string, hidden: readonly string[]): boolean {
+  const dir = path.slice(0, Math.max(path.lastIndexOf('/'), 0));
+  return path.split('/').slice(1, -1).some(isDefaultSkippedDir) || (dir !== '' && isHiddenDir(dir, hidden));
 }
 
-export function fromFiles(files: File[]): Workspace {
+export function fromFiles(files: File[], hidden: string[] = []): Workspace {
   const byPath = new Map<string, File>();
   for (const f of files) byPath.set(f.webkitRelativePath || f.name, f);
   const docs = [...byPath.keys()]
-    .filter((p) => isMarkdownName(p) && !inSkippedDir(p))
+    .filter((p) => isMarkdownName(p) && !inSkippedDir(p, hidden))
     .sort()
     .map((path) => ({ path }));
+  // A picked folder: every path starts with its name. Plain dropped files can't hide anything.
+  const top = new Set([...byPath.keys()].map((p) => (p.includes('/') ? p.split('/')[0] : '')));
+  const folder = top.size === 1 && !top.has('') ? [...top][0] : undefined;
   return {
     label: docs.length === 1 ? docs[0].path : `${files.length} files`,
     docs,
     watchable: false,
+    // Nothing to read again: the File snapshots are filtered in memory.
+    ...(folder !== undefined && { hiddenDirs: hidden, folder, rescan: async (next: string[]) => fromFiles(files, next) }),
     async read(doc) {
       const file = byPath.get(doc.path)!;
       return { text: await file.text(), stamp: stampOf(file) };
