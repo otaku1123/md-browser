@@ -1,5 +1,5 @@
-// Click an image in the document to see it at full size in an overlay (the image size setting may
-// shrink it). The overlay scrolls when the image is larger than the window; a click or Esc closes it.
+// Click an image in the document to see it at full size in an overlay (the display size may differ:
+// media-sizes.ts). The overlay scrolls when the image is larger than the window; a click or Esc closes it.
 // Diagrams (Mermaid, PlantUML) open the same way, scaled to fit the window, with Save SVG / Save PNG buttons.
 // An overlay rather than a new tab: viewer images are blob: URLs that are revoked on re-render.
 import { t } from '../i18n';

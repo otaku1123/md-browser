@@ -134,6 +134,44 @@ test('shares the theme between file tabs', async ({ context, workdir }) => {
   await expect(b.locator('html')).not.toHaveAttribute('data-theme', /.*/);
 });
 
+test('remembers the size of one image and one diagram per file across reloads', async ({ context, extensionId, workdir }) => {
+  expect(extensionId).toBeTruthy(); // the service worker is up
+  const page = await context.newPage();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(fileUrl(workdir, 'README.md'));
+  const img = page.locator('img[alt="diagram"]'); // 240px wide
+  const chart = page.locator('.diagram-plantuml').first();
+  const frame = (item: typeof img) => item.locator('xpath=ancestor::*[contains(concat(" ", @class, " "), " media-frame ")][1]');
+  const width = (item: typeof img) => item.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+  await expect.poll(() => width(img)).toBe(240);
+  await expect(chart.locator('svg')).toBeVisible();
+  const natural = await width(chart.locator('svg'));
+
+  await img.hover();
+  await frame(img).getByRole('button', { name: '小さくする' }).click();
+  expect(await width(img)).toBe(180);
+  await chart.hover();
+  await frame(chart).getByRole('button', { name: '大きくする' }).click();
+  await expect(frame(chart).getByRole('button', { name: 'サイズを戻す（現在 125%）' })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expectAccessible(page);
+
+  await page.reload();
+  await expect.poll(() => width(img)).toBe(180);
+  await expect.poll(async () => Math.abs((await width(chart.locator('svg'))) - natural * 1.25)).toBeLessThanOrEqual(1);
+  // Saved locally (not synced), under the file's URL.
+  const saved = await context.serviceWorkers()[0].evaluate(() => chrome.storage.local.get('md-browser:media-sizes'));
+  expect(Object.keys(saved['md-browser:media-sizes'])).toEqual([fileUrl(workdir, 'README.md')]);
+
+  // Another file (same image) keeps its own size.
+  const other = await context.newPage();
+  await other.goto(fileUrl(workdir, 'docs/other.md'));
+  await expect.poll(() => width(other.locator('img'))).toBe(240);
+
+  await frame(img).getByRole('button', { name: 'サイズを戻す（現在 75%）' }).click();
+  expect(await width(img)).toBe(240);
+});
+
 test('adds copy buttons to code blocks', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));

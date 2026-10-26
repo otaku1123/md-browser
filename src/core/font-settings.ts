@@ -5,25 +5,28 @@ import { t } from '../i18n';
 import { createSettingsStore } from './settings-store';
 import { normalizeScanLimit, scanLimitStore, SCAN_LIMIT_MAX, SCAN_LIMIT_MIN } from './scan-limit';
 import { applyTheme, normalizeTheme, type ThemePreference } from './theme';
+import { setGlobalMediaScale } from './media-sizes';
 
 // Values for the document only: the toolbar and TOC keep their size.
 const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
 const WIDTHS = { normal: '980px', wide: '1280px', full: 'none' } as const;
-// Longest side of document images; "normal" keeps them as wide as the text.
-const IMAGES = { normal: 'none', large: '800px', medium: '480px', small: '240px' } as const;
+// Images and diagrams, in percent of their natural width (never wider than the text: media-sizes.ts).
+const IMAGE_SCALES = [50, 75, 100, 150, 200] as const;
+// Saved before the setting became a scale: it only capped the size, so "large" (800px) was barely smaller.
+const OLD_IMAGE_SIZES: Record<string, ImageScale> = { normal: 100, large: 100, medium: 75, small: 50 };
 type TextSize = keyof typeof SIZES;
 type ContentWidth = keyof typeof WIDTHS;
-type ImageSize = keyof typeof IMAGES;
+type ImageScale = (typeof IMAGE_SCALES)[number];
 
 export interface FontSettings {
   body: string;
   code: string;
   size: TextSize;
   width: ContentWidth;
-  image: ImageSize;
+  image: ImageScale;
 }
 
-const EMPTY: FontSettings = { body: '', code: '', size: 'normal', width: 'normal', image: 'normal' };
+const EMPTY: FontSettings = { body: '', code: '', size: 'normal', width: 'normal', image: 100 };
 const STORAGE_KEY = 'md-browser:fonts';
 const THEME_KEY = 'md-browser:theme';
 const SAVE_DELAY_MS = 400; // chrome.storage.sync allows ~120 writes per minute
@@ -43,7 +46,7 @@ export function sanitizeFontName(name: unknown): string {
   return name.replace(/["'\\;{}<>\u0000-\u001f]/g, '').trim().slice(0, 100);
 }
 
-function normalize(v: unknown): FontSettings {
+export function normalizeFontSettings(v: unknown): FontSettings {
   const o = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof FontSettings, unknown>>;
   return {
     body: sanitizeFontName(o.body),
@@ -51,7 +54,11 @@ function normalize(v: unknown): FontSettings {
     // Saved before size / width / image existed, or unknown: use the default.
     size: typeof o.size === 'string' && o.size in SIZES ? (o.size as TextSize) : 'normal',
     width: typeof o.width === 'string' && o.width in WIDTHS ? (o.width as ContentWidth) : 'normal',
-    image: typeof o.image === 'string' && o.image in IMAGES ? (o.image as ImageSize) : 'normal',
+    image: (IMAGE_SCALES as readonly unknown[]).includes(o.image)
+      ? (o.image as ImageScale)
+      : typeof o.image === 'string' && Object.hasOwn(OLD_IMAGE_SIZES, o.image)
+        ? OLD_IMAGE_SIZES[o.image]
+        : 100,
   };
 }
 
@@ -69,9 +76,7 @@ export function applyFonts(s: FontSettings): void {
   else root.removeProperty('--doc-font-size');
   if (width !== WIDTHS.normal) root.setProperty('--doc-max-width', width);
   else root.removeProperty('--doc-max-width');
-  const image = IMAGES[s.image] ?? IMAGES.normal;
-  if (image !== IMAGES.normal) root.setProperty('--doc-img-max', image);
-  else root.removeProperty('--doc-img-max');
+  setGlobalMediaScale((IMAGE_SCALES as readonly number[]).includes(s.image) ? s.image : 100);
 }
 
 const GEAR_ICON =
@@ -85,13 +90,18 @@ let uid = 0;
 const THEME_LABELS = { auto: 'themeAuto', light: 'themeLight', dark: 'themeDark' } as const;
 const SIZE_LABELS = { small: 'sizeSmall', normal: 'sizeNormal', large: 'sizeLarge', xlarge: 'sizeXlarge' } as const;
 const WIDTH_LABELS = { normal: 'widthNormal', wide: 'widthWide', full: 'widthFull' } as const;
-const IMAGE_LABELS = { normal: 'sizeNormal', large: 'sizeLarge', medium: 'imageMedium', small: 'sizeSmall' } as const;
+const IMAGE_LABELS = Object.fromEntries(IMAGE_SCALES.map((n) => [n, `${n}%`])) as Record<`${ImageScale}`, string>;
+
+/** Translated labels for choiceRow. */
+function texts<V extends string>(keys: Record<V, Parameters<typeof t>[0]>): Record<V, string> {
+  return Object.fromEntries(Object.entries(keys).map(([v, key]) => [v, t(key as Parameters<typeof t>[0])])) as Record<V, string>;
+}
 
 /** A labelled radio group; set() shows a value without firing onPick. */
 function choiceRow<V extends string>(
   name: string,
   label: string,
-  labels: Record<V, Parameters<typeof t>[0]>,
+  labels: Record<V, string>,
   onPick: (value: V) => void,
 ): { row: HTMLElement; set(value: V): void } {
   const row = document.createElement('div');
@@ -112,7 +122,7 @@ function choiceRow<V extends string>(
     radio.value = value;
     radio.addEventListener('change', () => onPick(value));
     inputs.set(value, radio);
-    option.append(radio, t(labels[value]));
+    option.append(radio, labels[value]);
     options.append(option);
   }
   row.append(text, options);
@@ -159,7 +169,7 @@ export function mountFontSettings(
   toolbar: HTMLElement,
   opts: { onScanLimitChange?: (limit: number) => void } = {},
 ): void {
-  const store = createSettingsStore(STORAGE_KEY, normalize);
+  const store = createSettingsStore(STORAGE_KEY, normalizeFontSettings);
   const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
   let current: FontSettings = { ...EMPTY };
   const id = `md-font-${++uid}`;
@@ -209,7 +219,7 @@ export function mountFontSettings(
   }
 
   // Theme is stored on its own and saved at once (a single write, no debounce needed).
-  const theme = choiceRow<ThemePreference>(`${id}-theme`, t('theme'), THEME_LABELS, (pref) => {
+  const theme = choiceRow<ThemePreference>(`${id}-theme`, t('theme'), texts(THEME_LABELS), (pref) => {
     applyTheme(pref);
     void themeStore.save(pref);
   });
@@ -218,13 +228,13 @@ export function mountFontSettings(
     theme.set(pref);
   }
   showTheme('auto');
-  const size = choiceRow<TextSize>(`${id}-size`, t('textSize'), SIZE_LABELS, (v) => update({ ...current, size: v }));
-  const width = choiceRow<ContentWidth>(`${id}-width`, t('contentWidth'), WIDTH_LABELS, (v) =>
+  const size = choiceRow<TextSize>(`${id}-size`, t('textSize'), texts(SIZE_LABELS), (v) => update({ ...current, size: v }));
+  const width = choiceRow<ContentWidth>(`${id}-width`, t('contentWidth'), texts(WIDTH_LABELS), (v) =>
     update({ ...current, width: v }),
   );
 
-  const image = choiceRow<ImageSize>(`${id}-image`, t('imageSize'), IMAGE_LABELS, (v) =>
-    update({ ...current, image: v }),
+  const image = choiceRow<`${ImageScale}`>(`${id}-image`, t('imageSize'), IMAGE_LABELS, (v) =>
+    update({ ...current, image: Number(v) as ImageScale }),
   );
 
   panel.append(heading, theme.row, size.row, width.row, image.row);
@@ -252,12 +262,12 @@ export function mountFontSettings(
     if (force || document.activeElement !== codeInput) codeInput.value = current.code;
     size.set(current.size);
     width.set(current.width);
-    image.set(current.image);
+    image.set(`${current.image}`);
   }
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   function update(next: FontSettings): void {
-    current = normalize(next);
+    current = normalizeFontSettings(next);
     applyFonts(current);
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
