@@ -395,6 +395,21 @@ test('redraws diagrams when the OS theme changes after loading', async ({ page }
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(4); // screen + print copies
 });
 
+test('keeps sequence diagram box colours readable in the dark theme', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openSampleFolder(page);
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile: (rel: string, text: string) => Promise<void> }).__appendToFile(
+      'README.md',
+      '\n```mermaid\nsequenceDiagram\n  box rgb(220,232,250) Software\n    participant A\n  end\n  A->>A: hello\n```\n',
+    ),
+  );
+  const seq = page.locator('.diagram-mermaid').filter({ hasText: 'hello' });
+  // Light grey text on the pastel box: only the on-screen (dark) copy is dimmed, not the print copy.
+  await expect(seq.locator('.diagram-screen rect.rect')).toHaveAttribute('fill-opacity', '0.25');
+  await expect(seq.locator('.diagram-print rect.rect')).not.toHaveAttribute('fill-opacity', /./);
+});
+
 test('remembers the theme across reloads', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto('/');
