@@ -35,6 +35,19 @@ function loadMermaid(): Promise<MermaidApi> {
 
 const isPlantUml = (node: HTMLElement) => node.classList.contains('diagram-plantuml');
 
+/** How much of a sequence diagram's own box / rect colour shows through in the dark theme. */
+export const DARK_BOX_OPACITY = 0.25;
+
+/**
+ * Sequence diagrams keep `box` / `rect` colours from the source in every theme, but the dark theme
+ * draws messages and labels in light grey: on the usual pastel colours that is unreadable (~1.3:1).
+ * Showing a quarter of the colour over the dark page keeps the hue and gives at least ~5.7:1.
+ */
+export function dimSequenceBoxes(svg: SVGSVGElement): void {
+  if (svg.getAttribute('aria-roledescription') !== 'sequence') return;
+  for (const rect of svg.querySelectorAll('rect.rect')) rect.setAttribute('fill-opacity', String(DARK_BOX_OPACITY));
+}
+
 /** SVG markup for one diagram in the given theme. */
 async function draw(node: HTMLElement, source: string, theme: Theme, id: string): Promise<string> {
   if (isPlantUml(node)) return renderPlantUml(source, theme === 'dark');
@@ -61,6 +74,9 @@ export async function renderDiagrams(root: ParentNode): Promise<void> {
         // Paper is white: keep a light-theme copy that only the print stylesheet shows.
         const light = await draw(node, source, 'light', `${id}-print`);
         node.innerHTML = `<div class="diagram-screen">${svg}</div><div class="diagram-print">${light}</div>`;
+        // On the element, so the zoom view and SVG / PNG export (copies of it) keep it too.
+        const screen = node.querySelector<SVGSVGElement>('.diagram-screen svg');
+        if (screen) dimSequenceBoxes(screen);
       } else {
         node.innerHTML = svg;
       }
@@ -108,6 +124,7 @@ export async function renderForExport(node: HTMLElement): Promise<SVGSVGElement>
     const out = new DOMParser().parseFromString(svg, 'text/html').querySelector('svg');
     if (!out) throw new Error('no svg');
     if (out.querySelector('foreignObject')) throw new Error('this diagram type uses HTML labels');
+    if (currentTheme() === 'dark') dimSequenceBoxes(out);
     return out;
   } finally {
     for (const stray of [id, `d${id}`]) document.getElementById(stray)?.remove();
