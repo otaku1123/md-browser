@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withTheme } from '../../src/core/diagrams';
+import { DARK_BOX_OPACITY, dimSequenceBoxes, withTheme } from '../../src/core/diagrams';
 
 // jsdom has no matchMedia: fake the OS setting and let tests flip it.
 let osDark = false;
@@ -66,5 +66,27 @@ describe('withTheme', () => {
   it('keeps Mermaid front matter first', () => {
     const src = '---\ntitle: Flow\n---\ngraph LR\n  A --> B';
     expect(withTheme(src, 'light')).toBe('---\ntitle: Flow\n---\n%%{init: {"theme": "default"}}%%\ngraph LR\n  A --> B');
+  });
+});
+
+describe('dimSequenceBoxes', () => {
+  const svg = (role: string) =>
+    new DOMParser().parseFromString(
+      `<svg xmlns="http://www.w3.org/2000/svg" aria-roledescription="${role}">` +
+        '<rect class="rect" fill="rgb(220,232,250)"/><rect class="actor" fill="#eaeaea"/></svg>',
+      'image/svg+xml',
+    ).documentElement as unknown as SVGSVGElement;
+
+  it('lets only a little of the box / rect colours through in sequence diagrams', () => {
+    const el = svg('sequence');
+    dimSequenceBoxes(el);
+    expect(el.querySelector('rect.rect')!.getAttribute('fill-opacity')).toBe(String(DARK_BOX_OPACITY));
+    expect(el.querySelector('rect.actor')!.hasAttribute('fill-opacity')).toBe(false); // themed by Mermaid
+  });
+
+  it('leaves other diagram types alone (pie charts also use rect.rect)', () => {
+    const el = svg('pie');
+    dimSequenceBoxes(el);
+    expect(el.querySelector('rect.rect')!.hasAttribute('fill-opacity')).toBe(false);
   });
 });

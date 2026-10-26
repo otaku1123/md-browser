@@ -134,6 +134,44 @@ test('shares the theme between file tabs', async ({ context, workdir }) => {
   await expect(b.locator('html')).not.toHaveAttribute('data-theme', /.*/);
 });
 
+test('remembers the size of one image and one diagram per file across reloads', async ({ context, extensionId, workdir }) => {
+  expect(extensionId).toBeTruthy(); // the service worker is up
+  const page = await context.newPage();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(fileUrl(workdir, 'README.md'));
+  const img = page.locator('img[alt="diagram"]'); // 240px wide
+  const chart = page.locator('.diagram-plantuml').first();
+  const frame = (item: typeof img) => item.locator('xpath=ancestor::*[contains(concat(" ", @class, " "), " media-frame ")][1]');
+  const width = (item: typeof img) => item.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+  await expect.poll(() => width(img)).toBe(240);
+  await expect(chart.locator('svg')).toBeVisible();
+  const natural = await width(chart.locator('svg'));
+
+  await img.hover();
+  await frame(img).getByRole('button', { name: '小さくする' }).click();
+  expect(await width(img)).toBe(180);
+  await chart.hover();
+  await frame(chart).getByRole('button', { name: '大きくする' }).click();
+  await expect(frame(chart).getByRole('button', { name: 'サイズを戻す（現在 125%）' })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expectAccessible(page);
+
+  await page.reload();
+  await expect.poll(() => width(img)).toBe(180);
+  await expect.poll(async () => Math.abs((await width(chart.locator('svg'))) - natural * 1.25)).toBeLessThanOrEqual(1);
+  // Saved locally (not synced), under the file's URL.
+  const saved = await context.serviceWorkers()[0].evaluate(() => chrome.storage.local.get('md-browser:media-sizes'));
+  expect(Object.keys(saved['md-browser:media-sizes'])).toEqual([fileUrl(workdir, 'README.md')]);
+
+  // Another file (same image) keeps its own size.
+  const other = await context.newPage();
+  await other.goto(fileUrl(workdir, 'docs/other.md'));
+  await expect.poll(() => width(other.locator('img'))).toBe(240);
+
+  await frame(img).getByRole('button', { name: 'サイズを戻す（現在 75%）' }).click();
+  expect(await width(img)).toBe(240);
+});
+
 test('adds copy buttons to code blocks', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));
@@ -256,6 +294,62 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
     await other.goto(fileUrl(dir, 'README.md'));
     await expect(other.getByRole('button', { name: 'ファイル一覧' })).toHaveAttribute('aria-expanded', 'false');
     await expect(other.locator('.files')).toBeHidden();
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('hides folders from the file sidebar per root folder, and shows them again', async ({ context }) => {
+  const dir = await makeFolder({
+    'README.md': '# Top',
+    'notes.md': '# Notes',
+    'src/b.md': '# B',
+    'src/gen/a.md': '# A',
+    'vendor/v.md': '# skip (default exclusion)',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const sidebar = page.locator('.files');
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['a.md', 'b.md', 'notes.md', 'README.md']);
+
+    await sidebar.getByRole('button', { name: '「src/gen」を一覧から隠す' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['b.md', 'notes.md', 'README.md']);
+    await expect(sidebar.locator('.files-hidden summary')).toHaveText('非表示のフォルダ（1）');
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+
+    // Remembered for the root folder: another file of it lists the same.
+    await page.goto(fileUrl(dir, 'notes.md'));
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'notes.md');
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['b.md', 'notes.md', 'README.md']);
+    // Hiding the parent replaces the folder below it.
+    await sidebar.getByRole('button', { name: '「src」を一覧から隠す' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['notes.md', 'README.md']);
+    await sidebar.locator('.files-hidden summary').click();
+    await expect(sidebar.locator('.files-hidden-name')).toHaveText(['src']);
+    await expectAccessible(page);
+
+    await sidebar.getByRole('button', { name: '「src」を一覧に表示' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['a.md', 'b.md', 'notes.md', 'README.md']);
+    await expect(sidebar.locator('.files-hidden')).toHaveCount(0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('keeps the file sidebar while folders are hidden, even with one file left', async ({ context }) => {
+  const dir = await makeFolder({ 'only.md': '# Only', 'sub/x.md': '# X' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'only.md'));
+    const sidebar = page.locator('.files');
+    await sidebar.getByRole('button', { name: '「sub」を一覧から隠す' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['only.md']);
+    await page.reload();
+    await expect(sidebar.locator('.files-hidden summary')).toHaveText('非表示のフォルダ（1）');
+    await sidebar.locator('.files-hidden summary').click();
+    await sidebar.getByRole('button', { name: '「sub」を一覧に表示' }).click();
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['x.md', 'only.md']);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

@@ -38,7 +38,29 @@ export function plantUmlLines(source: string): string[] {
   return /^@start\w+/.test(text) ? lines : ['@startuml', ...lines, '@enduml'];
 }
 
-/** Renders to sanitized SVG markup. Syntax errors come back as PlantUML's own error image. */
+/**
+ * Reads PlantUML's error image (syntax errors, failed !include) back into a message, or returns
+ * null for a real diagram. The image names the line as "[From textarea (line N) ]", counted in
+ * plantUmlLines(source); it is mapped back to the line in the code block.
+ */
+export function plantUmlError(svg: string, source: string): string | null {
+  const texts = Array.from(new DOMParser().parseFromString(svg, 'image/svg+xml').querySelectorAll('text'));
+  const from = texts.map((el) => /^\[From .*\(line (\d+)\)\s*\]$/.exec(el.textContent?.trim() ?? '')).find(Boolean);
+  if (!from) return null;
+  const message =
+    texts
+      .filter((el) => el.getAttribute('fill')?.toUpperCase() === '#FF0000')
+      .map((el) => el.textContent?.trim())
+      .filter(Boolean)
+      .join('\n') || 'Syntax Error?';
+  const text = source.replace(/\r\n?/g, '\n');
+  // plantUmlLines trims leading blank lines and may add @startuml.
+  const trimmed = (/^\s*/.exec(text)?.[0] ?? '').split('\n').length - 1;
+  const added = /^@start\w+/.test(text.trim()) ? 0 : 1;
+  return t('plantumlLine', { line: String(Number(from[1]) - added + trimmed), error: message });
+}
+
+/** Renders to sanitized SVG markup. Syntax errors throw with the message and line in the code block. */
 export async function renderPlantUml(source: string, dark: boolean): Promise<string> {
   const { renderToString } = await loadEngine();
   const svg = await new Promise<string>((resolve, reject) => {
@@ -46,6 +68,9 @@ export async function renderPlantUml(source: string, dark: boolean): Promise<str
     const fail = (message: string) => reject(new Error(message.replace(/^(?:[\w$]+\.)+[\w$]*(?:Exception|Error): /, '')));
     renderToString(plantUmlLines(source), resolve, fail, { dark });
   });
+  // Syntax errors still "succeed" with an image of the error; show them like Mermaid's instead.
+  const error = plantUmlError(svg, source);
+  if (error) throw new Error(error);
   // The text in the diagram is the document's; links ([[url]]) and styles must not escape as script.
   return DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
 }

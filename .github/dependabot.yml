@@ -1,0 +1,32 @@
+# Version updates (security alerts are separate and always on).
+# Minor/patch bumps arrive as one grouped PR per ecosystem; majors get their own PR.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Mermaid pins katex ^0.18; a newer minor would bundle a second copy. Bump by hand once Mermaid moves.
+      - dependency-name: katex
+        update-types: ["version-update:semver-minor"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    groups:
+      actions:
+        patterns: ["*"]

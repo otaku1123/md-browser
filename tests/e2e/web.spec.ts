@@ -135,6 +135,36 @@ test('reopens the last folder and document after a reload', async ({ page }) => 
   await expect(page.locator('.welcome')).toHaveCount(0);
 });
 
+test('hides a folder from the sidebar, remembers it, and shows it again', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  await files.locator('[data-path="docs/other.md"]').click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  // Hiding the open document's folder falls back to the README.
+  await files.getByRole('button', { name: 'Hide "docs" from the list' }).click();
+  await expect(files.locator('.file-tree-file')).toHaveText(['README.md', 'xss.md']);
+  await expect(files.locator('.file-tree summary')).toHaveCount(0);
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  const section = files.locator('.files-hidden');
+  await expect(section.locator('summary')).toHaveText('Hidden folders (1)');
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:hidden-dirs'))).toBe('{"sample":["docs"]}');
+
+  await page.waitForTimeout(300); // the remembered document is saved asynchronously
+  await page.reload();
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(files.locator('.file-tree-file')).toHaveText(['README.md', 'xss.md']);
+  await section.locator('summary').click();
+  await expectAccessible(page);
+  await section.getByRole('button', { name: 'Show "docs" in the list' }).click();
+  await expect(files.locator('.file-tree-file')).toHaveCount(3);
+  await expect(files.locator('.file-tree summary')).toHaveText(['docs']);
+  await expect(section).toHaveCount(0);
+  // The open document stays.
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:hidden-dirs'))).toBe('{}');
+});
+
 test('offers a button when the permission must be asked again', async ({ page }) => {
   await openSampleFolder(page);
   await page.waitForTimeout(300);
@@ -302,30 +332,125 @@ test('applies the folder scan limit from the settings', async ({ page }) => {
   await expect(page.locator('.markdown-body h1')).toHaveText('Big');
 });
 
-test('limits the image size and shows an image at full size on click', async ({ page }) => {
+/** The size buttons of an image or diagram, which sit in a frame around it. */
+const sizeButtons = (item: ReturnType<Page['locator']>) =>
+  item.locator('xpath=ancestor::*[contains(concat(" ", @class, " "), " media-frame ")][1]').getByRole('group', { name: 'Display size' });
+/** Mermaid's own width for a diagram (its svg's max-width), before any scaling. */
+const naturalWidth = (svg: ReturnType<Page['locator']>) => svg.evaluate((el) => parseFloat((el as SVGSVGElement).style.maxWidth));
+const widthOf = (locator: ReturnType<Page['locator']>) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+/** Width of the text column, the most an image or diagram may take. */
+const columnWidth = (page: Page) =>
+  page.locator('#content').evaluate((el) => {
+    const style = getComputedStyle(el);
+    return Math.round(el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+  });
+
+test('scales images and diagrams by the image setting, up to the text width', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
   await openSampleFolder(page);
-  const img = page.locator('img[alt="diagram"]');
-  const limits = () => img.evaluate((el) => ({ w: getComputedStyle(el).maxWidth, h: getComputedStyle(el).maxHeight }));
-  expect(await limits()).toEqual({ w: '100%', h: 'none' });
+  const img = page.locator('img[alt="diagram"]'); // 240px wide
+  const chart = page.locator('.diagram-mermaid svg').first();
+  await expect.poll(() => widthOf(img)).toBe(240);
+  const natural = await naturalWidth(chart);
+  const column = await columnWidth(page);
+  expect(await widthOf(chart)).toBe(Math.min(Math.round(natural), column));
+  const images = page.locator('.font-settings-panel').getByRole('radiogroup', { name: 'Images & diagrams' });
 
   await page.locator('.font-settings-toggle').click();
-  await page
-    .locator('.font-settings-panel')
-    .getByRole('radiogroup', { name: 'Images' })
-    .getByRole('radio', { name: 'Medium', exact: true })
-    .check();
-  expect(await limits()).toEqual({ w: 'min(100%, 480px)', h: '480px' });
+  await images.getByRole('radio', { name: '50%', exact: true }).check();
+  expect(await widthOf(img)).toBe(120);
+  expect(Math.abs((await widthOf(chart)) - natural / 2)).toBeLessThanOrEqual(1);
+  await images.getByRole('radio', { name: '150%', exact: true }).check();
+  expect(await widthOf(img)).toBe(360);
+  expect(Math.abs((await widthOf(chart)) - Math.min(natural * 1.5, column))).toBeLessThanOrEqual(1);
+  // Twice the flowchart is wider than the text: it stops at the column.
+  await images.getByRole('radio', { name: '200%', exact: true }).check();
+  expect(await widthOf(img)).toBe(480);
+  expect(natural * 2).toBeGreaterThan(column);
+  expect(await widthOf(chart)).toBe(column);
   await page.locator('.font-settings-toggle').click();
 
+  // The zoom still shows the image at its natural size.
   await img.click();
   const zoom = page.getByRole('dialog', { name: 'diagram' });
   await expect(zoom).toBeVisible();
   await expect(zoom.locator('img')).toHaveJSProperty('naturalWidth', 240);
+  expect(await widthOf(zoom.locator('img'))).toBe(240);
   await page.keyboard.press('Escape');
   await expect(zoom).toHaveCount(0);
   await img.click();
   await zoom.click();
   await expect(zoom).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('md-browser:fonts') ?? '{}').image)).toBe(200);
+});
+
+test('resizes one image or diagram from its buttons and remembers it for the document', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  const img = page.locator('img[alt="diagram"]');
+  const imgSize = sizeButtons(img);
+  const chart = page.locator('.diagram-mermaid').first();
+  const chartSvg = chart.locator('svg');
+  const chartSize = sizeButtons(chart);
+  await expect.poll(() => widthOf(img)).toBe(240);
+  const natural = await naturalWidth(chartSvg);
+  const second = page.locator('.diagram-mermaid svg').nth(1);
+  const secondWidth = await widthOf(second);
+
+  // Shown on hover; a click resizes without opening the zoom.
+  await expect(imgSize).toHaveCSS('opacity', '0');
+  await img.hover();
+  await expect(imgSize).toHaveCSS('opacity', '1');
+  await imgSize.getByRole('button', { name: 'Make larger' }).click();
+  await imgSize.getByRole('button', { name: 'Make larger' }).click();
+  expect(await widthOf(img)).toBe(360);
+  await expect(imgSize.getByRole('button', { name: 'Reset size (now 150%)' })).toHaveText('150%');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // From the keyboard: the buttons follow the diagram in the tab order and show on focus.
+  await chart.focus();
+  await page.keyboard.press('Tab');
+  await expect(chartSize.getByRole('button', { name: 'Make smaller' })).toBeFocused();
+  await expect(chartSize).toHaveCSS('opacity', '1');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(Math.abs((await widthOf(chartSvg)) - natural / 2)).toBeLessThanOrEqual(1);
+  await expectAccessible(page);
+  // Other items keep the setting.
+  expect(await widthOf(second)).toBe(secondWidth);
+
+  await page.reload();
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect.poll(() => widthOf(img)).toBe(360);
+  await expect.poll(async () => Math.abs((await widthOf(chartSvg)) - natural / 2)).toBeLessThanOrEqual(1);
+
+  // The n% button goes back to the setting; the next setting applies to it again.
+  await chartSize.getByRole('button', { name: 'Reset size (now 50%)' }).click();
+  expect(Math.abs((await widthOf(chartSvg)) - Math.min(natural, await columnWidth(page)))).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: '50%', exact: true }).check();
+  expect(Math.abs((await widthOf(chartSvg)) - natural / 2)).toBeLessThanOrEqual(1);
+  expect(await widthOf(img)).toBe(360); // its own size stays
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('md-browser:media-sizes')!));
+  expect(saved['sample/README.md'].items).toEqual({ 'img:img/diagram.svg#1': 150 });
+});
+
+test('keeps a diagram size across a theme change and in print', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  const chart = page.locator('.diagram-mermaid').first();
+  const chartSize = sizeButtons(chart);
+  const natural = await naturalWidth(chart.locator('svg'));
+  await chart.hover();
+  await chartSize.getByRole('button', { name: 'Make smaller' }).click();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(chart.locator('.diagram-screen svg')).toHaveCount(1);
+  await expect.poll(async () => Math.abs((await widthOf(chart.locator('.diagram-screen svg'))) - natural * 0.75)).toBeLessThanOrEqual(2);
+  await page.emulateMedia({ media: 'print', colorScheme: 'dark' });
+  await expect(chartSize).toBeHidden();
+  expect(Math.abs((await widthOf(chart.locator('.diagram-print svg'))) - natural * 0.75)).toBeLessThanOrEqual(2);
 });
 
 const LIGHT_NODE = 'rgb(236, 236, 255)'; // mermaid "default" theme
@@ -363,6 +488,21 @@ test('redraws diagrams when the OS theme changes after loading', async ({ page }
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect.poll(() => nodeFill(page)).toBe(DARK_NODE);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(4); // screen + print copies
+});
+
+test('keeps sequence diagram box colours readable in the dark theme', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openSampleFolder(page);
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile: (rel: string, text: string) => Promise<void> }).__appendToFile(
+      'README.md',
+      '\n```mermaid\nsequenceDiagram\n  box rgb(220,232,250) Software\n    participant A\n  end\n  A->>A: hello\n```\n',
+    ),
+  );
+  const seq = page.locator('.diagram-mermaid').filter({ hasText: 'hello' });
+  // Light grey text on the pastel box: only the on-screen (dark) copy is dimmed, not the print copy.
+  await expect(seq.locator('.diagram-screen rect.rect')).toHaveAttribute('fill-opacity', '0.25');
+  await expect(seq.locator('.diagram-print rect.rect')).not.toHaveAttribute('fill-opacity', /./);
 });
 
 test('remembers the theme across reloads', async ({ page }) => {
@@ -705,6 +845,9 @@ test('passes the axe accessibility checks on the welcome screen and a document',
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
   await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
   await expectAccessible(page);
+  // The folder rows' hide buttons, shown on focus.
+  await page.locator('#files .file-tree-hide').first().focus();
+  await expectAccessible(page);
 });
 
 test('passes the axe accessibility checks in dark mode, settings and dialogs', async ({ page }) => {
@@ -756,7 +899,11 @@ test('renders PlantUML diagrams offline, in both themes', async ({ page }) => {
     ),
   );
   await expect(diagrams).toHaveCount(3);
-  await expect(diagrams.nth(2)).toContainText('cannot include <C4/C4_Context>');
+  // Shown like a Mermaid error (message + source), with the line in the code block.
+  await expect(diagrams.nth(2)).toHaveClass(/diagram-error/);
+  await expect(diagrams.nth(2).locator('.diagram-error-message')).toContainText('line 1: cannot include <C4/C4_Context>');
+  await expect(diagrams.nth(2).locator('pre')).toContainText('Person(u, "User")');
+  await expect(diagrams.nth(2)).not.toHaveAttribute('role', 'button');
   expect(offsite).toEqual([]);
 });
 

@@ -7,6 +7,7 @@ import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
 import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom, prepareImageZoom } from '../core/image-zoom';
+import { applyMediaSizes, loadMediaDoc, prepareMediaSizes, showMediaSizes } from '../core/media-sizes';
 import { mountSkipLink } from '../core/skip-link';
 import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
@@ -16,7 +17,15 @@ import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
 import { createFileTree } from '../file-tree';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
-import { MSG_LIST_SIBLINGS, MSG_READ_SELF, type ListSiblingsResponse, type ReadSelfResponse } from './messages';
+import {
+  MSG_LIST_SIBLINGS,
+  MSG_READ_SELF,
+  MSG_SET_HIDDEN_DIR,
+  type ListSiblingsResponse,
+  type ReadSelfResponse,
+  type SetHiddenDirMessage,
+  type SetHiddenDirResponse,
+} from './messages';
 
 const POLL_MS = 1000;
 /** Background tabs still poll, less often, so the tab icon can flag changes. */
@@ -43,30 +52,57 @@ function fileName(): string {
   return decodeURIComponent(location.pathname.split('/').pop() ?? 'document.md');
 }
 
+async function listSiblings(): Promise<ListSiblingsResponse | undefined> {
+  try {
+    return await chrome.runtime.sendMessage({ type: MSG_LIST_SIBLINGS });
+  } catch {
+    return undefined; // no listing (e.g. file access off): the page works without the sidebar
+  }
+}
+
 /** Lists the Markdown files in this file's folder and below, then offers them in the sidebar. */
 async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement): Promise<void> {
-  let res: ListSiblingsResponse | undefined;
-  try {
-    res = await chrome.runtime.sendMessage({ type: MSG_LIST_SIBLINGS });
-  } catch {
-    return; // no listing (e.g. file access off): the page works without the sidebar
-  }
-  if (!res?.ok || res.paths.length < 2) return;
+  const res = await listSiblings();
+  // Hidden folders keep the sidebar, so they can always be shown again.
+  if (!res?.ok || (res.paths.length < 2 && res.hidden.length === 0)) return;
   // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
   const rootUrl = new URL('../'.repeat(res.current.split('/').length - 1) || './', location.href);
-  const tree = createFileTree(filesEl, (path) => {
-    // Paths are relative to the root; encode each segment so names like "a#b.md" survive.
-    location.href = new URL(path.split('/').map(encodeURIComponent).join('/'), rootUrl).href;
-  });
-  tree.render(res.paths);
-  if (res.truncated) {
-    const note = document.createElement('p');
-    note.className = 'files-note';
-    note.textContent = t('filesTruncated');
-    filesEl.append(note);
+
+  let busy = Promise.resolve();
+  /** The background saves the change for the tab's root, then the folder is listed again. */
+  const setHidden = (path: string, hidden: boolean) => {
+    busy = busy.then(async () => {
+      const msg: SetHiddenDirMessage = { type: MSG_SET_HIDDEN_DIR, path, hidden };
+      const done: SetHiddenDirResponse | undefined = await chrome.runtime.sendMessage(msg).catch(() => undefined);
+      if (!done?.ok) return;
+      const next = await listSiblings();
+      if (next?.ok) show(next);
+    });
+  };
+
+  const tree = createFileTree(
+    filesEl,
+    (path) => {
+      // Paths are relative to the root; encode each segment so names like "a#b.md" survive.
+      location.href = new URL(path.split('/').map(encodeURIComponent).join('/'), rootUrl).href;
+    },
+    { onHide: (dir) => setHidden(dir, true), onUnhide: (dir) => setHidden(dir, false) },
+  );
+  const sidebar = mountFilesSidebar(filesToggle, filesEl);
+
+  function show(list: Extract<ListSiblingsResponse, { ok: true }>): void {
+    tree.render(list.paths, list.hidden);
+    if (list.truncated) {
+      const note = document.createElement('p');
+      note.className = 'files-note';
+      note.textContent = t('filesTruncated');
+      filesEl.append(note);
+    }
+    tree.setActive(list.current); // not listed (e.g. below the depth limit or hidden): nothing is marked
   }
-  tree.setActive(res.current); // not listed (e.g. below the depth limit): nothing is marked
-  mountFilesSidebar(filesToggle, filesEl).setAvailable(true);
+
+  show(res);
+  sidebar.setAvailable(true);
 }
 
 function buildShell(): {
@@ -135,15 +171,20 @@ async function main(): Promise<void> {
     // <template> content is inert: nothing loads until it is attached.
     const staging = document.createElement('template');
     staging.innerHTML = html;
+    prepareMediaSizes(staging.content);
+    // Per-item sizes are remembered by the file's URL (without the heading in the hash).
+    const media = loadMediaDoc(location.href.split('#')[0]);
     // Relative images/links resolve natively against the file:// URL.
     await renderDiagrams(staging.content);
     await renderMath(staging.content);
     addCopyButtons(staging.content);
     prepareImageZoom(staging.content);
     addHeadingLinks(staging.content, true);
+    const mediaDoc = await media;
     if (mine !== seq) return;
     const y = window.scrollY;
     content.replaceChildren(staging.content);
+    showMediaSizes(content, mediaDoc);
     sourceView.setSource(src);
     toc.render(items);
     if (keepScroll) window.scrollTo(0, y);
@@ -156,7 +197,7 @@ async function main(): Promise<void> {
 
   await render(current, false);
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
-  onThemeChange(() => void renderDiagrams(content));
+  onThemeChange(() => void renderDiagrams(content).then(() => applyMediaSizes(content)));
   enableImageZoom(content);
   void showSiblings(filesEl, filesToggle);
 
