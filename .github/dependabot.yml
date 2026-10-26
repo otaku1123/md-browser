@@ -14,6 +14,10 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # Mermaid pins katex ^0.18; a newer minor would bundle a second copy. Bump by hand once Mermaid moves.
+      - dependency-name: katex
+        update-types: ["version-update:semver-minor"]
 
   - package-ecosystem: github-actions
     directory: /
