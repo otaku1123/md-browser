@@ -332,30 +332,125 @@ test('applies the folder scan limit from the settings', async ({ page }) => {
   await expect(page.locator('.markdown-body h1')).toHaveText('Big');
 });
 
-test('limits the image size and shows an image at full size on click', async ({ page }) => {
+/** The size buttons of an image or diagram, which sit in a frame around it. */
+const sizeButtons = (item: ReturnType<Page['locator']>) =>
+  item.locator('xpath=ancestor::*[contains(concat(" ", @class, " "), " media-frame ")][1]').getByRole('group', { name: 'Display size' });
+/** Mermaid's own width for a diagram (its svg's max-width), before any scaling. */
+const naturalWidth = (svg: ReturnType<Page['locator']>) => svg.evaluate((el) => parseFloat((el as SVGSVGElement).style.maxWidth));
+const widthOf = (locator: ReturnType<Page['locator']>) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+/** Width of the text column, the most an image or diagram may take. */
+const columnWidth = (page: Page) =>
+  page.locator('#content').evaluate((el) => {
+    const style = getComputedStyle(el);
+    return Math.round(el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+  });
+
+test('scales images and diagrams by the image setting, up to the text width', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
   await openSampleFolder(page);
-  const img = page.locator('img[alt="diagram"]');
-  const limits = () => img.evaluate((el) => ({ w: getComputedStyle(el).maxWidth, h: getComputedStyle(el).maxHeight }));
-  expect(await limits()).toEqual({ w: '100%', h: 'none' });
+  const img = page.locator('img[alt="diagram"]'); // 240px wide
+  const chart = page.locator('.diagram-mermaid svg').first();
+  await expect.poll(() => widthOf(img)).toBe(240);
+  const natural = await naturalWidth(chart);
+  const column = await columnWidth(page);
+  expect(await widthOf(chart)).toBe(Math.min(Math.round(natural), column));
+  const images = page.locator('.font-settings-panel').getByRole('radiogroup', { name: 'Images & diagrams' });
 
   await page.locator('.font-settings-toggle').click();
-  await page
-    .locator('.font-settings-panel')
-    .getByRole('radiogroup', { name: 'Images' })
-    .getByRole('radio', { name: 'Medium', exact: true })
-    .check();
-  expect(await limits()).toEqual({ w: 'min(100%, 480px)', h: '480px' });
+  await images.getByRole('radio', { name: '50%', exact: true }).check();
+  expect(await widthOf(img)).toBe(120);
+  expect(Math.abs((await widthOf(chart)) - natural / 2)).toBeLessThanOrEqual(1);
+  await images.getByRole('radio', { name: '150%', exact: true }).check();
+  expect(await widthOf(img)).toBe(360);
+  expect(Math.abs((await widthOf(chart)) - Math.min(natural * 1.5, column))).toBeLessThanOrEqual(1);
+  // Twice the flowchart is wider than the text: it stops at the column.
+  await images.getByRole('radio', { name: '200%', exact: true }).check();
+  expect(await widthOf(img)).toBe(480);
+  expect(natural * 2).toBeGreaterThan(column);
+  expect(await widthOf(chart)).toBe(column);
   await page.locator('.font-settings-toggle').click();
 
+  // The zoom still shows the image at its natural size.
   await img.click();
   const zoom = page.getByRole('dialog', { name: 'diagram' });
   await expect(zoom).toBeVisible();
   await expect(zoom.locator('img')).toHaveJSProperty('naturalWidth', 240);
+  expect(await widthOf(zoom.locator('img'))).toBe(240);
   await page.keyboard.press('Escape');
   await expect(zoom).toHaveCount(0);
   await img.click();
   await zoom.click();
   await expect(zoom).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('md-browser:fonts') ?? '{}').image)).toBe(200);
+});
+
+test('resizes one image or diagram from its buttons and remembers it for the document', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  const img = page.locator('img[alt="diagram"]');
+  const imgSize = sizeButtons(img);
+  const chart = page.locator('.diagram-mermaid').first();
+  const chartSvg = chart.locator('svg');
+  const chartSize = sizeButtons(chart);
+  await expect.poll(() => widthOf(img)).toBe(240);
+  const natural = await naturalWidth(chartSvg);
+  const second = page.locator('.diagram-mermaid svg').nth(1);
+  const secondWidth = await widthOf(second);
+
+  // Shown on hover; a click resizes without opening the zoom.
+  await expect(imgSize).toHaveCSS('opacity', '0');
+  await img.hover();
+  await expect(imgSize).toHaveCSS('opacity', '1');
+  await imgSize.getByRole('button', { name: 'Make larger' }).click();
+  await imgSize.getByRole('button', { name: 'Make larger' }).click();
+  expect(await widthOf(img)).toBe(360);
+  await expect(imgSize.getByRole('button', { name: 'Reset size (now 150%)' })).toHaveText('150%');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // From the keyboard: the buttons follow the diagram in the tab order and show on focus.
+  await chart.focus();
+  await page.keyboard.press('Tab');
+  await expect(chartSize.getByRole('button', { name: 'Make smaller' })).toBeFocused();
+  await expect(chartSize).toHaveCSS('opacity', '1');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(Math.abs((await widthOf(chartSvg)) - natural / 2)).toBeLessThanOrEqual(1);
+  await expectAccessible(page);
+  // Other items keep the setting.
+  expect(await widthOf(second)).toBe(secondWidth);
+
+  await page.reload();
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect.poll(() => widthOf(img)).toBe(360);
+  await expect.poll(async () => Math.abs((await widthOf(chartSvg)) - natural / 2)).toBeLessThanOrEqual(1);
+
+  // The n% button goes back to the setting; the next setting applies to it again.
+  await chartSize.getByRole('button', { name: 'Reset size (now 50%)' }).click();
+  expect(Math.abs((await widthOf(chartSvg)) - Math.min(natural, await columnWidth(page)))).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: '50%', exact: true }).check();
+  expect(Math.abs((await widthOf(chartSvg)) - natural / 2)).toBeLessThanOrEqual(1);
+  expect(await widthOf(img)).toBe(360); // its own size stays
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('md-browser:media-sizes')!));
+  expect(saved['sample/README.md'].items).toEqual({ 'img:img/diagram.svg#1': 150 });
+});
+
+test('keeps a diagram size across a theme change and in print', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  const chart = page.locator('.diagram-mermaid').first();
+  const chartSize = sizeButtons(chart);
+  const natural = await naturalWidth(chart.locator('svg'));
+  await chart.hover();
+  await chartSize.getByRole('button', { name: 'Make smaller' }).click();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(chart.locator('.diagram-screen svg')).toHaveCount(1);
+  await expect.poll(async () => Math.abs((await widthOf(chart.locator('.diagram-screen svg'))) - natural * 0.75)).toBeLessThanOrEqual(2);
+  await page.emulateMedia({ media: 'print', colorScheme: 'dark' });
+  await expect(chartSize).toBeHidden();
+  expect(Math.abs((await widthOf(chart.locator('.diagram-print svg'))) - natural * 0.75)).toBeLessThanOrEqual(2);
 });
 
 const LIGHT_NODE = 'rgb(236, 236, 255)'; // mermaid "default" theme

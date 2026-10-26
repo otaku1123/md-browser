@@ -13,6 +13,7 @@ import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
 import { addHeadingLinks } from './core/heading-link';
 import { enableImageZoom, prepareImageZoom } from './core/image-zoom';
+import { applyMediaSizes, loadMediaDoc, prepareMediaSizes, showMediaSizes } from './core/media-sizes';
 import { mountSkipLink } from './core/skip-link';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
@@ -84,6 +85,10 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   // <template> content is inert, so images don't start loading unresolved relative URLs.
   const staging = document.createElement('template');
   staging.innerHTML = html;
+  // Before the refs are resolved: per-item sizes are keyed by the image refs as written.
+  prepareMediaSizes(staging.content);
+  // Folder name + path, like the hidden folders: browsers give no absolute path.
+  const media = loadMediaDoc(workspace.folder !== undefined ? `${workspace.folder}/${doc.path}` : doc.path);
   const assets = workspace.assetResolver(doc);
   await resolveImages(staging.content, assets.resolve);
   await renderDiagrams(staging.content);
@@ -91,6 +96,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   addCopyButtons(staging.content);
   prepareImageZoom(staging.content);
   addHeadingLinks(staging.content, false);
+  const mediaDoc = await media;
   if (seq !== renderSeq) {
     assets.release();
     return; // a newer render started meanwhile
@@ -98,6 +104,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
 
   const scrollY = window.scrollY;
   contentEl.replaceChildren(staging.content);
+  showMediaSizes(contentEl, mediaDoc);
   releaseAssets();
   releaseAssets = assets.release;
   if (currentDoc !== doc) {
@@ -493,7 +500,7 @@ mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
 mountSkipLink(document.querySelector<HTMLElement>('.toolbar')!);
 const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
-onThemeChange(() => void renderDiagrams(contentEl));
+onThemeChange(() => void renderDiagrams(contentEl).then(() => applyMediaSizes(contentEl)));
 enableImageZoom(contentEl);
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));

@@ -7,6 +7,7 @@ import { onThemeChange } from '../core/theme';
 import { addCopyButtons } from '../core/code-copy';
 import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom, prepareImageZoom } from '../core/image-zoom';
+import { applyMediaSizes, loadMediaDoc, prepareMediaSizes, showMediaSizes } from '../core/media-sizes';
 import { mountSkipLink } from '../core/skip-link';
 import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
@@ -170,15 +171,20 @@ async function main(): Promise<void> {
     // <template> content is inert: nothing loads until it is attached.
     const staging = document.createElement('template');
     staging.innerHTML = html;
+    prepareMediaSizes(staging.content);
+    // Per-item sizes are remembered by the file's URL (without the heading in the hash).
+    const media = loadMediaDoc(location.href.split('#')[0]);
     // Relative images/links resolve natively against the file:// URL.
     await renderDiagrams(staging.content);
     await renderMath(staging.content);
     addCopyButtons(staging.content);
     prepareImageZoom(staging.content);
     addHeadingLinks(staging.content, true);
+    const mediaDoc = await media;
     if (mine !== seq) return;
     const y = window.scrollY;
     content.replaceChildren(staging.content);
+    showMediaSizes(content, mediaDoc);
     sourceView.setSource(src);
     toc.render(items);
     if (keepScroll) window.scrollTo(0, y);
@@ -191,7 +197,7 @@ async function main(): Promise<void> {
 
   await render(current, false);
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
-  onThemeChange(() => void renderDiagrams(content));
+  onThemeChange(() => void renderDiagrams(content).then(() => applyMediaSizes(content)));
   enableImageZoom(content);
   void showSiblings(filesEl, filesToggle);
 
