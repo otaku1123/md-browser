@@ -23,7 +23,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.7.0.zip` |
+| アップロードするファイル | `release/md-browser-1.8.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -49,7 +49,7 @@ Open any .md file from your computer (drag it into Chrome or open file:///…/RE
 FEATURES
 • GitHub-style rendering: tables, task lists, syntax-highlighted code blocks
 • Sidebar table of contents that follows your scroll position; hide it or drag to resize
-• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable
+• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable, and folders you don't need can be hidden
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
 • PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
@@ -57,7 +57,8 @@ FEATURES
 • GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
 • One-click copy button on code blocks, and a link button on headings
 • Switch to the raw Markdown source (button or Ctrl/⌘+Shift+M), with line numbers
-• Display settings: theme (system / light / dark), text size, content width, image size, and fonts for body text and code
+• Display settings: theme (system / light / dark), text size, content width, image and diagram size (50–200%), and fonts for body text and code
+• Resize a single image or diagram with the −/+ buttons that appear on hover; remembered for each document
 • Click an image to see it at full size
 • Works from the keyboard and with screen readers: a skip link to the document, and Enter opens diagrams and images
 • Relative images and links to other .md files just work
@@ -87,7 +88,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 主な機能
 • GitHub 風の表示：表・タスクリスト・シンタックスハイライト付きコードブロック
 • スクロール位置に連動する目次サイドバー（表示の切り替え、ドラッグで幅を変更）
-• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能）
+• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能。不要なフォルダは非表示にできる）
 • Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
 • PlantUML 図（ブラウザ内で描画し、PlantUML のサーバーには送信しません）
 • KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
@@ -95,7 +96,8 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示
 • コードブロックのワンクリックコピーと、見出しへのリンクのコピー
 • 元の Markdown テキスト表示への切り替え（ボタンまたは Ctrl/⌘+Shift+M、行番号付き）
-• 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、画像サイズ、本文とコードのフォント
+• 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、画像・図のサイズ（50〜200%）、本文とコードのフォント
+• 画像や図にマウスを乗せると出る −/+ ボタンで、1 つずつ大きさを変更（文書ごとに記憶）
 • 画像をクリックすると原寸で表示
 • キーボードやスクリーンリーダーでも操作しやすい（本文へのスキップリンク、Enter で図や画像を拡大）
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
@@ -140,13 +142,13 @@ manifest の `permissions` は `storage` だけで、`host_permissions` はな�
 審査で理由を聞かれたときは、次の文面で返信する。
 
 ```text
-The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders and node_modules are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. No file contents other than the viewed file are read, no other pages are accessed, and no network requests are made by the extension.
+The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders, common dependency and build output folders such as node_modules and dist, and folders the user chose to hide are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. No file contents other than the viewed file are read, no other pages are accessed, and no network requests are made by the extension.
 ```
 
 ### storage 権限が必要な理由（Permission justification: storage）
 
 ```text
-Stores the user's display preferences (theme, text size, content width, image size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. Only these preferences and folder locations are stored; no file contents or personal data are saved.
+Stores the user's display preferences (theme, text size, content width, image and diagram size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. chrome.storage.local keeps, on this computer only and never synced, the subfolders the user chose to hide from the file sidebar (per starting folder) and the sizes the user set for individual images and diagrams (per document URL). Only these preferences, folder locations and document URLs are stored; no file contents or personal data are saved.
 ```
 
 ### リモートコード（Remote code）
