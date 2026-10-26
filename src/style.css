@@ -578,7 +578,15 @@ body {
 .diagram:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .diagram-print { display: none; }
 .diagram-error { text-align: left; }
-.diagram-error-message { color: var(--error); font-size: 13px; margin-bottom: 4px; }
+/* Mermaid points at the error with a ^ under a quoted line: keep line breaks and columns. */
+.diagram-error-message {
+  color: var(--error);
+  font-family: var(--font-code);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 4px;
+}
 
 /* ---- welcome ---- */
 .welcome { padding-top: 40px; }

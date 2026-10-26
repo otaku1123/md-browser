@@ -756,7 +756,11 @@ test('renders PlantUML diagrams offline, in both themes', async ({ page }) => {
     ),
   );
   await expect(diagrams).toHaveCount(3);
-  await expect(diagrams.nth(2)).toContainText('cannot include <C4/C4_Context>');
+  // Shown like a Mermaid error (message + source), with the line in the code block.
+  await expect(diagrams.nth(2)).toHaveClass(/diagram-error/);
+  await expect(diagrams.nth(2).locator('.diagram-error-message')).toContainText('line 1: cannot include <C4/C4_Context>');
+  await expect(diagrams.nth(2).locator('pre')).toContainText('Person(u, "User")');
+  await expect(diagrams.nth(2)).not.toHaveAttribute('role', 'button');
   expect(offsite).toEqual([]);
 });
 
