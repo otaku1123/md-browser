@@ -8,7 +8,7 @@ A static web app and Chrome extension for previewing Markdown files in the brows
 
 **Chrome extension:** [Chrome Web Store](https://chromewebstore.google.com/detail/infhmmggjagaoiiogbjkffelfdgfdkop)
 
-**Feedback:** report bugs in [Issues](https://github.com/otaku1123/md-browser/issues/new?template=bug_report.yml) and share ideas or questions in [Discussions](https://github.com/otaku1123/md-browser/discussions). Both are also linked from the bottom of the settings panel (gear icon); the bug report link fills in the version.
+**Feedback:** open an [issue](https://github.com/otaku1123/md-browser/issues/new/choose) — a [bug report](https://github.com/otaku1123/md-browser/issues/new?template=bug_report.yml) or an [idea or question](https://github.com/otaku1123/md-browser/issues/new?template=feature_request.yml). Both are also linked from the bottom of the settings panel (gear icon), which fills in the version.
 
 Everything runs locally in your browser. Files are never uploaded, and diagrams and math are rendered by bundled engines without contacting external servers ([privacy policy](https://otaku1123.github.io/md-browser/privacy.html)).
 

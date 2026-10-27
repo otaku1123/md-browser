@@ -2,7 +2,6 @@ import { version } from '../../package.json';
 import { t } from '../i18n';
 
 const REPO = 'https://github.com/otaku1123/md-browser';
-export const DISCUSSIONS_URL = `${REPO}/discussions`;
 
 export type Surface = 'web' | 'extension-file' | 'extension-viewer';
 
@@ -20,13 +19,16 @@ const SURFACE_LABELS: Record<Surface, string> = {
 };
 
 /**
- * New-issue URL for the bug report form, with the version and where it runs filled in.
+ * New-issue URL for one of the issue forms, with the version and where it runs filled in.
  * Nothing about the open document (its name or path) goes into it.
  */
-export function bugReportUrl(surface: Surface = currentSurface()): string {
-  const params = new URLSearchParams({ template: 'bug_report.yml', version, surface: SURFACE_LABELS[surface] });
+function issueUrl(template: string, surface: Surface): string {
+  const params = new URLSearchParams({ template, version, surface: SURFACE_LABELS[surface] });
   return `${REPO}/issues/new?${params}`;
 }
+
+export const bugReportUrl = (surface: Surface = currentSurface()) => issueUrl('bug_report.yml', surface);
+export const featureRequestUrl = (surface: Surface = currentSurface()) => issueUrl('feature_request.yml', surface);
 
 /** "Report a bug" and "Ideas & questions" links for the bottom of the settings panel. */
 export function feedbackLinks(): HTMLElement {
@@ -40,6 +42,6 @@ export function feedbackLinks(): HTMLElement {
     a.textContent = text;
     return a;
   };
-  row.append(link(bugReportUrl(), t('feedbackBug')), link(DISCUSSIONS_URL, t('feedbackIdeas')));
+  row.append(link(bugReportUrl(), t('feedbackBug')), link(featureRequestUrl(), t('feedbackIdeas')));
   return row;
 }

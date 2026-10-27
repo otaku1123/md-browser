@@ -1,8 +1,0 @@
-blank_issues_enabled: true
-contact_links:
-  - name: 要望・アイデア / Ideas
-    url: https://github.com/otaku1123/md-browser/discussions/categories/ideas
-    about: 新しい機能や改善のアイデアはこちら / Suggest a new feature or an improvement
-  - name: 質問 / Questions
-    url: https://github.com/otaku1123/md-browser/discussions/categories/q-a
-    about: 使い方の質問はこちら / Ask how to do something

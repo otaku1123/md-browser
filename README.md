@@ -10,7 +10,7 @@ Markdown ファイルをブラウザでプレビューする静的 Web アプリ
 
 **開発版:** https://otaku1123.github.io/md-browser/dev/ （`develop` ブランチ。ツールバーに「DEV」と表示）
 
-**フィードバック:** 不具合は [Issues](https://github.com/otaku1123/md-browser/issues/new?template=bug_report.yml)、要望・質問は [Discussions](https://github.com/otaku1123/md-browser/discussions) へ。アプリの設定パネル（歯車）の下からも開ける（不具合の報告にはバージョンが自動で入る）
+**フィードバック:** [Issues](https://github.com/otaku1123/md-browser/issues/new/choose) へ（[不具合の報告](https://github.com/otaku1123/md-browser/issues/new?template=bug_report.yml) / [要望・質問](https://github.com/otaku1123/md-browser/issues/new?template=feature_request.yml)）。アプリの設定パネル（歯車）の下からも開け、バージョンが自動で入る
 
 `main` / `develop` に push すると GitHub Actions（`.github/workflows/deploy-pages.yml`）で両方がまとめてデプロイされます。
 
