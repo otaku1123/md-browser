@@ -92,6 +92,17 @@ npm run pack:ext   # create release/md-browser-<version>.zip
 
 To load a development build, open `chrome://extensions`, turn on Developer mode, choose "Load unpacked" and select `dist-extension/`, then turn on "Allow access to file URLs" in the extension's details.
 
+Screenshot tests (`tests/e2e/visual-*.spec.ts`) compare pages with the baselines in `tests/e2e/__screenshots__/`. Fonts render differently on each OS, so baselines are made on CI (Linux) and the tests skip elsewhere. After an intended visual change, regenerate them on CI and commit them:
+
+```sh
+gh workflow run test.yml --ref <branch> -f update_screenshots=true
+gh run list --workflow test.yml --branch <branch> -L 1   # find the run ID
+gh run download <run-id> -n screenshots -D tests/e2e/__screenshots__
+git diff --stat tests/e2e/__screenshots__   # review the images, then commit
+```
+
+On a diff failure, the `playwright-report` artifact holds the expected, actual and diff images. To try them locally on any OS, `VISUAL_LOCAL=<temp dir> npx playwright test --project=visual-web --project=visual-extension --update-snapshots` writes the images outside the repo.
+
 Branching, release and store submission notes are in the [Japanese README](README.md).
 
 ## License

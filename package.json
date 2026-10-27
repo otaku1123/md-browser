@@ -11,7 +11,8 @@
     "pack:ext": "npm run build:ext && node scripts/pack-extension.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && npm run build:ext && playwright test"
+    "test:e2e": "npm run build && npm run build:ext && playwright test",
+    "test:visual": "npm run build && npm run build:ext && playwright test --project=visual-web --project=visual-extension"
   },
   "keywords": [],
   "author": "",
