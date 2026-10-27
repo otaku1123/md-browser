@@ -23,27 +23,36 @@ async function makeWorkdir(): Promise<string> {
   return dir;
 }
 
-/** Reads sample/ as { relativePath: base64 } for loading into the web app's OPFS stand-in. */
-export async function readSampleFiles(): Promise<Record<string, string>> {
+/** Reads a folder as { relativePath: base64 } for loading into the web app's OPFS stand-in. */
+export async function readFolderFiles(dir: string): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
-  for (const entry of await fs.readdir(SAMPLE, { recursive: true, withFileTypes: true })) {
+  for (const entry of await fs.readdir(dir, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const abs = path.join(entry.parentPath, entry.name);
-    out[path.relative(SAMPLE, abs).split(path.sep).join('/')] = (await fs.readFile(abs)).toString('base64');
+    out[path.relative(dir, abs).split(path.sep).join('/')] = (await fs.readFile(abs)).toString('base64');
   }
+  return out;
+}
+
+/** sample/ plus the XSS probe, as readFolderFiles() returns them. */
+export async function readSampleFiles(): Promise<Record<string, string>> {
+  const out = await readFolderFiles(SAMPLE);
   out['xss.md'] = Buffer.from(XSS_MD).toString('base64');
   return out;
 }
 
 type ExtensionFixtures = { context: BrowserContext; extensionId: string; workdir: string };
+type ExtensionOptions = { extensionLocale: string };
 
 /** Chromium with the built extension loaded (file URL access is granted for --load-extension). */
-export const extensionTest = base.extend<ExtensionFixtures>({
-  context: async ({}, use) => {
+export const extensionTest = base.extend<ExtensionFixtures & ExtensionOptions>({
+  extensionLocale: ['ja-JP', { option: true }],
+  context: async ({ extensionLocale, viewport }, use) => {
     const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'mdb-profile-'));
     const context = await chromium.launchPersistentContext(profile, {
       channel: 'chromium',
-      locale: 'ja-JP',
+      locale: extensionLocale,
+      viewport,
       args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
     });
     await use(context);

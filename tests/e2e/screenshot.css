@@ -1,0 +1,5 @@
+/* Applied to every toHaveScreenshot() capture (playwright.config.ts): hide what changes between runs. */
+.env-badge, /* DEV badge with the commit of /dev/ builds */
+.status { /* "updated <time>" */
+  visibility: hidden !important;
+}
