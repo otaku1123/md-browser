@@ -1,0 +1,31 @@
+name: 要望・質問 / Idea or question
+description: あったら便利な機能、改善のアイデア、使い方の質問 / A feature or improvement you'd like, or a question
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ありがとうございます。Issues は公開されるので、社外秘の内容やファイルのパスは書かないでください。
+        Thanks! Issues are public, so please leave out confidential content and file paths.
+  - type: textarea
+    id: request
+    attributes:
+      label: 要望・質問の内容 / What would you like?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 困っていること・使っている場面 / What are you trying to do?
+      description: どんな場面で必要になるかが分かると助かります。 / Knowing when you'd need it helps.
+  - type: input
+    id: version
+    attributes:
+      label: バージョン / Version
+      description: 設定パネル（歯車）の「要望・質問」から開くと自動で入ります。 / Filled in when opened from "Ideas & questions" in the settings panel.
+      placeholder: "1.8.0"
+  - type: input
+    id: surface
+    attributes:
+      label: 使い方 / Where
+      placeholder: Chrome extension (file:// page)
