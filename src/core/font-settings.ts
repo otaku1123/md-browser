@@ -6,6 +6,7 @@ import { createSettingsStore } from './settings-store';
 import { normalizeScanLimit, scanLimitStore, SCAN_LIMIT_MAX, SCAN_LIMIT_MIN } from './scan-limit';
 import { applyTheme, normalizeTheme, type ThemePreference } from './theme';
 import { setGlobalMediaScale } from './media-sizes';
+import { feedbackLinks } from './feedback';
 
 // Values for the document only: the toolbar and TOC keep their size.
 const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
@@ -253,6 +254,7 @@ export function mountFontSettings(
   panel.append(hint, reset);
   // Only the viewer opens folders; the file:// page shows a single document.
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
+  panel.append(feedbackLinks());
   wrap.append(toggle, panel);
   toolbar.append(wrap);
 
