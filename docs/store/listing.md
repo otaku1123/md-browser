@@ -23,7 +23,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.8.0.zip` |
+| アップロードするファイル | `release/md-browser-1.9.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -64,7 +64,8 @@ FEATURES
 • Relative images and links to other .md files just work
 • Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars
 • Tab icon shows which tabs are rendered by MD Browser, and marks files that changed (or can't be read) while the tab was in the background
-• Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree and the folder name in the toolbar; a list of recently opened files and folders, and an adjustable scan limit for very large folders is adjustable
+• Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree and the folder name in the toolbar; a list of recently opened files and folders, and an adjustable scan limit for very large folders
+• Report a bug or suggest an idea from the settings panel: it opens a GitHub issue form, and nothing is sent unless you submit it
 
 PRIVACY
 Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only reads the Markdown file you are viewing and, for the file sidebar, the names of the files in that file's folder and below.
@@ -104,6 +105,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）
 • タブのアイコンで MD Browser が表示しているタブがひと目でわかり、裏のタブでファイルが更新された（または読めなくなった）ことも表示
 • ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリーとフォルダ名の表示付き。最近開いたファイル・フォルダの一覧。大きなフォルダの走査上限は変更可能）
+• 設定パネルから不具合の報告や要望の投稿ができる（GitHub の Issue フォームが開きます。送信するまで何も送られません）
 
 プライバシー
 すべての処理はブラウザ内で完結します。データの収集・送信やアクセス解析は一切行いません。拡張機能が読み込むのは、表示中の Markdown ファイルと、ファイル一覧のサイドバー用に、そのファイルがあるフォルダとその下にあるファイルの名前だけです。
