@@ -8,6 +8,8 @@ A static web app and Chrome extension for previewing Markdown files in the brows
 
 **Chrome extension:** [Chrome Web Store](https://chromewebstore.google.com/detail/infhmmggjagaoiiogbjkffelfdgfdkop)
 
+**Feedback:** open an [issue](https://github.com/otaku1123/md-browser/issues/new/choose) — a [bug report](https://github.com/otaku1123/md-browser/issues/new?template=bug_report.yml) or an [idea or question](https://github.com/otaku1123/md-browser/issues/new?template=feature_request.yml). Both are also linked from the bottom of the settings panel (gear icon), which fills in the version.
+
 Everything runs locally in your browser. Files are never uploaded, and diagrams and math are rendered by bundled engines without contacting external servers ([privacy policy](https://otaku1123.github.io/md-browser/privacy.html)).
 
 ## Features
@@ -89,6 +91,17 @@ npm run pack:ext   # create release/md-browser-<version>.zip
 ```
 
 To load a development build, open `chrome://extensions`, turn on Developer mode, choose "Load unpacked" and select `dist-extension/`, then turn on "Allow access to file URLs" in the extension's details.
+
+Screenshot tests (`tests/e2e/visual-*.spec.ts`) compare pages with the baselines in `tests/e2e/__screenshots__/`. Fonts render differently on each OS, so baselines are made on CI (Linux) and the tests skip elsewhere. After an intended visual change, regenerate them on CI and commit them:
+
+```sh
+gh workflow run test.yml --ref <branch> -f update_screenshots=true
+gh run list --workflow test.yml --branch <branch> -L 1   # find the run ID
+gh run download <run-id> -n screenshots -D tests/e2e/__screenshots__
+git diff --stat tests/e2e/__screenshots__   # review the images, then commit
+```
+
+On a diff failure, the `playwright-report` artifact holds the expected, actual and diff images. To try them locally on any OS, `VISUAL_LOCAL=<temp dir> npx playwright test --project=visual-web --project=visual-extension --update-snapshots` writes the images outside the repo.
 
 Branching, release and store submission notes are in the [Japanese README](README.md).
 

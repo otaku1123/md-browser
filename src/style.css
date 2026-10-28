@@ -794,6 +794,8 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
 /* Not a display setting (and not reset with them): set apart from the rows above. */
 .scan-limit-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .scan-limit-setting .font-settings-hint { margin-bottom: 0; }
+.feedback-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; }
+.feedback-links a { color: var(--accent); }
 
 /* ---- dev deployment marker ---- */
 .env-badge {

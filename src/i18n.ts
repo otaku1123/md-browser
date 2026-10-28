@@ -93,6 +93,8 @@ const en = {
   fontDefault: 'Default',
   fontHint: 'Enter the name of a font installed on your computer. Unknown fonts fall back to the default.',
   fontReset: 'Reset to default',
+  feedbackBug: 'Report a bug',
+  feedbackIdeas: 'Ideas & questions',
   scanLimit: 'Scan limit',
   scanLimitHint: 'Entries scanned when opening a folder ({min}–{max}). Changing it rescans the open folder.',
 } as const;
@@ -191,6 +193,8 @@ const ja: Record<Key, string> = {
   fontDefault: '既定',
   fontHint: 'PC にインストールされているフォント名を入力してください。見つからない場合は既定のフォントで表示します。',
   fontReset: '既定に戻す',
+  feedbackBug: '不具合を報告',
+  feedbackIdeas: '要望・質問',
   scanLimit: '走査上限',
   scanLimitHint: 'フォルダを開くときに調べる件数（{min}〜{max}）。変更すると、開いているフォルダを読み直します。',
 };

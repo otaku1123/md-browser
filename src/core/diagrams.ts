@@ -24,6 +24,21 @@ export function withTheme(source: string, theme: Theme, extra = ''): string {
 /** Source and theme of every diagram drawn so far, so a theme change can redraw it. */
 const drawn = new WeakMap<HTMLElement, { source: string; theme: Theme }>();
 
+/**
+ * Finished markup by kind + theme + source. Every save renders the document into a fresh DOM, so
+ * `drawn` never hits there; this lets unchanged diagrams skip Mermaid / PlantUML entirely.
+ * Bounded (oldest dropped first, Map keeps insertion order) so editing a diagram for a long session
+ * doesn't keep every intermediate version alive.
+ */
+const markupCache = new Map<string, string>();
+const MARKUP_CACHE_LIMIT = 200;
+
+function cacheMarkup(key: string, markup: string): void {
+  markupCache.delete(key);
+  markupCache.set(key, markup);
+  while (markupCache.size > MARKUP_CACHE_LIMIT) markupCache.delete(markupCache.keys().next().value!);
+}
+
 // mermaid is ~1MB, so load it only when a document actually contains a diagram.
 function loadMermaid(): Promise<MermaidApi> {
   mermaidPromise ??= import('mermaid').then(({ default: mermaid }) => {
@@ -58,27 +73,42 @@ async function draw(node: HTMLElement, source: string, theme: Theme, id: string)
 /**
  * Draws the Mermaid and PlantUML diagrams in root in the theme shown now. Diagrams already drawn
  * in that theme are skipped, so calling it again after a theme change redraws only what changed.
+ * Markup from earlier calls is reused for the same source and theme, so re-rendering a saved file
+ * only draws the diagrams that were edited.
  */
 export async function renderDiagrams(root: ParentNode): Promise<void> {
   const nodes = Array.from(root.querySelectorAll<HTMLElement>('.diagram-mermaid, .diagram-plantuml')).filter(
     (node) => drawn.get(node)?.theme !== currentTheme(),
   );
+  // Mermaid SVGs carry their id in their own <style> (`#mermaid-12 …`) and marker refs, so two
+  // copies of one cached entry in a document would clash: a repeat of a key in this call draws fresh.
+  const used = new Set<string>();
   for (const node of nodes) {
     const source = drawn.get(node)?.source ?? node.querySelector('.diagram-source')?.textContent ?? '';
     const theme = currentTheme();
     drawn.set(node, { source, theme });
+    const key = `${isPlantUml(node) ? 'plantuml' : 'mermaid'}\0${theme}\0${source}`;
+    const cached = used.has(key) ? undefined : markupCache.get(key);
+    used.add(key);
     const id = `mermaid-${++renderSeq}`;
     try {
-      const svg = await draw(node, source, theme, id);
-      if (theme === 'dark') {
-        // Paper is white: keep a light-theme copy that only the print stylesheet shows.
-        const light = await draw(node, source, 'light', `${id}-print`);
-        node.innerHTML = `<div class="diagram-screen">${svg}</div><div class="diagram-print">${light}</div>`;
-        // On the element, so the zoom view and SVG / PNG export (copies of it) keep it too.
-        const screen = node.querySelector<SVGSVGElement>('.diagram-screen svg');
-        if (screen) dimSequenceBoxes(screen);
+      if (cached !== undefined) {
+        node.innerHTML = cached;
+        cacheMarkup(key, cached); // mark as recently used
       } else {
-        node.innerHTML = svg;
+        const svg = await draw(node, source, theme, id);
+        if (theme === 'dark') {
+          // Paper is white: keep a light-theme copy that only the print stylesheet shows.
+          const light = await draw(node, source, 'light', `${id}-print`);
+          node.innerHTML = `<div class="diagram-screen">${svg}</div><div class="diagram-print">${light}</div>`;
+          // On the element, so the zoom view and SVG / PNG export (copies of it) keep it too.
+          const screen = node.querySelector<SVGSVGElement>('.diagram-screen svg');
+          if (screen) dimSequenceBoxes(screen);
+        } else {
+          node.innerHTML = svg;
+        }
+        // Failures throw before this, so they aren't cached and are retried next time.
+        cacheMarkup(key, node.innerHTML);
       }
       node.classList.remove('diagram-error');
       // Click or Enter opens it large (image-zoom.ts).

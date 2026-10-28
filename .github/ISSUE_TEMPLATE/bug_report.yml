@@ -1,0 +1,53 @@
+name: 不具合の報告 / Bug report
+description: 表示がおかしい・動かないなど / Something is rendered wrong or doesn't work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます。社外秘の内容やファイルのパスは書かないでください。
+        Thanks for the report. Please leave out confidential content and file paths.
+  - type: input
+    id: version
+    attributes:
+      label: バージョン / Version
+      description: 設定パネル（歯車）の「不具合を報告」から開くと自動で入ります。 / Filled in when opened from "Report a bug" in the settings panel.
+      placeholder: "1.8.0"
+    validations:
+      required: true
+  - type: input
+    id: surface
+    attributes:
+      label: 使い方 / Where
+      description: Web 版 / 拡張機能（file:// のページ）/ 拡張機能（ビューアー） / Web app, Chrome extension (file:// page) or Chrome extension (viewer)
+      placeholder: Chrome extension (file:// page)
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: ブラウザと OS / Browser and OS
+      placeholder: Chrome 140 / macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順 / Steps to reproduce
+      description: できれば、再現する最小限の Markdown も貼ってください。 / If you can, paste a minimal Markdown sample that shows it.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した結果と実際の結果 / Expected vs. actual
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: スクリーンショット・その他 / Screenshots and anything else

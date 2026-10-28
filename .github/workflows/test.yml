@@ -5,6 +5,11 @@ on:
     branches: [main, develop]
   pull_request:
   workflow_dispatch:
+    inputs:
+      update_screenshots:
+        description: Regenerate the screenshot baselines (tests/e2e/__screenshots__) and upload them as an artifact
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,7 +20,8 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned: a new runner image can change fonts and so every screenshot baseline.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -30,7 +36,17 @@ jobs:
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
       - name: E2E tests (web app + extension)
+        if: ${{ !inputs.update_screenshots }}
         run: npm run test:e2e
+      - name: Update screenshot baselines
+        if: ${{ inputs.update_screenshots }}
+        run: npm run test:visual -- --update-snapshots
+      - uses: actions/upload-artifact@v7
+        if: ${{ inputs.update_screenshots }}
+        with:
+          name: screenshots
+          path: tests/e2e/__screenshots__/
+          retention-days: 7
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

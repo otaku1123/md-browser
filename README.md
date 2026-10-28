@@ -10,6 +10,8 @@ Markdown ファイルをブラウザでプレビューする静的 Web アプリ
 
 **開発版:** https://otaku1123.github.io/md-browser/dev/ （`develop` ブランチ。ツールバーに「DEV」と表示）
 
+**フィードバック:** [Issues](https://github.com/otaku1123/md-browser/issues/new/choose) へ（[不具合の報告](https://github.com/otaku1123/md-browser/issues/new?template=bug_report.yml) / [要望・質問](https://github.com/otaku1123/md-browser/issues/new?template=feature_request.yml)）。アプリの設定パネル（歯車）の下からも開け、バージョンが自動で入る
+
 `main` / `develop` に push すると GitHub Actions（`.github/workflows/deploy-pages.yml`）で両方がまとめてデプロイされます。
 
 ### ブランチ運用
@@ -61,6 +63,19 @@ npm run test:e2e             # Web 版と拡張機能をビルドして E2E テ�
 ```
 
 push と PR のたびに GitHub Actions（`.github/workflows/test.yml`）で型チェック・単体テスト・E2E テストが走る。失敗時はレポートが Artifacts に保存される。
+
+#### スクリーンショット比較
+
+`tests/e2e/visual-*.spec.ts` は画面を `tests/e2e/__screenshots__/` の基準画像と比べる。フォントの描画が OS で違うため、基準画像は CI（Linux）で作り、Linux 以外では自動でスキップされる。表示を意図して変えたときは、CI で基準画像を作り直してコミットする:
+
+```sh
+gh workflow run test.yml --ref <branch> -f update_screenshots=true
+gh run list --workflow test.yml --branch <branch> -L 1   # run ID を確認
+gh run download <run-id> -n screenshots -D tests/e2e/__screenshots__
+git diff --stat tests/e2e/__screenshots__   # 画像を目で確認してからコミット
+```
+
+差分で失敗したときは、失敗時の Artifacts（`playwright-report`）に期待値・実際・差分の画像が入っている。手元（macOS など）で試すだけなら `VISUAL_LOCAL=<一時ディレクトリ> npx playwright test --project=visual-web --project=visual-extension --update-snapshots` で、リポジトリの外に画像を作って実行できる。
 
 ## 使い方
 
