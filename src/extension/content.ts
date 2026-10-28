@@ -17,11 +17,13 @@ import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
 import { createFileTree } from '../file-tree';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
+import { sha256Hex } from './read-self';
 import {
   MSG_LIST_SIBLINGS,
   MSG_READ_SELF,
   MSG_SET_HIDDEN_DIR,
   type ListSiblingsResponse,
+  type ReadSelfMessage,
   type ReadSelfResponse,
   type SetHiddenDirMessage,
   type SetHiddenDirResponse,
@@ -41,11 +43,12 @@ function readPlainTextSource(): string | null {
 }
 
 /** Reads the current file again via the service worker (the page itself is blocked by CORS). */
-async function fetchSource(): Promise<string> {
-  const res: ReadSelfResponse | undefined = await chrome.runtime.sendMessage({ type: MSG_READ_SELF });
+async function fetchSource(known?: string): Promise<{ text: string; hash: string } | 'unchanged'> {
+  const msg: ReadSelfMessage = { type: MSG_READ_SELF, known };
+  const res: ReadSelfResponse | undefined = await chrome.runtime.sendMessage(msg);
   if (!res) throw new Error('no response from background');
   if (!res.ok) throw new Error(res.error);
-  return res.text;
+  return res.unchanged ? 'unchanged' : { text: res.text, hash: res.hash };
 }
 
 function fileName(): string {
@@ -202,8 +205,21 @@ async function main(): Promise<void> {
   void showSiblings(filesEl, filesToggle);
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
+  // Its hash is what the polls compare against (kept here, as the service worker keeps no state).
+  // Sending the hash of the text shown now lets an unchanged file skip the transfer even then, which
+  // matters above Chrome's 64MiB message limit (it matches when the file is UTF-8 without a BOM).
+  let hash: string;
   try {
-    await fetchSource();
+    const shown = await sha256Hex(new TextEncoder().encode(current)).catch(() => undefined);
+    const probe = await fetchSource(shown);
+    if (probe === 'unchanged') hash = shown!;
+    else {
+      hash = probe.hash;
+      if (probe.text !== current) {
+        current = probe.text;
+        await render(current, true);
+      }
+    }
   } catch (err) {
     status.textContent = t('autoReloadOff', { error: err instanceof Error ? err.message : String(err) });
     status.classList.add('error');
@@ -220,10 +236,11 @@ async function main(): Promise<void> {
     if (document.hidden && ++hiddenTicks % HIDDEN_POLL_EVERY !== 0) return;
     busy = true;
     try {
-      const next = await fetchSource();
-      if (next !== current) {
-        current = next;
-        await render(next, true);
+      const next = await fetchSource(hash);
+      if (next !== 'unchanged') {
+        current = next.text;
+        hash = next.hash;
+        await render(next.text, true);
         status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
         status.classList.remove('error');
         faviconUpdated();
