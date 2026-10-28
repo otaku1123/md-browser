@@ -1,5 +1,6 @@
 import { updateFileAccessBadge } from './file-access-badge';
 import { chooseRoot, folderOf, listMarkdownTree, relativePath } from './dir-listing';
+import { readSelf } from './read-self';
 import { addHiddenDir, normalizeHiddenDirs, removeHiddenDir } from '../core/hidden-dirs';
 import {
   MSG_LIST_SIBLINGS,
@@ -37,10 +38,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse: (r: ReadSelfRes
     sendResponse({ ok: false, error: 'not a Markdown file URL' });
     return false;
   }
-  fetch(url, { cache: 'no-store' })
-    .then((r) => r.text())
-    .then((text) => sendResponse({ ok: true, text }))
-    .catch((err: unknown) => sendResponse({ ok: false, error: String(err) }));
+  void readSelf(fetch, url, typeof msg.known === 'string' ? msg.known : undefined).then(sendResponse);
   return true; // async response
 });
 
