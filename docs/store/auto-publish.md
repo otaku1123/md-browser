@@ -22,7 +22,7 @@
 ```sh
 PROJECT_ID=md-browser-release   # 既存のプロジェクトでもよい
 gcloud projects create "$PROJECT_ID"   # 既存を使う場合は不要
-gcloud services enable chromewebstore.googleapis.com iamcredentials.googleapis.com sts.googleapis.com --project "$PROJECT_ID"
+gcloud services enable chromewebstore.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com --project "$PROJECT_ID"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
 ```
 
@@ -66,6 +66,15 @@ gh variable set CWS_PUBLISHER_ID --body "<パブリッシャー ID>"
 gh variable set CWS_ITEM_ID --body "infhmmggjagaoiiogbjkffelfdgfdkop"
 ```
 
+### 6. Actions の許可
+
+このリポジトリでは、GitHub 公式以外の Action は個別に許可したものしか使えない。`google-github-actions/auth` を許可しておく。
+
+```sh
+gh api -X PUT repos/otaku1123/md-browser/actions/permissions/selected-actions \
+  -F github_owned_allowed=true -F verified_allowed=false -f 'patterns_allowed[]=google-github-actions/auth@*'
+```
+
 ## リリース時の手順
 
 1. リリース PR（`develop` → `main`）をマージする
@@ -85,6 +94,8 @@ gh variable set CWS_ITEM_ID --body "infhmmggjagaoiiogbjkffelfdgfdkop"
 
 | 症状 | 原因と対処 |
 |---|---|
+| プールの作成が `Permission 'iam.workloadIdentityPools.create' denied` で失敗 | IAM API（`iam.googleapis.com`）が有効になっていない。手順 1 の `services enable` に入っているか確認する。プロジェクトを作った直後は、権限の反映を数分待つ |
+| タグを push しても Release ワークフローが `startup_failure` で止まる | リポジトリの Actions 設定で `google-github-actions/auth` が許可されていない（GitHub 公式の Action だけを許可している）。下の「Actions の許可」を確認する。止まったときは、許可したあと `gh workflow run release.yml --ref main -f tag=v<version> -f store=true` で実行し直す |
 | `store` job がスキップされる | `CWS_WIF_PROVIDER` が未設定。手動実行（workflow_dispatch）では `store` にチェックを入れないと動かない |
 | auth ステップが `Permission 'iam.serviceAccounts.getAccessToken' denied` で失敗 | 手順 3 の `add-iam-policy-binding` の member（リポジトリ名やプロジェクト番号）が間違っている。反映に数分かかることもある |
 | アップロードが 401 / 403 で失敗 | 手順 4 でダッシュボードに登録したサービスアカウントと `CWS_SERVICE_ACCOUNT` が違う、または `CWS_PUBLISHER_ID` が違う |
