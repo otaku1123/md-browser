@@ -18,16 +18,49 @@ const SURFACE_LABELS: Record<Surface, string> = {
   'extension-viewer': 'Chrome extension (viewer)',
 };
 
+interface UADataLike {
+  brands?: { brand: string; version: string }[];
+  platform?: string;
+}
+
 /**
- * New-issue URL for one of the issue forms, with the version and where it runs filled in.
+ * "Chrome 140 / macOS" for the bug form. Only the major version and the OS name: Chrome freezes the
+ * rest of the user agent, so finer detail would be wrong rather than helpful.
+ */
+export function browserLabel(
+  nav: { userAgent: string; userAgentData?: UADataLike } = navigator as Navigator & { userAgentData?: UADataLike },
+): string {
+  const ua = nav.userAgent;
+  const brands = nav.userAgentData?.brands ?? [];
+  // Edge and Chrome both list "Chromium" too, so look for the specific brand first.
+  const brand = ['Microsoft Edge', 'Google Chrome', 'Chromium'].map((name) => brands.find((b) => b.brand === name)).find(Boolean);
+  // Edge's and Chrome's strings also say "Chrome" and "Safari": check the more specific tokens first.
+  const fromUa = [/(Edg)\/(\d+)/, /(Firefox)\/(\d+)/, /(Chrome)\/(\d+)/, /(Version)\/(\d+).*Safari/]
+    .map((re) => re.exec(ua))
+    .find(Boolean);
+  const browser = brand
+    ? `${brand.brand.replace(/^(Google|Microsoft) /, '')} ${brand.version}`
+    : fromUa
+      ? `${{ Edg: 'Edge', Version: 'Safari' }[fromUa[1]] ?? fromUa[1]} ${fromUa[2]}`
+      : '';
+  const os =
+    nav.userAgentData?.platform ||
+    (/Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Mac OS X/.test(ua) ? 'macOS' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : '');
+  return [browser, os].filter(Boolean).join(' / ');
+}
+
+/**
+ * New-issue URL for one of the issue forms, with the version, where it runs and any `extra` fields filled in.
  * Nothing about the open document (its name or path) goes into it.
  */
-function issueUrl(template: string, surface: Surface): string {
+function issueUrl(template: string, surface: Surface, extra: Record<string, string> = {}): string {
   const params = new URLSearchParams({ template, version, surface: SURFACE_LABELS[surface] });
+  for (const [key, value] of Object.entries(extra)) if (value) params.set(key, value);
   return `${REPO}/issues/new?${params}`;
 }
 
-export const bugReportUrl = (surface: Surface = currentSurface()) => issueUrl('bug_report.yml', surface);
+export const bugReportUrl = (surface: Surface = currentSurface(), browser = browserLabel()) =>
+  issueUrl('bug_report.yml', surface, { browser });
 export const featureRequestUrl = (surface: Surface = currentSurface()) => issueUrl('feature_request.yml', surface);
 
 /** "Report a bug" and "Ideas & questions" links for the bottom of the settings panel. */
