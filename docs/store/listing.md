@@ -2,6 +2,8 @@
 
 デベロッパー ダッシュボード（https://chrome.google.com/webstore/devconsole ）に入力する内容をまとめたもの。
 
+パッケージのアップロードと審査への提出は、タグを push すると自動で行われる（[auto-publish.md](auto-publish.md)）。このメモは、掲載情報を変えるときと、手動で提出するときに使う。
+
 ## 前提条件
 
 - Chrome ウェブストアのデベロッパー登録が済んでいる（登録料 $5、一度だけ）
@@ -23,7 +25,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.9.0.zip` |
+| アップロードするファイル | `release/md-browser-1.9.1.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）

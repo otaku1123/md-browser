@@ -26,6 +26,7 @@ async function openSampleFolder(page: Page): Promise<void> {
         for (const [rel, b64] of Object.entries(files)) await write(rel, Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
         return root.getDirectoryHandle('sample');
       },
+      __writeFile: write,
       __appendToFile: async (rel: string, text: string) => {
         const old = await (await (await fileHandle(rel, false)).getFile()).text();
         await write(rel, old + text);
@@ -235,6 +236,21 @@ test('opens files from the sidebar and toggles it', async ({ page }) => {
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
   await expect(page.locator('#files')).toBeVisible();
+});
+
+// #109: files added outside show up when the user comes back to the tab, on the same document.
+test('lists the folder again when the user comes back to the tab', async ({ page }) => {
+  await openSampleFolder(page);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await page.evaluate(async () => {
+    await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/added.md', '# Added');
+    window.dispatchEvent(new Event('focus'));
+  });
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
+  await expect(page.locator('#files [data-path="docs/added.md"]')).toBeVisible();
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await page.locator('#files').getByRole('button', { name: 'added.md' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('Added');
 });
 
 test('re-renders when the file changes', async ({ page }) => {
@@ -583,6 +599,23 @@ test('toggles the TOC and keeps the choice across reloads', async ({ page }) => 
   await expect(page.getByRole('button', { name: 'Table of contents' })).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('button', { name: 'Table of contents' }).click();
   await expect(page.locator('.toc')).toBeVisible();
+});
+
+// #111: on narrow screens the TOC sits above the text, so bringing its active entry into view
+// must scroll only the TOC, not pull the page back up while the user scrolls down.
+test('keeps the page where the user scrolled on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 700 });
+  await openSampleFolder(page);
+  await page.evaluate(() => scrollTo(0, 1500));
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => scrollY)).toBe(1500);
+  // The TOC still follows inside its own box.
+  const inBox = await page.locator('.toc').evaluate((toc) => {
+    const box = toc.getBoundingClientRect();
+    const a = toc.querySelector('a.active')!.getBoundingClientRect();
+    return a.top >= box.top && a.bottom <= box.bottom;
+  });
+  expect(inBox).toBe(true);
 });
 
 test('hides the TOC toggle when the document has no headings', async ({ page }) => {

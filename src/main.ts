@@ -15,6 +15,7 @@ import { addHeadingLinks } from './core/heading-link';
 import { enableImageZoom, prepareImageZoom } from './core/image-zoom';
 import { applyMediaSizes, loadMediaDoc, prepareMediaSizes, showMediaSizes } from './core/media-sizes';
 import { mountSkipLink } from './core/skip-link';
+import { onReturn } from './core/on-return';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
 import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
@@ -208,6 +209,30 @@ async function setHidden(dir: string, hide: boolean): Promise<void> {
     await showDoc(same || startDoc(next), { keepScroll: !!same });
   } catch (err) {
     setStatus(errMsg(err), 'error');
+  }
+}
+
+/**
+ * Lists the open folder again (#109), so files added or removed outside show up in the sidebar.
+ * Queued with folder hiding, so neither replaces the other's list. Snapshots of dropped files can't change.
+ */
+function queueRefreshFileList(): void {
+  hiddenQueue = hiddenQueue.then(refreshFileList);
+}
+
+async function refreshFileList(): Promise<void> {
+  const current = ws;
+  if (!current?.watchable || !current.rescan) return;
+  try {
+    const next = await current.rescan(current.hiddenDirs ?? []);
+    const paths = (w: Workspace) => w.docs.map((d) => d.path).join('\n');
+    if (ws !== current || next.docs.length === 0 || paths(next) === paths(current)) return;
+    ws = next;
+    if (currentDoc) currentDoc = next.docs.find((d) => d.path === currentDoc!.path) ?? currentDoc;
+    renderFileTree();
+    if (currentDoc) fileTree.setActive(currentDoc.path);
+  } catch {
+    // The folder is unreadable for now (permission, sync tool): keep the list; polling reports errors.
   }
 }
 
@@ -536,6 +561,7 @@ contentEl.addEventListener('click', (e) => {
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) void poll();
 });
+onReturn(queueRefreshFileList);
 
 let dragDepth = 0;
 window.addEventListener('dragenter', (e) => {
