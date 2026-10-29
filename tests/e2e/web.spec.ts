@@ -26,6 +26,7 @@ async function openSampleFolder(page: Page): Promise<void> {
         for (const [rel, b64] of Object.entries(files)) await write(rel, Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
         return root.getDirectoryHandle('sample');
       },
+      __writeFile: write,
       __appendToFile: async (rel: string, text: string) => {
         const old = await (await (await fileHandle(rel, false)).getFile()).text();
         await write(rel, old + text);
@@ -235,6 +236,21 @@ test('opens files from the sidebar and toggles it', async ({ page }) => {
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
   await expect(page.locator('#files')).toBeVisible();
+});
+
+// #109: files added outside show up when the user comes back to the tab, on the same document.
+test('lists the folder again when the user comes back to the tab', async ({ page }) => {
+  await openSampleFolder(page);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await page.evaluate(async () => {
+    await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/added.md', '# Added');
+    window.dispatchEvent(new Event('focus'));
+  });
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
+  await expect(page.locator('#files [data-path="docs/added.md"]')).toBeVisible();
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await page.locator('#files').getByRole('button', { name: 'added.md' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('Added');
 });
 
 test('re-renders when the file changes', async ({ page }) => {

@@ -9,6 +9,7 @@ import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom, prepareImageZoom } from '../core/image-zoom';
 import { applyMediaSizes, loadMediaDoc, prepareMediaSizes, showMediaSizes } from '../core/media-sizes';
 import { mountSkipLink } from '../core/skip-link';
+import { onReturn } from '../core/on-return';
 import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
 import { mountSourceView } from '../core/source-view';
@@ -63,11 +64,13 @@ async function listSiblings(): Promise<ListSiblingsResponse | undefined> {
   }
 }
 
-/** Lists the Markdown files in this file's folder and below, then offers them in the sidebar. */
+/**
+ * Lists the Markdown files in this file's folder and below, then offers them in the sidebar.
+ * Lists again when the user comes back to the tab, so added or removed files show up (#109).
+ */
 async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement): Promise<void> {
   const res = await listSiblings();
-  // Hidden folders keep the sidebar, so they can always be shown again.
-  if (!res?.ok || (res.paths.length < 2 && res.hidden.length === 0)) return;
+  if (!res?.ok) return;
   // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
   const rootUrl = new URL('../'.repeat(res.current.split('/').length - 1) || './', location.href);
 
@@ -93,7 +96,12 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
   );
   const sidebar = mountFilesSidebar(filesToggle, filesEl);
 
-  function show(list: Extract<ListSiblingsResponse, { ok: true }>): void {
+  type Listing = Extract<ListSiblingsResponse, { ok: true }>;
+  const key = (list: Listing) => JSON.stringify([list.paths, list.hidden, list.truncated]);
+  let shown = '';
+
+  function show(list: Listing): void {
+    shown = key(list);
     tree.render(list.paths, list.hidden);
     if (list.truncated) {
       const note = document.createElement('p');
@@ -102,10 +110,17 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
       filesEl.append(note);
     }
     tree.setActive(list.current); // not listed (e.g. below the depth limit or hidden): nothing is marked
+    // Hidden folders keep the sidebar, so they can always be shown again.
+    sidebar.setAvailable(list.paths.length >= 2 || list.hidden.length > 0);
   }
 
   show(res);
-  sidebar.setAvailable(true);
+  onReturn(() => {
+    busy = busy.then(async () => {
+      const next = await listSiblings();
+      if (next?.ok && key(next) !== shown) show(next);
+    });
+  });
 }
 
 function buildShell(): {

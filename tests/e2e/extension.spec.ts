@@ -355,7 +355,7 @@ test('keeps the file sidebar while folders are hidden, even with one file left',
   }
 });
 
-test('shows no file sidebar for a folder with a single Markdown file', async ({ context }) => {
+test('shows no file sidebar for a single Markdown file, until another one is added', async ({ context }) => {
   const dir = await makeFolder({ 'only.md': '# Only', 'other.txt': 'x' });
   try {
     const page = await context.newPage();
@@ -365,6 +365,11 @@ test('shows no file sidebar for a folder with a single Markdown file', async ({ 
     await page.waitForTimeout(500);
     await expect(page.locator('.files')).toBeHidden();
     await expect(page.getByRole('button', { name: 'ファイル一覧' })).toBeHidden();
+    // #109: a file added later shows up when the user comes back to the tab.
+    await fs.writeFile(path.join(dir, 'added.md'), '# Added');
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.locator('.files .file-tree-file')).toHaveText(['added.md', 'only.md']);
+    await expect(page.locator('.files [aria-current="page"]')).toHaveAttribute('data-path', 'only.md');
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
