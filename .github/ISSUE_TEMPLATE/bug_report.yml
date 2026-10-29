@@ -27,6 +27,7 @@ body:
     id: browser
     attributes:
       label: ブラウザと OS / Browser and OS
+      description: 設定パネルから開くと自動で入ります。OS のバージョンが分かれば書き足してください。 / Filled in from the settings panel; add the OS version if you know it.
       placeholder: Chrome 140 / macOS 15
     validations:
       required: true
