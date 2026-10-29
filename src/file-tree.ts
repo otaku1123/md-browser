@@ -1,4 +1,5 @@
 import { PANEL_RESIZER_CLASS } from './core/panel-resizer';
+import { scrollIntoPanel } from './core/scroll-into-panel';
 import { t } from './i18n';
 
 export interface FileTreeController {
@@ -137,7 +138,7 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
     btn.setAttribute('aria-current', 'page');
     active = btn;
     for (let d = btn.closest('details'); d; d = d.parentElement?.closest('details') ?? null) d.open = true;
-    btn.scrollIntoView?.({ block: 'nearest' });
+    scrollIntoPanel(btn, el);
   }
 
   return {

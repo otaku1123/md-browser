@@ -1,4 +1,5 @@
 import type { TocItem } from './render';
+import { scrollIntoPanel } from './scroll-into-panel';
 
 export interface TocController {
   render(items: TocItem[]): void;
@@ -45,7 +46,7 @@ export function createToc(tocEl: HTMLElement): TocController {
     }
     active ??= links[0];
     for (const link of links) link.classList.toggle('active', link === active);
-    active?.scrollIntoView({ block: 'nearest' });
+    if (active) scrollIntoPanel(active, tocEl);
   }
 
   tocEl.addEventListener('click', (e) => {
