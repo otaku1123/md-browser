@@ -585,6 +585,23 @@ test('toggles the TOC and keeps the choice across reloads', async ({ page }) => 
   await expect(page.locator('.toc')).toBeVisible();
 });
 
+// #111: on narrow screens the TOC sits above the text, so bringing its active entry into view
+// must scroll only the TOC, not pull the page back up while the user scrolls down.
+test('keeps the page where the user scrolled on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 700 });
+  await openSampleFolder(page);
+  await page.evaluate(() => scrollTo(0, 1500));
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => scrollY)).toBe(1500);
+  // The TOC still follows inside its own box.
+  const inBox = await page.locator('.toc').evaluate((toc) => {
+    const box = toc.getBoundingClientRect();
+    const a = toc.querySelector('a.active')!.getBoundingClientRect();
+    return a.top >= box.top && a.bottom <= box.bottom;
+  });
+  expect(inBox).toBe(true);
+});
+
 test('hides the TOC toggle when the document has no headings', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Table of contents' })).toBeHidden();
