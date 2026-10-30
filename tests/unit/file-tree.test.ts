@@ -109,3 +109,87 @@ describe('createFileTree', () => {
     expect(dir('src').open).toBe(false);
   });
 });
+
+describe('keyboard navigation', () => {
+  function mount() {
+    const el = document.createElement('nav');
+    document.body.append(el);
+    const onOpen = vi.fn();
+    // Rows in order: docs, api, ref.md, guide.md, a.md, README.md.
+    const tree = createFileTree(el, onOpen, { onHide: vi.fn(), onUnhide: vi.fn() });
+    tree.render(['README.md', 'docs/guide.md', 'docs/api/ref.md', 'a.md']);
+    const folder = (name: string) => [...el.querySelectorAll<HTMLDetailsElement>('details')].find((d) => d.querySelector('summary')!.textContent === name)!;
+    const file = (path: string) => el.querySelector<HTMLElement>(`button[data-path="${path}"]`)!;
+    const press = (target: HTMLElement, key: string, init: KeyboardEventInit = {}) => {
+      target.focus();
+      const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+      target.dispatchEvent(e);
+      return e;
+    };
+    return { el, onOpen, folder, file, press, focused: () => document.activeElement };
+  }
+
+  it('moves between the visible rows with the arrow keys, Home and End', () => {
+    const { el, folder, file, press, focused } = mount();
+    for (const d of el.querySelectorAll('details')) d.open = true; // folders start collapsed (#122)
+    const docs = folder('docs').querySelector('summary')!;
+    const api = folder('api').querySelector('summary')!;
+    expect(press(docs, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(focused()).toBe(api);
+    press(api, 'ArrowDown');
+    expect(focused()).toBe(file('docs/api/ref.md'));
+    press(file('docs/api/ref.md'), 'ArrowUp');
+    expect(focused()).toBe(api);
+    press(api, 'End');
+    expect(focused()).toBe(file('README.md'));
+    press(file('README.md'), 'ArrowDown'); // the last row stays
+    expect(focused()).toBe(file('README.md'));
+    press(file('README.md'), 'Home');
+    expect(focused()).toBe(docs);
+    // A closed folder's rows are skipped.
+    folder('docs').open = false;
+    press(docs, 'ArrowDown');
+    expect(focused()).toBe(file('a.md'));
+    el.remove();
+  });
+
+  it('expands a folder with Right and enters it, collapses with Left and goes to the parent', () => {
+    const { el, folder, file, press, focused } = mount();
+    for (const d of el.querySelectorAll('details')) d.open = false;
+    const docs = folder('docs').querySelector('summary')!;
+    const api = folder('api').querySelector('summary')!;
+    press(docs, 'ArrowRight');
+    expect(folder('docs').open).toBe(true);
+    expect(focused()).toBe(docs);
+    press(docs, 'ArrowRight');
+    expect(focused()).toBe(api);
+    press(api, 'ArrowRight');
+    press(api, 'ArrowRight');
+    expect(folder('api').open).toBe(true);
+    expect(focused()).toBe(file('docs/api/ref.md'));
+    press(file('docs/api/ref.md'), 'ArrowLeft'); // a file: up to its folder
+    expect(focused()).toBe(api);
+    press(api, 'ArrowLeft');
+    expect(folder('api').open).toBe(false);
+    expect(focused()).toBe(api);
+    press(api, 'ArrowLeft');
+    expect(focused()).toBe(docs);
+    press(docs, 'ArrowLeft');
+    expect(folder('docs').open).toBe(false);
+    expect(press(docs, 'ArrowLeft').defaultPrevented).toBe(true); // top level: nowhere to go, still no scroll
+    expect(focused()).toBe(docs);
+    el.remove();
+  });
+
+  it('leaves other keys, modified keys, files on Right and the hide buttons alone', () => {
+    const { el, folder, file, press, onOpen } = mount();
+    const docs = folder('docs').querySelector('summary')!;
+    expect(press(docs, 'Enter').defaultPrevented).toBe(false);
+    expect(press(docs, 'ArrowDown', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(press(docs, 'ArrowDown', { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(press(file('a.md'), 'ArrowRight').defaultPrevented).toBe(false);
+    expect(press(el.querySelector<HTMLElement>('.file-tree-hide')!, 'ArrowDown').defaultPrevented).toBe(false);
+    expect(onOpen).not.toHaveBeenCalled();
+    el.remove();
+  });
+});

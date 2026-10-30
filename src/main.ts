@@ -15,6 +15,8 @@ import { addHeadingLinks } from './core/heading-link';
 import { enableImageZoom, prepareImageZoom } from './core/image-zoom';
 import { applyMediaSizes, loadMediaDoc, prepareMediaSizes, showMediaSizes } from './core/media-sizes';
 import { mountSkipLink } from './core/skip-link';
+import { mountQuickSwitcher } from './core/quick-switcher';
+import { noteRecentDoc, recentDocs } from './core/recent-docs';
 import { onReturn } from './core/on-return';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
@@ -45,12 +47,18 @@ const filesEl = $<HTMLElement>('files');
 const filesToggle = $<HTMLButtonElement>('toggle-files');
 const overlay = $<HTMLElement>('drop-overlay');
 const toc = createToc(tocEl);
+/** Opens a document of the workspace by path (sidebar, quick switcher). */
+function openPath(path: string): void {
+  const doc = ws?.docs.find((d) => d.path === path);
+  if (doc && doc !== currentDoc) void showDoc(doc, { keepScroll: false });
+}
+
+/** Key for the documents opened recently in this tab: the folder name, like the hidden folders. */
+const recentRoot = (w: Workspace) => w.folder ?? '';
+
 const fileTree = createFileTree(
   filesEl,
-  (path) => {
-    const doc = ws?.docs.find((d) => d.path === path);
-    if (doc && doc !== currentDoc) void showDoc(doc, { keepScroll: false });
-  },
+  openPath,
   { onHide: (dir) => queueSetHidden(dir, true), onUnhide: (dir) => queueSetHidden(dir, false) },
 );
 
@@ -112,6 +120,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
     toc.reset();
     sourceView.reset();
     if (recentHandle) void saveRecent({ handle: recentHandle, docPath: doc.path });
+    noteRecentDoc(recentRoot(workspace), doc.path);
   }
   currentDoc = doc;
   lastStamp = content.stamp;
@@ -523,6 +532,12 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
 mountSkipLink(document.querySelector<HTMLElement>('.toolbar')!);
+mountQuickSwitcher({
+  paths: () => ws?.docs.map((d) => d.path) ?? [],
+  current: () => currentDoc?.path ?? null,
+  recent: () => (ws ? recentDocs(recentRoot(ws)) : []),
+  onOpen: openPath,
+});
 const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl).then(() => applyMediaSizes(contentEl)));

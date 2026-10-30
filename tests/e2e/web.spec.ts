@@ -234,6 +234,35 @@ test('lists recent folders, most recent first, and removes them', async ({ page 
   await expect(page.locator('#recent')).toBeHidden();
 });
 
+test('opens a document with the quick switcher, recent ones first, with the shortcut from the settings', async ({ page }) => {
+  await openSampleFolder(page);
+  const switcher = page.getByRole('dialog', { name: 'Go to file' });
+  await page.keyboard.press('ControlOrMeta+P');
+  await expect(switcher.getByRole('combobox')).toBeFocused();
+  await expect(switcher.getByRole('option').first()).toBeVisible();
+  await expectAccessible(page);
+  await page.keyboard.type('othr');
+  await expect(switcher.getByRole('option')).toHaveText(['other.mddocs']);
+  await page.keyboard.press('Enter');
+  await expect(switcher).toHaveCount(0);
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+
+  // Empty query: the previous document first, so Enter goes back.
+  await page.keyboard.press('ControlOrMeta+P');
+  await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'README.md');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+
+  // Another shortcut from the display settings, shared with the other tabs through storage.
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radiogroup', { name: 'Go to file' }).getByText(/K$/).click();
+  await page.locator('.font-settings-toggle').click();
+  await page.keyboard.press('ControlOrMeta+K');
+  await expect(switcher).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(switcher).toHaveCount(0);
+});
+
 test('follows relative links between documents', async ({ page }) => {
   await openSampleFolder(page);
   await page.getByRole('link', { name: '別のMDファイル' }).click();
@@ -251,6 +280,41 @@ test('opens files from the sidebar and toggles it', async ({ page }) => {
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
   await expect(page.locator('#files')).toBeVisible();
+});
+
+// #123: the arrow keys move through the sidebar like a tree view.
+test('moves through the file sidebar with the keyboard', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  const docs = files.locator('.file-tree summary', { hasText: 'docs' });
+  const docsFolder = docs.locator('..');
+  await page.evaluate(() => document.querySelectorAll<HTMLDetailsElement>('#files details').forEach((d) => (d.open = false)));
+  await docs.focus();
+  await page.keyboard.press('ArrowDown'); // the closed folder's files are skipped
+  await expect(files.locator('[data-path="README.md"]')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowRight'); // opens the folder…
+  await expect(docsFolder).toHaveJSProperty('open', true);
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowRight'); // …then enters it
+  await expect(files.locator('[data-path="docs/other.md"]')).toBeFocused();
+  await page.keyboard.press('ArrowLeft'); // a file: back to its folder
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowLeft'); // closes it
+  await expect(docsFolder).toHaveJSProperty('open', false);
+  await page.keyboard.press('End');
+  await expect(files.locator('[data-path="xss.md"]')).toBeFocused();
+  await page.keyboard.press('Enter'); // a file row opens the document
+  await expect(page.locator('.markdown-body h1')).toHaveText('XSS');
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'xss.md');
+  // xss.md's inline handlers are reported by DOMPurify's DOMParser (see the XSS test); nothing else may be.
+  const violations = await page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations.splice(0));
+  for (const v of violations) expect(v).toMatch(/^script-src-attr inline /);
+  await page.keyboard.press('Home');
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('Enter'); // a folder row toggles, as a <summary> does
+  await expect(docsFolder).toHaveJSProperty('open', true);
 });
 
 // #109: files added outside show up when the user comes back to the tab, on the same document.

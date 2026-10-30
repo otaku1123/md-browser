@@ -97,6 +97,12 @@ const en = {
   feedbackIdeas: 'Ideas & questions',
   scanLimit: 'Scan limit',
   scanLimitHint: 'Entries scanned when opening a folder ({min}–{max}). Changing it rescans the open folder.',
+  quickOpen: 'Go to file',
+  quickOpenPlaceholder: 'Search files by name',
+  quickOpenEmpty: 'No matching files',
+  quickOpenKey: 'Go to file',
+  quickOpenOff: 'Off',
+  quickOpenHint: 'Shortcut for searching the open folder by file name (with two or more files). ⌘/Ctrl+P replaces the print shortcut; print from the browser menu instead.',
 } as const;
 
 type Key = keyof typeof en;
@@ -197,6 +203,12 @@ const ja: Record<Key, string> = {
   feedbackIdeas: '要望・質問',
   scanLimit: '走査上限',
   scanLimitHint: 'フォルダを開くときに調べる件数（{min}〜{max}）。変更すると、開いているフォルダを読み直します。',
+  quickOpen: 'ファイルへ移動',
+  quickOpenPlaceholder: 'ファイル名で検索',
+  quickOpenEmpty: '一致するファイルがありません',
+  quickOpenKey: 'ファイルへ移動',
+  quickOpenOff: 'オフ',
+  quickOpenHint: '開いているフォルダのファイルを名前で探すショートカット（ファイルが 2 件以上のとき）。⌘/Ctrl+P にすると印刷のショートカットの代わりになります。印刷はブラウザのメニューから行えます。',
 };
 
 export const lang: 'ja' | 'en' = (navigator.language || 'en').toLowerCase().startsWith('ja') ? 'ja' : 'en';
