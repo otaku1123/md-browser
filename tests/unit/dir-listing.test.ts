@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseRoot, folderOf, isSkipped, listMarkdownTree, parseListing, relativePath } from '../../src/extension/dir-listing';
+import { chooseRoot, fileUrlBelow, folderOf, isDocPath, isSkipped, listMarkdownTree, parseListing, relativePath } from '../../src/extension/dir-listing';
 
 /** A trimmed-down Chrome file:// directory listing page. */
 function listing(rows: [name: string, isDir: boolean][], withParent = false): string {
@@ -179,5 +179,26 @@ describe('listMarkdownTree', () => {
     const res = await listMarkdownTree(ROOT, fetchText, undefined, ['my src', 'docs/old']);
     expect(res).toEqual({ paths: ['README.md', 'docs/b.md', 'docs/oldies/d.md'], truncated: false });
     expect(fetched).toEqual([ROOT, `${ROOT}docs/`, `${ROOT}docs/oldies/`]);
+  });
+});
+
+describe('isDocPath', () => {
+  it('accepts root-relative Markdown paths as the listing gives them', () => {
+    expect(isDocPath('README.md')).toBe(true);
+    expect(isDocPath('sub dir/deep #1.md')).toBe(true);
+    expect(isDocPath('a/b/c.markdown')).toBe(true);
+  });
+
+  it('rejects anything that could leave the root or name another kind of file', () => {
+    for (const bad of ['../x.md', 'a/../x.md', '/x.md', 'a//x.md', './x.md', 'a/.', '', 'x.md/', 'a\\x.md', '..\\x.md', 'x.txt', 'x.md.png']) {
+      expect(isDocPath(bad), bad).toBe(false);
+    }
+  });
+});
+
+describe('fileUrlBelow', () => {
+  it('encodes each segment, keeping the slashes', () => {
+    expect(fileUrlBelow(ROOT, 'sub dir/deep #1.md')).toBe(`${ROOT}sub%20dir/deep%20%231.md`);
+    expect(relativePath(ROOT, fileUrlBelow(ROOT, 'sub dir/deep #1.md'))).toBe('sub dir/deep #1.md');
   });
 });

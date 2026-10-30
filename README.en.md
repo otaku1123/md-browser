@@ -77,7 +77,7 @@ Expected result: the file is rendered with a table of contents, and "Auto-reload
 ### How it works
 
 - A `file://` page cannot re-read itself because of CORS, so the extension's service worker reads the file and hands it to the page
-- The service worker only reads the `.md` file that the requesting tab itself has open
+- The service worker only reads the `.md` file that the requesting tab itself has open and, for full-text search, `.md` files below the tab's root folder that the page names by a root-relative path (`..` and absolute paths are refused)
 - The file list is read only from the folder of the file the tab first opened and below (from Chrome's folder listing page; never parent folders; up to 4 levels, 500 files and 200 folders). Excluded and user-hidden folders are never listed. Hide / show requests get the same tab check, and the page sends only a path relative to the root
 
 ## Development
