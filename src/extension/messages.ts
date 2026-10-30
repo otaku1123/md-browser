@@ -2,6 +2,8 @@ export const MSG_READ_SELF = 'md-browser:read-self';
 export const MSG_LIST_SIBLINGS = 'md-browser:list-siblings';
 /** Hides (or shows again) a folder of the tab's list: `path` is relative to the tab's root. */
 export const MSG_SET_HIDDEN_DIR = 'md-browser:set-hidden-dir';
+/** Reads a Markdown file below the tab's root by its root-relative path (full-text search). */
+export const MSG_READ_FILE = 'md-browser:read-file';
 
 /** `known` is the hash of the version the page already has; the answer then skips the text. */
 export type ReadSelfMessage = { type: typeof MSG_READ_SELF; known?: string };
@@ -14,3 +16,6 @@ export type ListSiblingsResponse =
   | { ok: false; error: string };
 export type SetHiddenDirMessage = { type: typeof MSG_SET_HIDDEN_DIR; path: string; hidden: boolean };
 export type SetHiddenDirResponse = { ok: true; hidden: string[] } | { ok: false; error: string };
+/** `known` as in ReadSelfMessage: the hash the page has, so an unchanged file sends no text. */
+export type ReadFileMessage = { type: typeof MSG_READ_FILE; path: string; known?: string };
+export type ReadFileResponse = ReadSelfResponse;

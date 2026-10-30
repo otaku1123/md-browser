@@ -74,6 +74,21 @@ export function relativePath(rootUrl: string, fileUrl: string): string {
 }
 
 /**
+ * A root-relative document path a page may ask to read: '/'-separated segments as the listing
+ * gives them, none empty, "." or ".." (so it stays below the root) and none with a backslash
+ * (a separator to Windows), naming a Markdown file.
+ */
+export function isDocPath(path: string): boolean {
+  const segs = path.split('/');
+  return segs.every((s) => s !== '' && s !== '.' && s !== '..' && !s.includes('\\')) && isMarkdownFile(segs[segs.length - 1]);
+}
+
+/** The file:// URL of a root-relative path, each segment percent-encoded (as the sidebar links). */
+export function fileUrlBelow(rootUrl: string, path: string): string {
+  return rootUrl + path.split('/').map(encodeURIComponent).join('/');
+}
+
+/**
  * Breadth-first walk from `rootUrl` (a folder URL ending in '/'), never above it.
  * A failing root listing rejects; failing subfolders are skipped.
  */

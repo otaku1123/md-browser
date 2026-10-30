@@ -451,3 +451,36 @@ test('passes the axe accessibility checks on a file page and the viewer', async 
   await expect(page.locator('.toolbar')).toBeVisible();
   await expectAccessible(page);
 });
+
+// #127: how long the service worker needs to read a folder's documents for full-text search —
+// fetch, SHA-256 and decode of each file, as readSelf does for MSG_READ_FILE. The time is recorded
+// in the report to guide the search design; the bound only catches a large regression.
+test('reads 500 files through the service worker in reasonable time', async ({ context }) => {
+  const body = `# Doc\n\n${'ここは本文です。BLE の再接続シーケンスについて説明します。 '.repeat(30)}\n`; // ~2 KB
+  const files: Record<string, string> = {};
+  for (let i = 0; i < 500; i++) files[`d${i % 10}/doc-${i}.md`] = body;
+  const dir = await makeFolder(files);
+  try {
+    const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    const urls = Object.keys(files).map((rel) => fileUrl(dir, rel));
+    const result = await sw.evaluate(async (urls: string[]) => {
+      const start = performance.now();
+      let chars = 0;
+      const queue = [...urls];
+      async function worker(): Promise<void> {
+        for (let url = queue.shift(); url; url = queue.shift()) {
+          const buf = await (await fetch(url, { cache: 'no-store' })).arrayBuffer();
+          await crypto.subtle.digest('SHA-256', buf);
+          chars += new TextDecoder().decode(buf).length;
+        }
+      }
+      await Promise.all(Array.from({ length: 8 }, worker)); // search-corpus.ts CONCURRENCY
+      return { ms: performance.now() - start, chars };
+    }, urls);
+    test.info().annotations.push({ type: 'perf', description: `500 files (${(500 * body.length) / 1000} K chars) read in the service worker: ${result.ms.toFixed(0)} ms` });
+    expect(result.chars).toBe(500 * body.length);
+    expect(result.ms).toBeLessThan(15_000);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
