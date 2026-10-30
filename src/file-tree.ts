@@ -58,8 +58,10 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
     for (const name of [...node.dirs.keys()].sort(byName)) {
       const li = document.createElement('li');
       li.className = 'file-tree-dir';
+      // Closed by default: a big folder stays short, and only the open document's folders expand
+      // (setActive), so the current place stands out.
       const details = document.createElement('details');
-      details.open = true;
+      details.dataset.dir = `${prefix}${name}`;
       const summary = document.createElement('summary');
       summary.textContent = name;
       details.append(summary, renderDir(node.dirs.get(name)!, `${prefix}${name}/`));
@@ -146,8 +148,11 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
       buttons = new Map();
       active = null;
       hideable = !!opts.onHide && hidden !== null;
+      // The folders the user expanded stay expanded across a re-render (e.g. after hiding one).
+      const expanded = new Set(Array.from(el.querySelectorAll<HTMLDetailsElement>('.file-tree details[open]'), (d) => d.dataset.dir));
       const list = renderDir(buildTree(paths), '');
       list.className = 'file-tree';
+      for (const d of list.querySelectorAll<HTMLDetailsElement>('details')) if (expanded.has(d.dataset.dir)) d.open = true;
       const extra = hidden?.length && opts.onUnhide ? [renderHidden(hidden)] : [];
       // Keep the resize handle (files-sidebar.ts), which lives in the sidebar too.
       el.replaceChildren(list, ...extra, ...el.querySelectorAll(`:scope > .${PANEL_RESIZER_CLASS}`));
