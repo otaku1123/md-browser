@@ -269,6 +269,7 @@ async function main(): Promise<void> {
   enableImageZoom(content);
   const search = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
     corpus: () => searchCorpus,
+    current: () => (currentPath !== null ? { path: currentPath, text: current } : null),
     truncated: () => searchTruncated,
     onOpen: (path, hit, query) => openHit(path, hit, query),
     onClose: () => {

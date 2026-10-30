@@ -61,7 +61,13 @@ describe('mountSearchPanel', () => {
       { path: 'README.md', text: 'ble here\nand BLE there\nＢＬＥ again' },
       { path: 'c.md', text: 'nothing' },
     ]);
-    panel = mountSearchPanel(toolbar, { corpus: () => fake.corpus, truncated: () => truncated, onOpen, onClose });
+    panel = mountSearchPanel(toolbar, {
+      corpus: () => fake.corpus,
+      current: () => fake.corpus.docs().find((d) => d.path === 'README.md') ?? null,
+      truncated: () => truncated,
+      onOpen,
+      onClose,
+    });
   });
 
   afterEach(() => {
@@ -115,6 +121,8 @@ describe('mountSearchPanel', () => {
 
     first.click();
     expect(onOpen).toHaveBeenCalledWith('README.md', expect.objectContaining({ line: 1 }), 'ble');
+    expect(first.getAttribute('aria-current')).toBe('true');
+    expect(status()).toBe('5 matches in 2 files · 1 / 5');
     expect(panelEl().hidden).toBe(false); // stays open to browse the rest
 
     type('zzz');
@@ -202,6 +210,54 @@ describe('mountSearchPanel', () => {
     document.querySelector<HTMLButtonElement>('.search-panel-close')!.click();
     expect(panelEl().hidden).toBe(true);
     expect(document.activeElement).toBe(toolbar.querySelector('.search-toggle'));
+  });
+
+  it('searches only the shown document in the "this file" scope, without reading the folder', () => {
+    panel.setAvailable(true);
+    panel.open();
+    const scopeButton = (name: string) => Array.from(panelEl().querySelectorAll<HTMLButtonElement>('.search-scope button')).find((b) => b.textContent === name)!;
+    expect(scopeButton('Folder').getAttribute('aria-pressed')).toBe('true');
+    scopeButton('This file').click();
+    expect(scopeButton('This file').getAttribute('aria-pressed')).toBe('true');
+    type('ble');
+    // The folder is still being read (never finished here), yet the shown file's matches are there.
+    expect(status()).toBe('3 matches in 1 files');
+    expect(hits().map((h) => h.dataset.path)).toEqual(['README.md', 'README.md', 'README.md']);
+    truncated = true;
+    type('ble ');
+    expect(document.querySelector<HTMLElement>('.search-panel-note')!.hidden).toBe(true); // the listing's limit is beside the point
+    panel.close();
+    panel.open(); // the scope stays; no read for it
+    expect(fake.corpus.load).toHaveBeenCalledTimes(1);
+    expect(hits()).toHaveLength(3);
+  });
+
+  it('steps through the matches with Enter / Shift+Enter and the buttons, around the ends', async () => {
+    panel.setAvailable(true);
+    panel.open();
+    fake.finish();
+    await vi.advanceTimersByTimeAsync(0);
+    type('ble');
+    const opened = () => onOpen.mock.calls.map(([path, hit]) => `${path}:${hit.line}`);
+    press(input(), { key: 'Enter' });
+    expect(opened()).toEqual(['README.md:1']);
+    expect(status()).toBe('5 matches in 2 files · 1 / 5');
+    press(input(), { key: 'Enter' });
+    press(input(), { key: 'Enter', shiftKey: true });
+    expect(opened().slice(1)).toEqual(['README.md:2', 'README.md:1']);
+    press(input(), { key: 'Enter', shiftKey: true }); // before the first: the last, in the other file
+    expect(opened().at(-1)).toBe('docs/a.md:6');
+    expect(status()).toBe('5 matches in 2 files · 5 / 5');
+    expect(hits().find((h) => h.getAttribute('aria-current') === 'true')?.dataset.line).toBe('6');
+    panelEl().querySelector<HTMLButtonElement>('.search-step[aria-label="Next match (Enter)"]')!.click();
+    expect(opened().at(-1)).toBe('README.md:1'); // around the end
+    panelEl().querySelector<HTMLButtonElement>('.search-step[aria-label="Previous match (Shift+Enter)"]')!.click();
+    expect(opened().at(-1)).toBe('docs/a.md:6');
+    press(input(), { key: 'Enter', isComposing: true }); // an IME confirming text
+    expect(opened()).toHaveLength(6);
+    type('zzz');
+    press(input(), { key: 'Enter' }); // nothing to step to
+    expect(opened()).toHaveLength(6);
   });
 
   it('reopens with a given query without taking the focus (after a file:// page load)', async () => {

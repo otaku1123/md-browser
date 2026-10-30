@@ -75,6 +75,8 @@ let searchTerms: string[] = [];
 let jumpLine: number | null = null;
 let currentDoc: DocEntry | null = null;
 let lastStamp = '';
+/** The shown document's source, for the search panel's "this file" scope. */
+let lastText = '';
 let renderSeq = 0;
 let releaseAssets: () => void = () => {};
 let pollTimer: number | undefined;
@@ -135,6 +137,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
   }
   currentDoc = doc;
   lastStamp = content.stamp;
+  lastText = content.text;
   corpus?.put(doc.path, content.text, content.stamp);
   sourceView.setSource(content.text);
   toc.render(tocItems);
@@ -566,6 +569,7 @@ function openHit(path: string, hit: SearchHit, query: string): void {
 
 const searchPanel = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
   corpus: () => corpus,
+  current: () => (currentDoc ? { path: currentDoc.path, text: lastText } : null),
   truncated: () => !!ws?.truncatedAt,
   onOpen: openHit,
   onClose: () => {

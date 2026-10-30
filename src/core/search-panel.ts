@@ -5,11 +5,15 @@
 // opens; every keystroke then searches them in memory (search.ts).
 import { t } from '../i18n';
 import { searchDocs, type DocHits, type SearchHit } from './search';
-import type { SearchCorpus } from './search-corpus';
+import type { CorpusDoc, SearchCorpus } from './search-corpus';
+
+export type SearchScope = 'folder' | 'file';
 
 export interface SearchPanelOptions {
   /** null until a folder (or a file:// listing) is there to search. */
   corpus(): SearchCorpus | null;
+  /** The document shown, for the "this file" scope: searched without reading the folder. */
+  current(): CorpusDoc | null;
   /** The listing stopped at a limit, so the search misses some files. */
   truncated(): boolean;
   /** A match was chosen; `query` is the text it was found with (its terms are highlighted). */
@@ -68,6 +72,11 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
   let loaded = false;
   let gen = 0;
   let timer: number | undefined;
+  let scope: SearchScope = 'folder';
+  /** The matches in the order listed, across files: what Next / Previous step through. */
+  let flat: { path: string; hit: SearchHit }[] = [];
+  let cursor = -1;
+  let statusBase = '';
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -106,6 +115,38 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
   close.setAttribute('aria-label', t('searchClose'));
   head.append(input, close);
 
+  // Scope (folder / this file) and Next / Previous.
+  const tools = document.createElement('div');
+  tools.className = 'search-panel-tools';
+  const scopeGroup = document.createElement('div');
+  scopeGroup.className = 'search-scope';
+  scopeGroup.setAttribute('role', 'group');
+  scopeGroup.setAttribute('aria-label', t('searchScope'));
+  const scopeButtons = new Map<SearchScope, HTMLButtonElement>();
+  for (const [value, label] of [
+    ['folder', t('searchScopeFolder')],
+    ['file', t('searchScopeFile')],
+  ] as const) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.setAttribute('aria-pressed', String(value === scope));
+    b.addEventListener('click', () => setScope(value));
+    scopeButtons.set(value, b);
+    scopeGroup.append(b);
+  }
+  const stepButton = (label: string, glyph: string, delta: 1 | -1) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'search-step';
+    b.textContent = glyph;
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', () => step(delta));
+    return b;
+  };
+  tools.append(scopeGroup, stepButton(t('searchPrev'), '↑', -1), stepButton(t('searchNext'), '↓', 1));
+
   const status = document.createElement('p');
   status.className = 'search-panel-status';
   status.setAttribute('role', 'status');
@@ -114,13 +155,48 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
   note.hidden = true;
   const results = document.createElement('div');
   results.className = 'search-panel-results';
-  panel.append(head, status, note, results);
+  panel.append(head, tools, status, note, results);
   document.body.append(panel);
 
   function clearResults(): void {
     results.replaceChildren();
     status.textContent = '';
+    statusBase = '';
     note.hidden = true;
+    flat = [];
+    cursor = -1;
+  }
+
+  function showStatus(): void {
+    status.textContent = cursor < 0 ? statusBase : `${statusBase} · ${t('searchPosition', { n: cursor + 1, total: flat.length })}`;
+  }
+
+  /** Makes match `i` the current one: marked in the list, and opened on the page. */
+  function select(i: number): void {
+    cursor = i;
+    const { path, hit } = flat[i];
+    for (const el of results.querySelectorAll('.search-hit[aria-current]')) el.removeAttribute('aria-current');
+    const row = results.querySelector<HTMLElement>(`.search-hit[data-path="${CSS.escape(path)}"][data-line="${hit.line}"]`);
+    row?.setAttribute('aria-current', 'true');
+    row?.scrollIntoView?.({ block: 'nearest' });
+    showStatus();
+    opts.onOpen(path, hit, input.value);
+  }
+
+  /** Next (1) or previous (-1) match, around the ends; from none, the first or the last. */
+  function step(delta: 1 | -1): void {
+    const n = flat.length;
+    if (!n) return;
+    select(cursor < 0 ? (delta > 0 ? 0 : n - 1) : (cursor + delta + n) % n);
+  }
+
+  function setScope(next: SearchScope): void {
+    if (next === scope) return;
+    scope = next;
+    for (const [value, b] of scopeButtons) b.setAttribute('aria-pressed', String(value === scope));
+    // The folder is read the first time it is searched; the shown file needs no reading.
+    if (scope === 'folder' && !loaded && !loading) load();
+    else runSearch();
   }
 
   function hitButton(doc: DocHits, hit: SearchHit): HTMLButtonElement {
@@ -151,7 +227,7 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
     text.className = 'search-hit-text';
     text.append(...marked(hit.excerpt, hit.ranges));
     btn.append(meta, text);
-    btn.addEventListener('click', () => opts.onOpen(doc.path, hit, input.value));
+    btn.addEventListener('click', () => select(flat.findIndex((f) => f.path === doc.path && f.hit === hit)));
     return btn;
   }
 
@@ -196,16 +272,30 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
   }
 
   function runSearch(): void {
-    const corpus = opts.corpus();
     const query = input.value;
-    if (!corpus || !loaded || !query.trim()) {
-      if (loaded || !query.trim()) clearResults();
+    if (!query.trim()) {
+      clearResults();
       return;
     }
-    const result = searchDocs(corpus.docs(), query);
+    let docs: CorpusDoc[];
+    if (scope === 'file') {
+      const current = opts.current();
+      docs = current ? [current] : [];
+    } else {
+      const corpus = opts.corpus();
+      if (!corpus || !loaded) return; // still reading: the status says so
+      docs = corpus.docs();
+    }
+    const result = searchDocs(docs, query);
+    flat = result.docs.flatMap((d) => d.hits.map((hit) => ({ path: d.path, hit })));
+    cursor = -1;
     const hits = result.docs.reduce((n, d) => n + d.total, 0);
-    status.textContent = result.docs.length ? t('searchCount', { hits, files: result.docs.length }) : t('searchNone');
-    const notes = [opts.truncated() ? t('searchTruncated') : '', result.skipped.length ? t('searchSkipped', { count: result.skipped.length }) : ''].filter(Boolean);
+    statusBase = result.docs.length ? t('searchCount', { hits, files: result.docs.length }) : t('searchNone');
+    showStatus();
+    const notes = [
+      scope === 'folder' && opts.truncated() ? t('searchTruncated') : '',
+      result.skipped.length ? t('searchSkipped', { count: result.skipped.length }) : '',
+    ].filter(Boolean);
     note.textContent = notes.join(' ');
     note.hidden = notes.length === 0;
     results.replaceChildren(...result.docs.map(fileSection));
@@ -244,7 +334,8 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
       input.focus();
       input.select();
     }
-    load();
+    if (scope === 'folder') load();
+    else runSearch();
   }
 
   function closePanel(): void {
@@ -275,6 +366,12 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
     if (e.key === 'Escape') {
       e.preventDefault();
       closePanel();
+      return;
+    }
+    // Enter / Shift+Enter in the field: next / previous match, as in the browser's find bar.
+    if (e.key === 'Enter' && e.target === input && !e.isComposing) {
+      e.preventDefault();
+      step(e.shiftKey ? -1 : 1);
       return;
     }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -317,7 +414,7 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
       loaded = false;
       clearResults();
       if (!next) closePanel();
-      else if (!panel.hidden) load();
+      else if (!panel.hidden) scope === 'folder' ? load() : runSearch();
     },
   };
 }
