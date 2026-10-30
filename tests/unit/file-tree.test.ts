@@ -26,9 +26,15 @@ describe('createFileTree', () => {
     expect(onOpen).toHaveBeenCalledWith('docs/guide.md');
   });
 
+  it('starts with every folder collapsed', () => {
+    const { el } = setup();
+    const dirs = [...el.querySelectorAll<HTMLDetailsElement>('details')];
+    expect(dirs.map((d) => d.dataset.dir)).toEqual(['docs', 'docs/api']);
+    expect(dirs.some((d) => d.open)).toBe(false);
+  });
+
   it('marks the active file and expands its folders', () => {
     const { el, tree } = setup();
-    for (const d of el.querySelectorAll('details')) d.open = false;
     tree.setActive('docs/api/ref.md');
     const btn = el.querySelector('button[data-path="docs/api/ref.md"]')!;
     expect(btn.getAttribute('aria-current')).toBe('page');
@@ -89,6 +95,19 @@ describe('createFileTree', () => {
     expect(el.querySelector('[aria-current="page"]')!.getAttribute('data-path')).toBe('a.md');
     expect(el.lastElementChild).toBe(handle);
   });
+
+  it('keeps the folders the user expanded across a re-render', () => {
+    const el = document.createElement('nav');
+    const tree = createFileTree(el, vi.fn(), { onHide: vi.fn(), onUnhide: vi.fn() });
+    tree.render(['a.md', 'docs/b.md', 'docs/api/c.md', 'src/d.md', 'old/e.md']);
+    const dir = (path: string) => el.querySelector<HTMLDetailsElement>(`details[data-dir="${path}"]`)!;
+    dir('docs').open = true;
+    dir('docs/api').open = true;
+    tree.render(['a.md', 'docs/b.md', 'docs/api/c.md', 'src/d.md'], ['old']);
+    expect(dir('docs').open).toBe(true);
+    expect(dir('docs/api').open).toBe(true);
+    expect(dir('src').open).toBe(false);
+  });
 });
 
 describe('keyboard navigation', () => {
@@ -112,6 +131,7 @@ describe('keyboard navigation', () => {
 
   it('moves between the visible rows with the arrow keys, Home and End', () => {
     const { el, folder, file, press, focused } = mount();
+    for (const d of el.querySelectorAll('details')) d.open = true; // folders start collapsed (#122)
     const docs = folder('docs').querySelector('summary')!;
     const api = folder('api').querySelector('summary')!;
     expect(press(docs, 'ArrowDown').defaultPrevented).toBe(true);

@@ -38,6 +38,17 @@ async function openSampleFolder(page: Page): Promise<void> {
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
 }
 
+/** Clicks a document in the sidebar. Folders start collapsed (#122), so its folders are opened first. */
+async function openFromSidebar(page: Page, path: string): Promise<void> {
+  const files = page.locator('#files');
+  const segs = path.split('/');
+  for (let i = 1; i < segs.length; i++) {
+    const details = files.locator(`details[data-dir="${segs.slice(0, i).join('/')}"]`);
+    if (!(await details.evaluate((d: HTMLDetailsElement) => d.open))) await details.locator(':scope > summary').click();
+  }
+  await files.locator(`[data-path="${path}"]`).click();
+}
+
 // The build ships a Content-Security-Policy (vite.config.ts); every test must run without violating it.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -92,6 +103,7 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('img.img-missing')).toHaveCount(1);
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
   await expect(page.locator('#files summary')).toHaveText(['docs']);
+  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', false); // folders start collapsed (#122)
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
   await expect(page.locator('#workspace-name')).toHaveText('sample/');
 });
@@ -127,19 +139,22 @@ test('opens another folder in the same tab', async ({ page }) => {
 
 test('reopens the last folder and document after a reload', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files [data-path="docs/other.md"]').click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   await page.waitForTimeout(300); // the remembered document is saved asynchronously
   await page.reload();
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  // The open document's folder is expanded, so the marked file is in view.
+  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', true);
+  await expect(page.locator('#files [data-path="docs/other.md"]')).toBeVisible();
   await expect(page.locator('.welcome')).toHaveCount(0);
 });
 
 test('hides a folder from the sidebar, remembers it, and shows it again', async ({ page }) => {
   await openSampleFolder(page);
   const files = page.locator('#files');
-  await files.locator('[data-path="docs/other.md"]').click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
   // Hiding the open document's folder falls back to the README.
   await files.getByRole('button', { name: 'Hide "docs" from the list' }).click();
@@ -185,7 +200,7 @@ test('offers a button when the permission must be asked again', async ({ page })
 
 test('lists recent folders, most recent first, and removes them', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files [data-path="docs/other.md"]').click();
+  await openFromSidebar(page, 'docs/other.md');
   await page.waitForTimeout(300);
   // A second folder, opened later, goes on top.
   await page.evaluate(() => {
@@ -256,7 +271,7 @@ test('follows relative links between documents', async ({ page }) => {
 
 test('opens files from the sidebar and toggles it', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files').getByRole('button', { name: 'other.md' }).click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   const toggle = page.getByRole('button', { name: 'Files' });
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -306,6 +321,7 @@ test('moves through the file sidebar with the keyboard', async ({ page }) => {
 test('lists the folder again when the user comes back to the tab', async ({ page }) => {
   await openSampleFolder(page);
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await page.locator('#files details[data-dir="docs"] summary').click(); // expanded by the user: stays so after the re-render
   await page.evaluate(async () => {
     await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/added.md', '# Added');
     window.dispatchEvent(new Event('focus'));
@@ -748,7 +764,7 @@ test('resizes the file list, keeps the handle across documents, and resets on do
   expect(await page.evaluate(() => localStorage.getItem('md-browser:files-sidebar'))).toBe('{"open":true,"width":160}');
 
   // Opening another document re-renders the list; the handle stays.
-  await files.locator('[data-path="docs/other.md"]').click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   await expect(handle).toBeVisible();
   await handle.dblclick();
@@ -892,7 +908,7 @@ test('switches to the Markdown source and back, and starts each document in the 
   // Another document opens in the preview.
   await page.keyboard.press('ControlOrMeta+Shift+M');
   await expect(source).toBeVisible();
-  await page.locator('#files').getByRole('button', { name: 'other.md' }).click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
   await expect(source).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');

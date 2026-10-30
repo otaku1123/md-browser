@@ -264,12 +264,17 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
     await expect(sidebar.locator('summary')).toHaveText(['sub dir']);
     await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
 
+    // Folders start collapsed (#122); the one holding the open document is expanded.
+    const subDir = sidebar.locator('details[data-dir="sub dir"]');
+    await expect(subDir).toHaveJSProperty('open', false);
+    await subDir.locator('summary').click();
     await sidebar.getByRole('button', { name: 'deep #1.md' }).click();
     await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
     await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
     // The tab keeps its root: same list, with the subfolder file active.
     await expect(sidebar.locator('.file-tree-file')).toHaveText(['deep #1.md', 'notes.md', 'README.md']);
     await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'sub dir/deep #1.md');
+    await expect(subDir).toHaveJSProperty('open', true);
     // Links resolve against the root, not the subfolder.
     await sidebar.getByRole('button', { name: 'notes.md' }).click();
     await expect(page).toHaveURL(/\/notes\.md$/);
@@ -339,6 +344,7 @@ test('hides folders from the file sidebar per root folder, and shows them again'
     const sidebar = page.locator('.files');
     await expect(sidebar.locator('.file-tree-file')).toHaveText(['a.md', 'b.md', 'notes.md', 'README.md']);
 
+    await sidebar.locator('details[data-dir="src"] > summary').click(); // folders start collapsed; "src/gen" is inside
     await sidebar.getByRole('button', { name: '「src/gen」を一覧から隠す' }).click();
     await expect(sidebar.locator('.file-tree-file')).toHaveText(['b.md', 'notes.md', 'README.md']);
     await expect(sidebar.locator('.files-hidden summary')).toHaveText('非表示のフォルダ（1）');
