@@ -437,6 +437,56 @@ body {
   cursor: zoom-out;
 }
 .image-zoom:focus { outline: none; }
+
+/* ---- quick file switcher (quick-switcher.ts) ---- */
+.quick-switcher {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 16px 16px;
+  background: rgba(0, 0, 0, 0.3);
+}
+.quick-switcher-dialog {
+  width: min(640px, 100%);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.quick-switcher-input {
+  margin: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.quick-switcher-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.quick-switcher-list { list-style: none; margin: 0; padding: 0 0 8px; overflow-y: auto; }
+.quick-switcher-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.quick-switcher-list li:hover { background: var(--bg-soft); }
+.quick-switcher-list li[aria-selected="true"] { background: var(--accent-soft); }
+.quick-switcher-name { flex-shrink: 0; }
+.quick-switcher-list li.current .quick-switcher-name { font-weight: 600; }
+.quick-switcher-dir { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--fg-muted); font-size: 0.85em; }
+.quick-switcher mark { background: none; color: var(--accent); font-weight: 600; }
+.quick-switcher-empty { margin: 0; padding: 8px 16px 12px; color: var(--fg-muted); }
 .image-zoom img { max-width: none; max-height: none; background: #fff; }
 /* Diagrams scale up to fit the window; the svg viewBox keeps them sharp. */
 .image-zoom svg.diagram-zoom-svg {
@@ -805,8 +855,10 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
 .choice-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .choice-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .font-settings-hint { margin: 0 0 10px; font-size: 12px; color: var(--fg-muted); }
-/* Not a display setting (and not reset with them): set apart from the rows above. */
+/* Not display settings (and not reset with them): set apart from the rows above. */
+.quick-open-setting,
 .scan-limit-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.quick-open-setting .font-settings-hint { margin-bottom: 0; }
 .scan-limit-setting .font-settings-hint { margin-bottom: 0; }
 .feedback-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; }
 .feedback-links a { color: var(--accent); }
@@ -833,6 +885,7 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
   .panel-resizer,
   .drop-overlay,
   .image-zoom,
+  .quick-switcher,
   .copy-button,
   .media-size,
   .heading-link { display: none !important; }

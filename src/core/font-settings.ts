@@ -1,5 +1,5 @@
 // Display settings panel (gear button): theme, text size, content width, image size, and fonts for the
-// document body and code, plus the folder scan limit in the viewer. Fonts are referenced by name (installed on the user's computer); unknown names fall back
+// document body and code, the quick switcher's shortcut, plus the folder scan limit in the viewer. Fonts are referenced by name (installed on the user's computer); unknown names fall back
 // to the default stack.
 import { t } from '../i18n';
 import { createSettingsStore } from './settings-store';
@@ -7,6 +7,7 @@ import { normalizeScanLimit, scanLimitStore, SCAN_LIMIT_MAX, SCAN_LIMIT_MIN } fr
 import { applyTheme, normalizeTheme, type ThemePreference } from './theme';
 import { setGlobalMediaScale } from './media-sizes';
 import { feedbackLinks } from './feedback';
+import { QUICK_OPEN_KEYS, quickOpenKeyLabel, quickOpenKeyStore, type QuickOpenKey } from './quick-open-key';
 
 // Values for the document only: the toolbar and TOC keep their size.
 const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
@@ -130,6 +131,25 @@ function choiceRow<V extends string>(
   return { row, set: (value) => void (inputs.get(value)!.checked = true) };
 }
 
+/** The quick file switcher's shortcut (quick-switcher.ts); saved at once, shared by every tab. */
+function quickOpenKeyRow(id: string): HTMLElement {
+  const keys = quickOpenKeyStore();
+  const labels = Object.fromEntries(QUICK_OPEN_KEYS.map((k) => [k, k === 'off' ? t('quickOpenOff') : quickOpenKeyLabel(k)])) as Record<
+    QuickOpenKey,
+    string
+  >;
+  const choice = choiceRow<QuickOpenKey>(`${id}-quick-open`, t('quickOpenKey'), labels, (k) => void keys.save(k));
+  const section = document.createElement('div');
+  section.className = 'quick-open-setting';
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('quickOpenHint');
+  section.append(choice.row, hint);
+  void keys.load().then(choice.set);
+  keys.onChange(choice.set);
+  return section;
+}
+
 /** A number field for the folder scan limit; saved when committed (blur / Enter), clamped to range. */
 function scanLimitRow(id: string, onChange: (limit: number) => void): HTMLElement {
   const limits = scanLimitStore();
@@ -251,7 +271,7 @@ export function mountFontSettings(
     update({ ...EMPTY });
     syncInputs(true);
   });
-  panel.append(hint, reset);
+  panel.append(hint, reset, quickOpenKeyRow(id));
   // Only the viewer opens folders; the file:// page shows a single document.
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
   panel.append(feedbackLinks());

@@ -16,6 +16,8 @@ import { mountSourceView } from '../core/source-view';
 import { mountFontSettings } from '../core/font-settings';
 import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
 import { createFileTree } from '../file-tree';
+import { mountQuickSwitcher } from '../core/quick-switcher';
+import { noteRecentDoc, recentDocs } from '../core/recent-docs';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
 import { sha256Hex } from './read-self';
@@ -86,21 +88,24 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
     });
   };
 
-  const tree = createFileTree(
-    filesEl,
-    (path) => {
-      // Paths are relative to the root; encode each segment so names like "a#b.md" survive.
-      location.href = new URL(path.split('/').map(encodeURIComponent).join('/'), rootUrl).href;
-    },
-    { onHide: (dir) => setHidden(dir, true), onUnhide: (dir) => setHidden(dir, false) },
-  );
+  // Paths are relative to the root; encode each segment so names like "a#b.md" survive.
+  const openPath = (path: string) => {
+    location.href = new URL(path.split('/').map(encodeURIComponent).join('/'), rootUrl).href;
+  };
+  const tree = createFileTree(filesEl, openPath, {
+    onHide: (dir) => setHidden(dir, true),
+    onUnhide: (dir) => setHidden(dir, false),
+  });
   const sidebar = mountFilesSidebar(filesToggle, filesEl);
 
   type Listing = Extract<ListSiblingsResponse, { ok: true }>;
   const key = (list: Listing) => JSON.stringify([list.paths, list.hidden, list.truncated]);
   let shown = '';
+  /** The latest listing, for the quick switcher. */
+  let listed: Listing = res;
 
   function show(list: Listing): void {
+    listed = list;
     shown = key(list);
     tree.render(list.paths, list.hidden);
     if (list.truncated) {
@@ -115,6 +120,13 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
   }
 
   show(res);
+  noteRecentDoc(rootUrl.href, res.current);
+  mountQuickSwitcher({
+    paths: () => listed.paths,
+    current: () => listed.current,
+    recent: () => recentDocs(rootUrl.href),
+    onOpen: openPath,
+  });
   onReturn(() => {
     busy = busy.then(async () => {
       const next = await listSiblings();

@@ -219,6 +219,35 @@ test('lists recent folders, most recent first, and removes them', async ({ page 
   await expect(page.locator('#recent')).toBeHidden();
 });
 
+test('opens a document with the quick switcher, recent ones first, with the shortcut from the settings', async ({ page }) => {
+  await openSampleFolder(page);
+  const switcher = page.getByRole('dialog', { name: 'Go to file' });
+  await page.keyboard.press('ControlOrMeta+P');
+  await expect(switcher.getByRole('combobox')).toBeFocused();
+  await expect(switcher.getByRole('option').first()).toBeVisible();
+  await expectAccessible(page);
+  await page.keyboard.type('othr');
+  await expect(switcher.getByRole('option')).toHaveText(['other.mddocs']);
+  await page.keyboard.press('Enter');
+  await expect(switcher).toHaveCount(0);
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+
+  // Empty query: the previous document first, so Enter goes back.
+  await page.keyboard.press('ControlOrMeta+P');
+  await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'README.md');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+
+  // Another shortcut from the display settings, shared with the other tabs through storage.
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radiogroup', { name: 'Go to file' }).getByText(/K$/).click();
+  await page.locator('.font-settings-toggle').click();
+  await page.keyboard.press('ControlOrMeta+K');
+  await expect(switcher).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(switcher).toHaveCount(0);
+});
+
 test('follows relative links between documents', async ({ page }) => {
   await openSampleFolder(page);
   await page.getByRole('link', { name: '別のMDファイル' }).click();

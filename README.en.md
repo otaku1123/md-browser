@@ -20,6 +20,7 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 - Emoji shortcodes (`:smile:`, `:+1:`; like GitHub, not inside code and not emoticons such as `:)`)
 - Copy buttons on code blocks
 - Markdown source view (the `<>` toolbar button, or Ctrl+Shift+M / ⌘+Shift+M on Mac) with line numbers, highlighting and copy-all; follows auto-reload
+- Quick file switcher (Ctrl+P / ⌘+P on Mac): fuzzy-find a Markdown file of the open folder by name (↑↓, Enter, Esc); with an empty query, documents recently opened in the tab come first. Active only with two or more files, so a single file still prints; the shortcut can be changed to ⌘/Ctrl+K, ⌘/Ctrl+Shift+P or turned off in the display settings
 - Hover a heading to show 🔗; click it to copy a link to that heading
 - Table of contents sidebar with scroll-synced highlighting; toggle it from the toolbar and resize it by dragging, with the arrow keys, or double-click to reset (saved and shared across tabs)
 - Mermaid diagrams (lazy-loaded); click to enlarge, save as SVG / PNG
