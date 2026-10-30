@@ -519,6 +519,11 @@ test('searches the text of the files below the root through the service worker',
     await inCode.click();
     await expect(page).toHaveURL(/\/docs\/a\.md$/);
     await expect(page.locator('.markdown-body pre [data-line="5"]')).toBeInViewport();
+    await expect(panel.locator('.search-panel-status')).toHaveText('2 ファイルに 3 件 · 2 / 3'); // docs/a.md is listed first (more matches)
+    // "This file" needs nothing from the service worker.
+    await panel.getByRole('button', { name: 'このファイル', exact: true }).click();
+    await expect(panel.locator('.search-panel-status')).toHaveText('1 ファイルに 2 件');
+    await expect(panel.locator('.search-file-path')).toHaveText(['docs/a.md2']);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

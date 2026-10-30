@@ -1080,6 +1080,23 @@ test('searches the text of every file in the folder from a panel', async ({ page
   await expect(page.locator('.markdown-body p', { hasText: 'もう一つのファイル' })).toBeVisible();
   expect((await highlights()).all).toBe(marked.all + 1);
 
+  // "This file": only the shown document, and Enter / Shift+Enter walk its matches.
+  await panel.getByRole('button', { name: 'This file', exact: true }).click();
+  await expect(panel.locator('.search-panel-status')).toHaveText(/^\d+ matches in 1 files$/);
+  await expect(panel.locator('.search-file-path')).toHaveCount(1);
+  await input.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.locator('.search-panel-status')).toHaveText(/ · 1 \/ \d+$/);
+  await expect(panel.locator('.search-hit[aria-current="true"]')).toHaveAttribute('data-line', /^\d+$/);
+  const firstLine = await panel.locator('.search-hit[aria-current="true"]').getAttribute('data-line');
+  await page.keyboard.press('Enter');
+  await expect(panel.locator('.search-panel-status')).toHaveText(/ · 2 \/ \d+$/);
+  await expect(panel.locator('.search-hit[aria-current="true"]')).not.toHaveAttribute('data-line', firstLine!);
+  expect((await highlights()).current).toBeGreaterThan(0);
+  await page.keyboard.press('Shift+Enter');
+  await expect(panel.locator('.search-panel-status')).toHaveText(/ · 1 \/ \d+$/);
+  await expectAccessible(page);
+
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden();
   await expect(page.getByRole('button', { name: 'Search in folder' })).toHaveAttribute('aria-expanded', 'false');

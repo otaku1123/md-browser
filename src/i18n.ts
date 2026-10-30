@@ -114,6 +114,12 @@ const en = {
   searchMore: 'Show {count} more',
   searchInCode: 'code',
   searchHit: '{path}, line {line}',
+  searchScope: 'Search in',
+  searchScopeFolder: 'Folder',
+  searchScopeFile: 'This file',
+  searchNext: 'Next match (Enter)',
+  searchPrev: 'Previous match (Shift+Enter)',
+  searchPosition: '{n} / {total}',
 } as const;
 
 type Key = keyof typeof en;
@@ -231,6 +237,12 @@ const ja: Record<Key, string> = {
   searchMore: 'さらに {count} 件',
   searchInCode: 'コード',
   searchHit: '{path} の {line} 行目',
+  searchScope: '検索範囲',
+  searchScopeFolder: 'フォルダ',
+  searchScopeFile: 'このファイル',
+  searchNext: '次へ（Enter）',
+  searchPrev: '前へ（Shift+Enter）',
+  searchPosition: '{n} / {total}',
 };
 
 export const lang: 'ja' | 'en' = (navigator.language || 'en').toLowerCase().startsWith('ja') ? 'ja' : 'en';
