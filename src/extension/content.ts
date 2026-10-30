@@ -17,6 +17,9 @@ import { mountFontSettings } from '../core/font-settings';
 import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
 import { createFileTree } from '../file-tree';
 import { mountQuickSwitcher } from '../core/quick-switcher';
+import { mountSearchPanel, type SearchPanel } from '../core/search-panel';
+import { createSearchCorpus, type SearchCorpus } from '../core/search-corpus';
+import { fileCorpusSource } from './file-corpus';
 import { noteRecentDoc, recentDocs } from '../core/recent-docs';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
@@ -58,6 +61,13 @@ function fileName(): string {
   return decodeURIComponent(location.pathname.split('/').pop() ?? 'document.md');
 }
 
+/** Full-text search over the tab's root, once its files are listed (showSiblings). */
+let searchCorpus: SearchCorpus | null = null;
+let searchTruncated = false;
+/** This document's root-relative path, as the listing names it. */
+let currentPath: string | null = null;
+let openDocPath: (path: string) => void = () => {};
+
 async function listSiblings(): Promise<ListSiblingsResponse | undefined> {
   try {
     return await chrome.runtime.sendMessage({ type: MSG_LIST_SIBLINGS });
@@ -70,7 +80,7 @@ async function listSiblings(): Promise<ListSiblingsResponse | undefined> {
  * Lists the Markdown files in this file's folder and below, then offers them in the sidebar.
  * Lists again when the user comes back to the tab, so added or removed files show up (#109).
  */
-async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement): Promise<void> {
+async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement, search: SearchPanel): Promise<void> {
   const res = await listSiblings();
   if (!res?.ok) return;
   // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
@@ -107,6 +117,8 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
   function show(list: Listing): void {
     listed = list;
     shown = key(list);
+    searchTruncated = list.truncated;
+    currentPath = list.current;
     tree.render(list.paths, list.hidden);
     if (list.truncated) {
       const note = document.createElement('p');
@@ -121,6 +133,9 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
 
   show(res);
   noteRecentDoc(rootUrl.href, res.current);
+  openDocPath = openPath;
+  searchCorpus = createSearchCorpus(fileCorpusSource(() => listed.paths));
+  search.setAvailable(true);
   mountQuickSwitcher({
     paths: () => listed.paths,
     current: () => listed.current,
@@ -229,7 +244,12 @@ async function main(): Promise<void> {
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
   onThemeChange(() => void renderDiagrams(content).then(() => applyMediaSizes(content)));
   enableImageZoom(content);
-  void showSiblings(filesEl, filesToggle);
+  const search = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
+    corpus: () => searchCorpus,
+    truncated: () => searchTruncated,
+    onOpen: (path) => openDocPath(path),
+  });
+  void showSiblings(filesEl, filesToggle, search);
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
   // Its hash is what the polls compare against (kept here, as the service worker keeps no state).
@@ -254,6 +274,9 @@ async function main(): Promise<void> {
     return;
   }
   status.textContent = t('autoReloadOn');
+  // The search reads this file through the service worker too; the version it has skips that.
+  const noteShown = () => currentPath !== null && searchCorpus?.put(currentPath, current, hash);
+  noteShown();
 
   let busy = false;
   let hiddenTicks = 0;
@@ -267,6 +290,7 @@ async function main(): Promise<void> {
       if (next !== 'unchanged') {
         current = next.text;
         hash = next.hash;
+        noteShown();
         await render(next.text, true);
         status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
         status.classList.remove('error');

@@ -484,3 +484,27 @@ test('reads 500 files through the service worker in reasonable time', async ({ c
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('searches the text of the files below the root through the service worker', async ({ context }) => {
+  const dir = await makeFolder({
+    'README.md': '# Top\n\nBLE の再接続について。',
+    'docs/a.md': '# A\n\n再接続は 3 秒待つ。\n\n```\n再接続()\n```\n',
+    'docs/b.md': '# B\n\nnothing here',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    await page.getByRole('button', { name: 'フォルダ内を検索' }).click();
+    const panel = page.getByRole('search', { name: 'フォルダ内を検索' });
+    await panel.getByRole('searchbox').fill('再接続');
+    await expect(panel.locator('.search-panel-status')).toHaveText('2 ファイルに 3 件');
+    await expect(panel.locator('.search-file-path')).toContainText(['docs/a.md', 'README.md']);
+    await expect(panel.locator('.search-hit-code')).toHaveText(['コード']);
+    await expectAccessible(page);
+    await panel.locator('.search-file[aria-label="docs/a.md"] .search-hit').first().click();
+    await expect(page).toHaveURL(/\/docs\/a\.md$/);
+    await expect(page.locator('.markdown-body h1')).toHaveText('A');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

@@ -98,3 +98,12 @@ test('shows the size buttons of an image on hover', async ({ page }) => {
   await expect(frame.locator('.media-size')).toHaveCSS('opacity', '1');
   await expect(frame).toHaveScreenshot('image-size-buttons.png');
 });
+
+test('shows the search panel', async ({ page }) => {
+  await openVisualFolder(page);
+  await page.keyboard.press('ControlOrMeta+Shift+F');
+  const panel = page.locator('.search-panel');
+  await panel.getByRole('searchbox').fill('test');
+  await expect(panel.locator('.search-file')).toHaveCount(2);
+  await expect(panel).toHaveScreenshot('search-panel.png');
+});

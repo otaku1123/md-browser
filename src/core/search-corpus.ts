@@ -26,6 +26,10 @@ export interface LoadOptions {
 export interface SearchCorpus {
   /** Every document's current text, in path order. Reads only what changed since the last call. */
   load(opts?: LoadOptions): Promise<CorpusDoc[]>;
+  /** The documents as last loaded (and put), in path order: what a search runs over. */
+  docs(): CorpusDoc[];
+  /** The page has this version of a document (e.g. after its auto-reload): no need to read it again. */
+  put(path: string, text: string, version: string): void;
 }
 
 /** Documents read at once: the viewer's file handles and the service worker both cope with this. */
@@ -33,10 +37,24 @@ export const CONCURRENCY = 8;
 
 export function createSearchCorpus(source: CorpusSource, concurrency = CONCURRENCY): SearchCorpus {
   const cache = new Map<string, { version: string; text: string }>();
+  let paths: string[] = [];
+
+  function docs(): CorpusDoc[] {
+    const out: CorpusDoc[] = [];
+    for (const path of paths) {
+      const entry = cache.get(path);
+      if (entry) out.push({ path, text: entry.text });
+    }
+    return out;
+  }
 
   return {
+    docs,
+    put(path, text, version) {
+      cache.set(path, { text, version });
+    },
     async load({ signal, onProgress } = {}) {
-      const paths = [...source.paths()];
+      paths = [...source.paths()];
       const wanted = new Set(paths);
       for (const path of cache.keys()) if (!wanted.has(path)) cache.delete(path);
 
@@ -58,13 +76,7 @@ export function createSearchCorpus(source: CorpusSource, concurrency = CONCURREN
       }
       await Promise.all(Array.from({ length: Math.min(concurrency, paths.length) }, worker));
       if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new DOMException('aborted', 'AbortError');
-
-      const docs: CorpusDoc[] = [];
-      for (const path of paths) {
-        const entry = cache.get(path);
-        if (entry) docs.push({ path, text: entry.text });
-      }
-      return docs;
+      return docs();
     },
   };
 }

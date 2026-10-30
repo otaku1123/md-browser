@@ -16,6 +16,8 @@ import { enableImageZoom, prepareImageZoom } from './core/image-zoom';
 import { applyMediaSizes, loadMediaDoc, prepareMediaSizes, showMediaSizes } from './core/media-sizes';
 import { mountSkipLink } from './core/skip-link';
 import { mountQuickSwitcher } from './core/quick-switcher';
+import { mountSearchPanel } from './core/search-panel';
+import { createSearchCorpus, type SearchCorpus } from './core/search-corpus';
 import { noteRecentDoc, recentDocs } from './core/recent-docs';
 import { onReturn } from './core/on-return';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
@@ -24,6 +26,7 @@ import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
 import { loadHiddenDirs, saveHiddenDirs } from './core/hidden-dirs-store';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
+  corpusSource,
   fromDirectoryHandle,
   fromFileHandle,
   fromFiles,
@@ -63,6 +66,8 @@ const fileTree = createFileTree(
 );
 
 let ws: Workspace | null = null;
+/** The open folder's texts for full-text search; new per opened folder, follows `ws` on a rescan. */
+let corpus: SearchCorpus | null = null;
 let currentDoc: DocEntry | null = null;
 let lastStamp = '';
 let renderSeq = 0;
@@ -124,6 +129,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   }
   currentDoc = doc;
   lastStamp = content.stamp;
+  corpus?.put(doc.path, content.text, content.stamp);
   sourceView.setSource(content.text);
   toc.render(tocItems);
   window.scrollTo(0, opts.keepScroll ? scrollY : 0);
@@ -150,6 +156,11 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
     return;
   }
   ws = next;
+  corpus = createSearchCorpus({
+    paths: () => ws?.docs.map((d) => d.path) ?? [],
+    read: (path, known) => (ws ? corpusSource(ws).read(path, known) : Promise.reject(new Error('no folder'))),
+  });
+  searchPanel.setAvailable(true);
   recentHandle = opts.handle ?? null;
   // The history stays, but a reload must not bring back an older item over one that can't be remembered.
   if (!recentHandle) void skipResume();
@@ -531,6 +542,11 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
+const searchPanel = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
+  corpus: () => corpus,
+  truncated: () => !!ws?.truncatedAt,
+  onOpen: (path) => openPath(path),
+});
 mountSkipLink(document.querySelector<HTMLElement>('.toolbar')!);
 mountQuickSwitcher({
   paths: () => ws?.docs.map((d) => d.path) ?? [],
