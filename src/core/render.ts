@@ -1,4 +1,4 @@
-import MarkdownIt from 'markdown-it';
+import MarkdownIt, { type Token } from 'markdown-it';
 import anchor from 'markdown-it-anchor';
 import { full as emoji } from 'markdown-it-emoji';
 import taskLists from 'markdown-it-task-lists';
@@ -99,15 +99,37 @@ md.core.ruler.after('block', 'github_alerts', (state) => {
   }
 });
 
+// Source line numbers: every block element gets data-line, the 1-based line in the file where it
+// starts (front matter lines included), so search results and "go to line" can find it later
+// (source-line.ts). Inline tokens and closing tags carry no line of their own.
+export const LINE_ATTR = 'data-line';
+
+md.core.ruler.after('block', 'source_line', (state) => {
+  const offset = (state.env as { lineOffset?: number }).lineOffset ?? 0;
+  for (const token of state.tokens) {
+    if (token.map && token.nesting !== -1 && token.type !== 'inline') token.attrSet(LINE_ATTR, String(token.map[0] + offset + 1));
+  }
+});
+
+function lineAttr(token: Token): string {
+  const line = token.attrGet(LINE_ATTR);
+  return line ? ` ${LINE_ATTR}="${line}"` : '';
+}
+
+// Rendered from a template, not renderToken, so the line attribute is added by hand.
+const mathBlock = md.renderer.rules.math_block!;
+md.renderer.rules.math_block = (tokens, idx, options, env, self) =>
+  mathBlock(tokens, idx, options, env, self).replace(/^<div /, `<div${lineAttr(tokens[idx])} `);
+
 const defaultFence = md.renderer.rules.fence!;
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
   const lang = token.info.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
-  if (lang === 'math') return mathPlaceholder(token.content.trim(), true) + '\n';
+  if (lang === 'math') return mathPlaceholder(token.content.trim(), true).replace(/^<div /, `<div${lineAttr(token)} `) + '\n';
   const kind = Object.hasOwn(DIAGRAM_KINDS, lang) ? DIAGRAM_KINDS[lang] : undefined;
   if (kind) {
     // Source goes in text content, not an attribute: DOMPurify drops attributes containing "-->".
-    return `<div class="diagram diagram-${kind}"><pre class="diagram-source">${escapeHtml(token.content)}</pre></div>\n`;
+    return `<div${lineAttr(token)} class="diagram diagram-${kind}"><pre class="diagram-source">${escapeHtml(token.content)}</pre></div>\n`;
   }
   return defaultFence(tokens, idx, options, env, self);
 };
@@ -140,16 +162,17 @@ function stripChatGptMarkers(src: string): string {
 const FRONT_MATTER =
   /^\uFEFF?(?:---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?(?:---|\.\.\.)|\+\+\+[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?\+\+\+)[ \t]*(?:\r?\n|$)/;
 
-function splitFrontMatter(src: string): { frontMatter: string; body: string } {
+function splitFrontMatter(src: string): { frontMatter: string; body: string; bodyLine: number } {
   const m = FRONT_MATTER.exec(src);
-  if (!m) return { frontMatter: '', body: src };
+  if (!m) return { frontMatter: '', body: src, bodyLine: 0 };
   const toml = m[0].replace(/^\uFEFF/, '').startsWith('+++');
   const lang = toml ? 'toml' : 'yaml';
   const code = md.options.highlight!((toml ? m[2] : m[1]) ?? '', lang, '');
   const html =
-    `<details class="front-matter"><summary>${escapeHtml(t('frontMatter'))}</summary>` +
+    `<details ${LINE_ATTR}="1" class="front-matter"><summary>${escapeHtml(t('frontMatter'))}</summary>` +
     `<pre><code class="hljs language-${lang}">${code}</code></pre></details>\n`;
-  return { frontMatter: html, body: src.slice(m[0].length) };
+  // Lines taken by the front matter: the body's first line is this many lines into the file.
+  return { frontMatter: html, body: src.slice(m[0].length), bodyLine: m[0].split('\n').length - 1 };
 }
 
 const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
@@ -160,8 +183,8 @@ function keepHeadingId(node: Element, data: UponSanitizeAttributeHookEvent): voi
 
 export function renderMarkdown(src: string): RenderResult {
   // docId namespaces footnote ids ("fn-md-1" rather than "fn1") so they can't collide with heading slugs.
-  const env = { docId: 'md' };
-  const { frontMatter, body } = splitFrontMatter(stripChatGptMarkers(src));
+  const { frontMatter, body, bodyLine } = splitFrontMatter(stripChatGptMarkers(src));
+  const env = { docId: 'md', lineOffset: bodyLine };
   const tokens = md.parse(body, env);
 
   const toc: TocItem[] = [];
