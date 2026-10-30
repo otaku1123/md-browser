@@ -2,6 +2,7 @@
 // and highlights text with the CSS Custom Highlight API. Highlights are ranges, not wrapper
 // elements, so they never touch the rendered DOM that diagrams, math and live reload rewrite.
 import { LINE_ATTR } from './render';
+import { foldText } from './search';
 
 export const SEARCH_HIGHLIGHT = 'md-browser-search';
 export const SEARCH_HIGHLIGHT_CURRENT = 'md-browser-search-current';
@@ -32,23 +33,13 @@ export function scrollToLine(root: ParentNode, line: number, behavior: ScrollBeh
 // KaTeX's MathML copy (the visible part is the HTML one).
 const SKIP = 'script, style, svg, .diagram-source, .katex-mathml';
 
-// Lower-cases one character at a time, keeping any whose lower case has another length (e.g. "İ"),
-// so offsets in the folded text are offsets in the original.
-function fold(s: string): string {
-  let out = '';
-  for (const ch of s) {
-    const lower = ch.toLowerCase();
-    out += lower.length === ch.length ? lower : ch;
-  }
-  return out;
-}
-
 /**
- * Ranges of every case-insensitive occurrence of `query` in `root`'s visible text, in document
- * order. A match may span inline elements ("**BLE** reconnect") but not two blocks.
+ * Ranges of every occurrence of `query` in `root`'s visible text, in document order, folded as
+ * the search engine folds (search.ts: NFKC and lower case, so "ＢＬＥ" and "ﾊﾟ" match "ble" and
+ * "パ"). A match may span inline elements ("**BLE** reconnect") but not two blocks.
  */
 export function findTextRanges(root: Node, query: string): Range[] {
-  const needle = fold(query);
+  const needle = foldText(query).folded;
   if (!needle) return [];
   const doc = root.ownerDocument ?? (root as Document);
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
@@ -67,7 +58,8 @@ export function findTextRanges(root: Node, query: string): Range[] {
     starts.push(text.length);
     text += (n as Text).data;
   }
-  const hay = fold(text);
+  // `map` turns an offset in the folded text back into one in `text`.
+  const { folded: hay, map } = foldText(text);
 
   // Text node holding offset `pos`, and the offset inside it; an end offset sits in the node it ends.
   let k = 0;
@@ -79,8 +71,8 @@ export function findTextRanges(root: Node, query: string): Range[] {
   const ranges: Range[] = [];
   for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + needle.length)) {
     const range = doc.createRange();
-    range.setStart(...locate(i, false));
-    range.setEnd(...locate(i + needle.length, true));
+    range.setStart(...locate(map[i], false));
+    range.setEnd(...locate(map[i + needle.length], true));
     ranges.push(range);
   }
   return ranges;

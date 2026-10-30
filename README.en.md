@@ -26,7 +26,7 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 - Mermaid diagrams (lazy-loaded); click to enlarge, save as SVG / PNG
 - Math with KaTeX (`$...$`, `$$...$$`, ` ```math `; same syntax as GitHub, lazy-loaded)
 - PlantUML diagrams (` ```plantuml ` / `puml` / `uml`); the official in-browser engine is bundled and lazy-loaded, nothing is sent to a server. The standard library, sprites and emoji are not bundled. Click to enlarge, save as SVG / PNG
-- Full-text search in the folder (Ctrl+Shift+F / ⌘+Shift+F on Mac, or the 🔍 toolbar button): searches the text of every Markdown file of the open folder and lists the matches per file with the line number, the heading they are under and an excerpt. Ignores case and character width (half-width kana too); several words are ANDed. No index: the files are read when the panel opens, so nothing is stored. Ctrl+F stays the browser's find
+- Full-text search in the folder (Ctrl+Shift+F / ⌘+Shift+F on Mac, or the 🔍 toolbar button): searches the text of every Markdown file of the open folder and lists the matches per file with the line number, the heading they are under and an excerpt. Clicking a match opens the file at that line and highlights the matches on the page (the ones on that line in another colour; cleared when the search is closed). Ignores case and character width (half-width kana too); several words are ANDed. No index: the files are read when the panel opens, so nothing is stored. Ctrl+F stays the browser's find
 - Images with relative paths (when a folder is opened)
 - Auto-reload when the local file changes (1 s polling, Chrome / Edge)
 - Relative links to other `.md` files in the folder

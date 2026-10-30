@@ -1055,7 +1055,33 @@ test('searches the text of every file in the folder from a panel', async ({ page
   await other.locator('.search-hit').first().click();
   await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
   await expect(panel).toBeVisible(); // stays open to browse the other matches
+
+  // A hit further down the README: the page opens it scrolled to that block, with the matches
+  // highlighted (CSS Custom Highlight API) and the ones on that line marked as current.
+  const highlights = () =>
+    page.evaluate(() => ({
+      all: CSS.highlights.get('md-browser-search')?.size ?? 0,
+      current: CSS.highlights.get('md-browser-search-current')?.size ?? 0,
+    }));
+  expect(await highlights()).toEqual({ all: 1, current: 1 });
+  const linkHit = panel.locator('.search-file[aria-label="README.md"] .search-hit', { hasText: '別のMDファイル' });
+  const line = await linkHit.getAttribute('data-line');
+  await linkHit.click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect(page.locator(`.markdown-body [data-line="${line}"]`)).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  const marked = await highlights();
+  expect(marked.all).toBeGreaterThan(marked.current);
+  expect(marked.current).toBeGreaterThan(0);
+  // The highlights are ranges of the rendered nodes: a re-render renews them.
+  await page.evaluate(async () => {
+    await (window as unknown as { __appendToFile(rel: string, text: string): Promise<void> }).__appendToFile('README.md', '\n\nもう一つのファイル\n');
+  });
+  await expect(page.locator('.markdown-body p', { hasText: 'もう一つのファイル' })).toBeVisible();
+  expect((await highlights()).all).toBe(marked.all + 1);
+
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden();
   await expect(page.getByRole('button', { name: 'Search in folder' })).toHaveAttribute('aria-expanded', 'false');
+  expect(await highlights()).toEqual({ all: 0, current: 0 }); // closing the search clears them
 });

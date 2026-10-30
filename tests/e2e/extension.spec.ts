@@ -501,9 +501,24 @@ test('searches the text of the files below the root through the service worker',
     await expect(panel.locator('.search-file-path')).toContainText(['docs/a.md', 'README.md']);
     await expect(panel.locator('.search-hit-code')).toHaveText(['コード']);
     await expectAccessible(page);
-    await panel.locator('.search-file[aria-label="docs/a.md"] .search-hit').first().click();
-    await expect(page).toHaveURL(/\/docs\/a\.md$/);
+    const hit = panel.locator('.search-file[aria-label="docs/a.md"] .search-hit').first();
+    await expect(hit).toHaveAttribute('data-line', '3');
+    await hit.click();
+    // The new page jumps to the line from the hash, then drops it, and shows the search again.
     await expect(page.locator('.markdown-body h1')).toHaveText('A');
+    await expect(page).toHaveURL(/\/docs\/a\.md$/);
+    await expect(page.locator('.markdown-body [data-line="3"]')).toBeInViewport();
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('searchbox')).toHaveValue('再接続');
+    await expect(panel.getByRole('searchbox')).not.toBeFocused();
+    await expect(panel.locator('.search-panel-status')).toHaveText('2 ファイルに 3 件');
+    // A hit in the file already shown jumps without a page load: line 6 is inside the code block
+    // that starts on line 5, whose <code> carries that line.
+    const inCode = panel.locator('.search-file[aria-label="docs/a.md"] .search-hit').nth(1);
+    await expect(inCode).toHaveAttribute('data-line', '6');
+    await inCode.click();
+    await expect(page).toHaveURL(/\/docs\/a\.md$/);
+    await expect(page.locator('.markdown-body pre [data-line="5"]')).toBeInViewport();
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
