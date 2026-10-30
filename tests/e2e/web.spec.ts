@@ -238,6 +238,41 @@ test('opens files from the sidebar and toggles it', async ({ page }) => {
   await expect(page.locator('#files')).toBeVisible();
 });
 
+// #123: the arrow keys move through the sidebar like a tree view.
+test('moves through the file sidebar with the keyboard', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  const docs = files.locator('.file-tree summary', { hasText: 'docs' });
+  const docsFolder = docs.locator('..');
+  await page.evaluate(() => document.querySelectorAll<HTMLDetailsElement>('#files details').forEach((d) => (d.open = false)));
+  await docs.focus();
+  await page.keyboard.press('ArrowDown'); // the closed folder's files are skipped
+  await expect(files.locator('[data-path="README.md"]')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowRight'); // opens the folder…
+  await expect(docsFolder).toHaveJSProperty('open', true);
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowRight'); // …then enters it
+  await expect(files.locator('[data-path="docs/other.md"]')).toBeFocused();
+  await page.keyboard.press('ArrowLeft'); // a file: back to its folder
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowLeft'); // closes it
+  await expect(docsFolder).toHaveJSProperty('open', false);
+  await page.keyboard.press('End');
+  await expect(files.locator('[data-path="xss.md"]')).toBeFocused();
+  await page.keyboard.press('Enter'); // a file row opens the document
+  await expect(page.locator('.markdown-body h1')).toHaveText('XSS');
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'xss.md');
+  // xss.md's inline handlers are reported by DOMPurify's DOMParser (see the XSS test); nothing else may be.
+  const violations = await page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations.splice(0));
+  for (const v of violations) expect(v).toMatch(/^script-src-attr inline /);
+  await page.keyboard.press('Home');
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('Enter'); // a folder row toggles, as a <summary> does
+  await expect(docsFolder).toHaveJSProperty('open', true);
+});
+
 // #109: files added outside show up when the user comes back to the tab, on the same document.
 test('lists the folder again when the user comes back to the tab', async ({ page }) => {
   await openSampleFolder(page);
