@@ -299,6 +299,32 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
   }
 });
 
+test('switches files with the quick switcher and keeps the recent ones across file pages', async ({ context }) => {
+  const dir = await makeFolder({ 'README.md': '# Top', 'notes.md': '# Notes', 'sub dir/deep #1.md': '# Deep' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    await expect(page.locator('.files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+    const switcher = page.getByRole('dialog', { name: 'ファイルへ移動' });
+    await page.keyboard.press('ControlOrMeta+P');
+    await expect(switcher.getByRole('combobox')).toBeFocused();
+    await expectAccessible(page);
+    await page.keyboard.type('deep');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
+    await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
+
+    // A new page was loaded: the previous document is still listed first.
+    await expect(page.locator('.files [aria-current="page"]')).toHaveAttribute('data-path', 'sub dir/deep #1.md');
+    await page.keyboard.press('ControlOrMeta+P');
+    await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'README.md');
+    await page.keyboard.press('Escape');
+    await expect(switcher).toHaveCount(0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('hides folders from the file sidebar per root folder, and shows them again', async ({ context }) => {
   const dir = await makeFolder({
     'README.md': '# Top',
