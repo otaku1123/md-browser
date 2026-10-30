@@ -103,6 +103,17 @@ const en = {
   quickOpenKey: 'Go to file',
   quickOpenOff: 'Off',
   quickOpenHint: 'Shortcut for searching the open folder by file name (with two or more files). ⌘/Ctrl+P replaces the print shortcut; print from the browser menu instead.',
+  searchFolder: 'Search in folder',
+  searchPlaceholder: 'Search the text of all files',
+  searchClose: 'Close search',
+  searchReading: 'Reading files… {done} / {total}',
+  searchCount: '{hits} matches in {files} files',
+  searchNone: 'No matches',
+  searchTruncated: 'Only part of the folder is listed, so some files are not searched.',
+  searchSkipped: '{count} files skipped (too large)',
+  searchMore: 'Show {count} more',
+  searchInCode: 'code',
+  searchHit: '{path}, line {line}',
 } as const;
 
 type Key = keyof typeof en;
@@ -209,6 +220,17 @@ const ja: Record<Key, string> = {
   quickOpenKey: 'ファイルへ移動',
   quickOpenOff: 'オフ',
   quickOpenHint: '開いているフォルダのファイルを名前で探すショートカット（ファイルが 2 件以上のとき）。⌘/Ctrl+P にすると印刷のショートカットの代わりになります。印刷はブラウザのメニューから行えます。',
+  searchFolder: 'フォルダ内を検索',
+  searchPlaceholder: '全ファイルの本文を検索',
+  searchClose: '検索を閉じる',
+  searchReading: 'ファイルを読み込み中… {done} / {total}',
+  searchCount: '{files} ファイルに {hits} 件',
+  searchNone: '一致なし',
+  searchTruncated: '一覧が上限に達しているため、一部のファイルは検索対象外です。',
+  searchSkipped: '{count} ファイルは大きすぎるため対象外',
+  searchMore: 'さらに {count} 件',
+  searchInCode: 'コード',
+  searchHit: '{path} の {line} 行目',
 };
 
 export const lang: 'ja' | 'en' = (navigator.language || 'en').toLowerCase().startsWith('ja') ? 'ja' : 'en';

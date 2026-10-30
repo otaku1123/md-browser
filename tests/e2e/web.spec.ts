@@ -1036,3 +1036,26 @@ test('opens a PlantUML diagram large and saves it as SVG and PNG', async ({ page
   expect((await readFile((await pngDownload.path())!)).subarray(1, 4).toString()).toBe('PNG');
   await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
 });
+
+test('searches the text of every file in the folder from a panel', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.keyboard.press('ControlOrMeta+Shift+F');
+  const panel = page.getByRole('search', { name: 'Search in folder' });
+  await expect(panel).toBeVisible();
+  const input = panel.getByRole('searchbox');
+  await expect(input).toBeFocused();
+  await input.fill('ファイル');
+  await expect(panel.locator('.search-panel-status')).toHaveText(/^\d+ matches in 2 files$/);
+  // Most matches first: the README mentions files many times, docs/other.md once in its title.
+  await expect(panel.locator('.search-file-path')).toContainText(['README.md', 'docs/other.md']);
+  const other = panel.locator('.search-file[aria-label="docs/other.md"]'); // the README's excerpts mention that path too
+  await expect(other.locator('.search-hit mark')).toHaveText(['ファイル']);
+  await expect(other.locator('.search-hit-line')).toHaveText(['1']);
+  await expectAccessible(page);
+  await other.locator('.search-hit').first().click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  await expect(panel).toBeVisible(); // stays open to browse the other matches
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Search in folder' })).toHaveAttribute('aria-expanded', 'false');
+});
