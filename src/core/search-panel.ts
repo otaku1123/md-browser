@@ -12,15 +12,21 @@ export interface SearchPanelOptions {
   corpus(): SearchCorpus | null;
   /** The listing stopped at a limit, so the search misses some files. */
   truncated(): boolean;
-  onOpen(path: string, hit: SearchHit): void;
+  /** A match was chosen; `query` is the text it was found with (its terms are highlighted). */
+  onOpen(path: string, hit: SearchHit, query: string): void;
+  /** The panel was closed: the page's highlights go. */
+  onClose?(): void;
 }
 
 export interface SearchPanel {
-  open(): void;
+  /** `focus` false keeps the focus where it is (reopening after a file:// page load). */
+  open(focus?: boolean): void;
   close(): void;
   toggle(): void;
   /** Offered only while there is something to search. Resets the panel: the folder changed. */
   setAvailable(available: boolean): void;
+  /** Fills the field, as if typed. */
+  setQuery(query: string): void;
 }
 
 export const SEARCH_DEBOUNCE_MS = 150;
@@ -145,7 +151,7 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
     text.className = 'search-hit-text';
     text.append(...marked(hit.excerpt, hit.ranges));
     btn.append(meta, text);
-    btn.addEventListener('click', () => opts.onOpen(doc.path, hit));
+    btn.addEventListener('click', () => opts.onOpen(doc.path, hit, input.value));
     return btn;
   }
 
@@ -229,13 +235,15 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
       });
   }
 
-  function open(): void {
+  function open(focus = true): void {
     if (!available || !panel.hidden) return;
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panel.hidden = false;
     button.setAttribute('aria-expanded', 'true');
-    input.focus();
-    input.select();
+    if (focus) {
+      input.focus();
+      input.select();
+    }
     load();
   }
 
@@ -249,7 +257,8 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
     button.setAttribute('aria-expanded', 'false');
     const back = returnFocus && returnFocus.isConnected && !panel.contains(returnFocus) ? returnFocus : button;
     returnFocus = null;
-    if (!back.hidden) back.focus();
+    if (panel.contains(document.activeElement) && !back.hidden) back.focus();
+    opts.onClose?.();
   }
 
   const toggle = () => (panel.hidden ? open() : closePanel());
@@ -298,6 +307,10 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
     open,
     close: closePanel,
     toggle,
+    setQuery(query) {
+      input.value = query;
+      runSearch();
+    },
     setAvailable(next) {
       available = next;
       button.hidden = !next;

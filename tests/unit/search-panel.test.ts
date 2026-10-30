@@ -41,7 +41,8 @@ describe('mountSearchPanel', () => {
 
   let toolbar: HTMLElement;
   let panel: SearchPanel;
-  let onOpen: ReturnType<typeof vi.fn<(path: string, hit: SearchHit) => void>>;
+  let onOpen: ReturnType<typeof vi.fn<(path: string, hit: SearchHit, query: string) => void>>;
+  let onClose: ReturnType<typeof vi.fn<() => void>>;
   let truncated = false;
   let fake: ReturnType<typeof fakeCorpus>;
 
@@ -53,13 +54,14 @@ describe('mountSearchPanel', () => {
     toolbar.append(gear);
     document.body.append(toolbar);
     onOpen = vi.fn();
+    onClose = vi.fn();
     truncated = false;
     fake = fakeCorpus([
       { path: 'docs/a.md', text: '# A\n\nble once\n\n```\nble in code\n```\n' },
       { path: 'README.md', text: 'ble here\nand BLE there\nＢＬＥ again' },
       { path: 'c.md', text: 'nothing' },
     ]);
-    panel = mountSearchPanel(toolbar, { corpus: () => fake.corpus, truncated: () => truncated, onOpen });
+    panel = mountSearchPanel(toolbar, { corpus: () => fake.corpus, truncated: () => truncated, onOpen, onClose });
   });
 
   afterEach(() => {
@@ -112,7 +114,7 @@ describe('mountSearchPanel', () => {
     expect(document.querySelector<HTMLElement>('.search-panel-note')!.hidden).toBe(true);
 
     first.click();
-    expect(onOpen).toHaveBeenCalledWith('README.md', expect.objectContaining({ line: 1 }));
+    expect(onOpen).toHaveBeenCalledWith('README.md', expect.objectContaining({ line: 1 }), 'ble');
     expect(panelEl().hidden).toBe(false); // stays open to browse the rest
 
     type('zzz');
@@ -188,6 +190,7 @@ describe('mountSearchPanel', () => {
     press(input(), { key: 'Escape' });
     expect(panelEl().hidden).toBe(true);
     expect(document.activeElement).toBe(before);
+    expect(onClose).toHaveBeenCalledTimes(1);
     before.remove();
     // The shortcut toggles; the button too.
     shortcut();
@@ -199,6 +202,24 @@ describe('mountSearchPanel', () => {
     document.querySelector<HTMLButtonElement>('.search-panel-close')!.click();
     expect(panelEl().hidden).toBe(true);
     expect(document.activeElement).toBe(toolbar.querySelector('.search-toggle'));
+  });
+
+  it('reopens with a given query without taking the focus (after a file:// page load)', async () => {
+    const reader = document.createElement('button');
+    document.body.append(reader);
+    reader.focus();
+    panel.setAvailable(true);
+    panel.setQuery('ble');
+    panel.open(false);
+    expect(panelEl().hidden).toBe(false);
+    expect(document.activeElement).toBe(reader);
+    expect(input().value).toBe('ble');
+    fake.finish();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hits().length).toBeGreaterThan(0); // searched as soon as the texts were read
+    panel.close();
+    expect(document.activeElement).toBe(reader); // the focus was never in the panel: left alone
+    reader.remove();
   });
 
   it('stops reading when closed, and resets when the folder changes', async () => {

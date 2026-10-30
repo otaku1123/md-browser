@@ -18,6 +18,8 @@ import { mountSkipLink } from './core/skip-link';
 import { mountQuickSwitcher } from './core/quick-switcher';
 import { mountSearchPanel } from './core/search-panel';
 import { createSearchCorpus, type SearchCorpus } from './core/search-corpus';
+import { parseQuery, type SearchHit } from './core/search';
+import { clearSearchHighlight, highlightSearch, jumpToLine } from './core/search-jump';
 import { noteRecentDoc, recentDocs } from './core/recent-docs';
 import { onReturn } from './core/on-return';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
@@ -68,6 +70,9 @@ const fileTree = createFileTree(
 let ws: Workspace | null = null;
 /** The open folder's texts for full-text search; new per opened folder, follows `ws` on a rescan. */
 let corpus: SearchCorpus | null = null;
+/** The search terms highlighted on the page while the search panel is open, and the line jumped to. */
+let searchTerms: string[] = [];
+let jumpLine: number | null = null;
 let currentDoc: DocEntry | null = null;
 let lastStamp = '';
 let renderSeq = 0;
@@ -81,7 +86,7 @@ let pollFailures = 0;
 
 // ---- rendering ------------------------------------------------------------
 
-async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<void> {
+async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number }): Promise<void> {
   if (!ws) return;
   const seq = ++renderSeq;
   const workspace = ws;
@@ -124,6 +129,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   if (currentDoc !== doc) {
     toc.reset();
     sourceView.reset();
+    jumpLine = null;
     if (recentHandle) void saveRecent({ handle: recentHandle, docPath: doc.path });
     noteRecentDoc(recentRoot(workspace), doc.path);
   }
@@ -133,6 +139,11 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   sourceView.setSource(content.text);
   toc.render(tocItems);
   window.scrollTo(0, opts.keepScroll ? scrollY : 0);
+  // A search hit: scroll to its line once; the highlights are ranges, so a re-render renews them.
+  if (opts.line !== undefined) {
+    jumpLine = opts.line;
+    jumpToLine(contentEl, opts.line, searchTerms);
+  } else highlightSearch(contentEl, searchTerms, jumpLine ?? undefined);
   fileTree.setActive(doc.path);
   toc.update();
   // File name first: narrow tabs only show the start of the title.
@@ -542,10 +553,26 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
+/** A search hit: the document is opened (or kept) at that line with the query's matches highlighted. */
+function openHit(path: string, hit: SearchHit, query: string): void {
+  const doc = ws?.docs.find((d) => d.path === path);
+  if (!doc) return;
+  searchTerms = parseQuery(query);
+  if (doc === currentDoc) {
+    jumpLine = hit.line;
+    jumpToLine(contentEl, hit.line, searchTerms);
+  } else void showDoc(doc, { keepScroll: false, line: hit.line });
+}
+
 const searchPanel = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
   corpus: () => corpus,
   truncated: () => !!ws?.truncatedAt,
-  onOpen: (path) => openPath(path),
+  onOpen: openHit,
+  onClose: () => {
+    searchTerms = [];
+    jumpLine = null;
+    clearSearchHighlight();
+  },
 });
 mountSkipLink(document.querySelector<HTMLElement>('.toolbar')!);
 mountQuickSwitcher({

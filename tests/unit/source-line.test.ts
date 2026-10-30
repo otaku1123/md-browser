@@ -87,6 +87,14 @@ describe('findTextRanges', () => {
   it('finds Japanese text and keeps offsets after characters with a longer lower case', () => {
     const root = dom('İstanbul の再接続シーケンス\n');
     expect(findTextRanges(root, '再接続').map(String)).toEqual(['再接続']);
+    expect(findTextRanges(root, 'i̇stanbul').map(String)).toEqual(['İstanbul']); // "İ" lower-cases to "i̇" (two characters)
+  });
+
+  it('folds character width and half-width kana like the search engine', () => {
+    const root = dom('ＢＬＥ と ble、ﾊﾟｹｯﾄとパケット\n');
+    expect(findTextRanges(root, 'ble').map(String)).toEqual(['ＢＬＥ', 'ble']);
+    expect(findTextRanges(root, 'パケット').map(String)).toEqual(['ﾊﾟｹｯﾄ', 'パケット']);
+    expect(findTextRanges(root, 'ﾊﾟｹｯﾄ').map(String)).toEqual(['ﾊﾟｹｯﾄ', 'パケット']);
   });
 
   it('skips diagram sources', () => {
