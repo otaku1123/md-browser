@@ -52,6 +52,8 @@ FEATURES
 • GitHub-style rendering: tables, task lists, syntax-highlighted code blocks
 • Sidebar table of contents that follows your scroll position; hide it or drag to resize
 • Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable, and folders you don't need can be hidden
+• Full-text search across the folder (Ctrl/⌘+Shift+F): matches grouped by file with the line, the heading and an excerpt; click one to jump there with the matches highlighted. Ignores case and character width; "This file" searches only the open document. No index, nothing stored
+• Quick file switcher (Ctrl/⌘+P): open any file of the folder by typing part of its name
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
 • PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
@@ -70,7 +72,7 @@ FEATURES
 • Report a bug or suggest an idea from the settings panel: it opens a GitHub issue form, and nothing is sent unless you submit it
 
 PRIVACY
-Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only reads the Markdown file you are viewing and, for the file sidebar, the names of the files in that file's folder and below.
+Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only reads the Markdown file you are viewing and, for the file sidebar, the names of the files in that file's folder and below; their contents are read only when you search the folder, in the page and in memory only — nothing is indexed or saved.
 
 SETUP (important)
 Chrome requires one extra step for extensions that read local files:
@@ -136,7 +138,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 ### 単一用途の説明（Single purpose）
 
 ```text
-Render local Markdown (.md) files opened in Chrome as formatted documents with a table of contents and Mermaid diagrams, and re-render them when the file changes. It can also list the other Markdown files in the same folder in a sidebar.
+Render local Markdown (.md) files opened in Chrome as formatted documents with a table of contents and Mermaid diagrams, and re-render them when the file changes. It can also list the other Markdown files in the same folder in a sidebar and search their text.
 ```
 
 ### ホスト権限（Host permissions）

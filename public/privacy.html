@@ -31,8 +31,8 @@
 
       <h2>What the extension accesses</h2>
       <ul>
-        <li><strong>Markdown files you open in Chrome</strong> (<code>file:///…/*.md</code>): the extension reads the file you are viewing to render it, and re-reads only that same file to detect changes (auto-reload). To list the other Markdown files next to it in the file sidebar, it also reads the folder listings of that file's folder and its subfolders (never parent folders) and keeps only the Markdown file names; the contents of those files are read only when you open one, or when you search the folder's text (⌘/Ctrl+Shift+F). File contents never leave your computer.</li>
-        <li><strong>Files or folders you pick in the viewer</strong>: read locally with the browser's File System Access API, only after you choose them.</li>
+        <li><strong>Markdown files you open in Chrome</strong> (<code>file:///…/*.md</code>): the extension reads the file you are viewing to render it, and re-reads only that same file to detect changes (auto-reload). To list the other Markdown files next to it in the file sidebar, it also reads the folder listings of that file's folder and its subfolders (never parent folders) and keeps only the Markdown file names; the contents of those files are read only when you open one, or when you search the folder's text (⌘/Ctrl+Shift+F). The search runs in the page and keeps the texts in memory only while the page is open: nothing is indexed or saved. File contents never leave your computer.</li>
+        <li><strong>Files or folders you pick in the viewer</strong>: read locally with the browser's File System Access API, only after you choose them. Searching the folder reads its Markdown files the same way, in the page, and stores nothing.</li>
       </ul>
 
       <h2>Settings</h2>
@@ -67,8 +67,8 @@
 
         <h2>拡張機能がアクセスするもの</h2>
         <ul>
-          <li><strong>Chrome で開いた Markdown ファイル</strong>（<code>file:///…/*.md</code>）: 表示のために閲覧中のファイルを読み込み、変更の検知（自動更新）のために同じファイルだけを再読み込みします。また、ファイル一覧のサイドバーに同じ場所の Markdown ファイルを表示するため、そのファイルがあるフォルダとその下のフォルダの一覧を読み込み、Markdown ファイルの名前だけを使います（親フォルダは読みません。一覧にあるファイルの中身は、開いたときと、フォルダ内の全文検索（⌘/Ctrl+Shift+F）を使ったときにだけ読みます）。ファイルの内容がパソコンの外に出ることはありません。</li>
-          <li><strong>ビューアーで選択したファイル・フォルダ</strong>: ユーザーが選択した後に限り、ブラウザの File System Access API でローカルに読み込みます。</li>
+          <li><strong>Chrome で開いた Markdown ファイル</strong>（<code>file:///…/*.md</code>）: 表示のために閲覧中のファイルを読み込み、変更の検知（自動更新）のために同じファイルだけを再読み込みします。また、ファイル一覧のサイドバーに同じ場所の Markdown ファイルを表示するため、そのファイルがあるフォルダとその下のフォルダの一覧を読み込み、Markdown ファイルの名前だけを使います（親フォルダは読みません。一覧にあるファイルの中身は、開いたときと、フォルダ内の全文検索（⌘/Ctrl+Shift+F）を使ったときにだけ読みます。検索はページ内で行い、本文はページを開いている間だけメモリに置きます。索引は作らず、何も保存しません）。ファイルの内容がパソコンの外に出ることはありません。</li>
+          <li><strong>ビューアーで選択したファイル・フォルダ</strong>: ユーザーが選択した後に限り、ブラウザの File System Access API でローカルに読み込みます。フォルダ内の全文検索も同じ方法でページ内で読み、何も保存しません。</li>
         </ul>
 
         <h2>設定の保存</h2>
