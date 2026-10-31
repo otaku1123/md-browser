@@ -209,7 +209,7 @@ export function mountSearchPanel(toolbar: HTMLElement, opts: SearchPanelOptions)
     meta.className = 'search-hit-meta';
     const line = document.createElement('span');
     line.className = 'search-hit-line';
-    line.textContent = String(hit.line);
+    line.textContent = `L${hit.line}`; // 'L' marks it as a line number (the heading follows)
     meta.append(line);
     if (hit.heading) {
       const heading = document.createElement('span');

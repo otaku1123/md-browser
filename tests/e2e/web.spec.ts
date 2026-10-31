@@ -1050,7 +1050,7 @@ test('searches the text of every file in the folder from a panel', async ({ page
   await expect(panel.locator('.search-file-path')).toContainText(['README.md', 'docs/other.md']);
   const other = panel.locator('.search-file[aria-label="docs/other.md"]'); // the README's excerpts mention that path too
   await expect(other.locator('.search-hit mark')).toHaveText(['ファイル']);
-  await expect(other.locator('.search-hit-line')).toHaveText(['1']);
+  await expect(other.locator('.search-hit-line')).toHaveText(['L1']);
   await expectAccessible(page);
   await other.locator('.search-hit').first().click();
   await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
