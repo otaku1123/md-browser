@@ -38,9 +38,11 @@ jobs:
       - name: E2E tests (web app + extension)
         if: ${{ !inputs.update_screenshots }}
         run: npm run test:e2e
+      # =all: the default ("changed") keeps a baseline whose difference is within the 1% tolerance, so
+      # a small intended change (a label, a few pixels) would never reach the committed image.
       - name: Update screenshot baselines
         if: ${{ inputs.update_screenshots }}
-        run: npm run test:visual -- --update-snapshots
+        run: npm run test:visual -- --update-snapshots=all
       - uses: actions/upload-artifact@v7
         if: ${{ inputs.update_screenshots }}
         with:

@@ -589,7 +589,7 @@ body {
 .search-hit:focus-visible { box-shadow: inset 2px 0 0 var(--accent); }
 .search-hit[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
 .search-hit-meta { display: flex; gap: 8px; align-items: baseline; font-size: 11px; color: var(--fg-muted); }
-.search-hit-line { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+.search-hit-line { min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
 .search-hit-heading { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-hit-code { padding: 0 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 10px; }
 .search-hit-text { display: block; overflow-wrap: anywhere; }
