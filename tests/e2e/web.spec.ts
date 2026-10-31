@@ -1197,3 +1197,73 @@ test('exports the document as one HTML file, and prints for PDF', async ({ page,
   await panel.getByRole('button', { name: 'Save as PDF' }).click();
   expect(await page.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(1);
 });
+
+test('zooms and pans a diagram in the overlay with the wheel, a drag, a double-click and the keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 500 }); // the flowchart (686 wide) is fitted below 100%
+  await openSampleFolder(page);
+  await page.locator('.diagram-mermaid').first().click();
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  const svg = zoom.locator('svg');
+  const level = zoom.getByRole('status');
+  await expect(svg).toBeVisible();
+  const levelNow = async () => Number((await level.textContent())!.replace('%', ''));
+  const fitLevel = await levelNow();
+  expect(fitLevel).toBeGreaterThan(0);
+  expect(fitLevel).toBeLessThan(100);
+  const transform = () => svg.evaluate((el) => (el as SVGElement).style.transform);
+  const box = (await svg.boundingBox())!;
+  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+
+  // Ctrl + wheel zooms around the pointer: a point left of the center moves the content right.
+  await svg.dispatchEvent('wheel', { deltaY: -100, ctrlKey: true, clientX: center.x - 200, clientY: center.y, bubbles: true, cancelable: true });
+  expect(await levelNow()).toBeGreaterThan(fitLevel);
+  expect(await transform()).toMatch(/translate\((\d|[1-9]\d*)(\.\d+)?px, 0px\) scale\(1\.2/);
+  await expect(zoom).toBeVisible();
+
+  // A plain wheel pans; a drag pans too and does not close the overlay.
+  await svg.dispatchEvent('wheel', { deltaX: 30, deltaY: 50, bubbles: true, cancelable: true });
+  const afterWheel = await transform();
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 60, center.y + 20, { steps: 4 });
+  await page.mouse.up();
+  await expect(zoom).toBeVisible();
+  expect(await transform()).not.toBe(afterWheel);
+
+  // Double-click: 100% (one viewBox unit per screen pixel), then back to fit. Screen coordinates:
+  // the zoomed svg is taller than the window, which Playwright's element actions cannot scroll into view.
+  await page.mouse.dblclick(center.x, center.y);
+  await expect(level).toHaveText('100%');
+  await page.mouse.dblclick(center.x, center.y);
+  await expect(level).toHaveText(`${fitLevel}%`);
+  expect(await transform()).toBe('translate(0px, 0px) scale(1)');
+
+  // Keyboard: + and − zoom, arrows pan, 0 resets.
+  await page.keyboard.press('+');
+  expect(Math.abs((await levelNow()) - fitLevel * 1.25)).toBeLessThanOrEqual(1);
+  await page.keyboard.press('ArrowRight');
+  expect(await transform()).toBe('translate(-40px, 0px) scale(1.25)');
+  await page.keyboard.press('-');
+  await page.keyboard.press('0');
+  await expect(level).toHaveText(`${fitLevel}%`);
+  await expectAccessible(page);
+
+  // A click without movement still closes it (after the double-click delay).
+  await page.mouse.click(5, 5);
+  await expect(zoom).toHaveCount(0);
+});
+
+test('zooms a document image in the overlay', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.getByRole('button', { name: 'diagram (Enter to open at full size)' }).click();
+  const zoom = page.getByRole('dialog', { name: 'diagram' });
+  const level = zoom.getByRole('status');
+  await expect(level).toHaveText('100%'); // 240px wide: natural size fits the window
+  await page.keyboard.press('+');
+  await expect(level).toHaveText('125%');
+  await expect(zoom.locator('img')).toHaveJSProperty('naturalWidth', 240);
+  await zoom.locator('img').dblclick(); // fit and 100% coincide here: back to fit
+  await expect(level).toHaveText('100%');
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+});

@@ -431,12 +431,16 @@ body {
   z-index: 100;
   display: grid;
   place-items: center;
-  overflow: auto;
+  overflow: clip; /* the content pans and zooms with a transform; clip also blocks programmatic scrolling */
   padding: 24px;
   background: rgba(0, 0, 0, 0.8);
   cursor: zoom-out;
+  touch-action: none;
 }
 .image-zoom:focus { outline: none; }
+.image-zoom .zoom-target { cursor: grab; will-change: transform; }
+.image-zoom.dragging, .image-zoom.dragging .zoom-target { cursor: grabbing; }
+.zoom-level { font-size: 12px; color: var(--fg-muted); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
 
 /* ---- quick file switcher (quick-switcher.ts) ---- */
 .quick-switcher {
@@ -609,14 +613,14 @@ body {
 @media (max-width: 800px) {
   .search-panel { left: 16px; right: 16px; width: auto; }
 }
-.image-zoom img { max-width: none; max-height: none; background: #fff; }
+/* Natural size when it fits, else fitted to the window (zooming to 100% is a transform on top). */
+.image-zoom img { max-width: calc(100vw - 48px); max-height: calc(100vh - 48px); background: #fff; }
 /* Diagrams scale up to fit the window; the svg viewBox keeps them sharp. */
 .image-zoom svg.diagram-zoom-svg {
   width: calc(100vw - 48px);
   height: calc(100vh - 48px);
   max-width: none;
   background: var(--bg);
-  cursor: default;
 }
 .diagram-actions {
   position: fixed;
