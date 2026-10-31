@@ -8,6 +8,7 @@ import { applyTheme, normalizeTheme, type ThemePreference } from './theme';
 import { setGlobalMediaScale } from './media-sizes';
 import { feedbackLinks } from './feedback';
 import { QUICK_OPEN_KEYS, quickOpenKeyLabel, quickOpenKeyStore, type QuickOpenKey } from './quick-open-key';
+import { buildStandaloneHtml, downloadHtml, exportFilename, mathCss } from './export-html';
 
 // Values for the document only: the toolbar and TOC keep their size.
 const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
@@ -186,9 +187,60 @@ function scanLimitRow(id: string, onChange: (limit: number) => void): HTMLElemen
 }
 
 /** Adds the settings (gear) button and its panel to the end of the toolbar. */
+/** The shown document, for the export buttons: its rendered root, file name and page title. */
+export interface ExportTarget {
+  root: HTMLElement;
+  name: string;
+  title: string;
+}
+
+/** "Export" section: the document as a standalone .html file, or the print dialog for a PDF. */
+function exportRow(target: () => ExportTarget | null): HTMLElement {
+  const section = document.createElement('div');
+  section.className = 'export-setting';
+  const title = document.createElement('p');
+  title.className = 'font-settings-title';
+  title.textContent = t('exportTitle');
+  const buttons = document.createElement('div');
+  buttons.className = 'export-buttons';
+  const status = document.createElement('p');
+  status.className = 'export-status';
+  status.setAttribute('role', 'alert');
+  const button = (label: string, run: () => void | Promise<void>) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.addEventListener('click', async () => {
+      status.textContent = '';
+      b.disabled = true;
+      try {
+        await run();
+      } catch (err) {
+        status.textContent = t('exportFailed', { error: err instanceof Error ? err.message : String(err) });
+      } finally {
+        b.disabled = false;
+      }
+    });
+    return b;
+  };
+  const html = button(t('exportHtml'), async () => {
+    const doc = target();
+    if (!doc) return;
+    const text = await buildStandaloneHtml(doc.root, { title: doc.title, extraCss: await mathCss(doc.root) });
+    downloadHtml(text, exportFilename(doc.name));
+  });
+  const pdf = button(t('exportPdf'), () => window.print());
+  buttons.append(html, pdf);
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('exportHint');
+  section.append(title, buttons, status, hint);
+  return section;
+}
+
 export function mountFontSettings(
   toolbar: HTMLElement,
-  opts: { onScanLimitChange?: (limit: number) => void } = {},
+  opts: { onScanLimitChange?: (limit: number) => void; exportTarget?: () => ExportTarget | null } = {},
 ): void {
   const store = createSettingsStore(STORAGE_KEY, normalizeFontSettings);
   const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
@@ -274,6 +326,7 @@ export function mountFontSettings(
   panel.append(hint, reset, quickOpenKeyRow(id));
   // Only the viewer opens folders; the file:// page shows a single document.
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
+  if (opts.exportTarget) panel.append(exportRow(opts.exportTarget));
   panel.append(feedbackLinks());
   wrap.append(toggle, panel);
   toolbar.append(wrap);

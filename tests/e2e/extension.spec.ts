@@ -559,3 +559,22 @@ test('searches a folder of 500 files below the root, reporting how long the firs
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('exports a file:// document as one HTML file, keeping local image paths', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page.locator('img[alt="diagram"]')).toHaveJSProperty('naturalWidth', 240);
+  await expect(page.locator('.diagram-plantuml svg')).toHaveCount(2);
+  await page.locator('.font-settings-toggle').click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'HTML として保存' }).click()]);
+  expect(download.suggestedFilename()).toBe('README.html');
+  const html = await fs.readFile((await download.path())!, 'utf8');
+  expect(html).toMatch(/^<!doctype html>\n<html lang="ja" data-theme="light">/);
+  expect(html).toContain('<main class="content markdown-body"><details class="front-matter">');
+  expect(html).toMatch(/<h1 id="[^"]+">MD Browser サンプル<\/h1>/);
+  // A page can't read file:// images, so they keep their (now absolute) path instead of being embedded.
+  expect(html).toContain(`<img src="${fileUrl(workdir, 'img/diagram.svg')}"`);
+  expect(html).not.toContain('class="copy-button"');
+  expect(html).not.toContain('data-line=');
+  expect(html.match(/<svg/g)?.length ?? 0).toBeGreaterThanOrEqual(4); // 2 Mermaid + 2 PlantUML
+});

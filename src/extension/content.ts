@@ -199,7 +199,10 @@ function buildShell(): {
   status.className = 'status';
   status.setAttribute('role', 'status');
   header.append(filesToggle, brand, status);
-  mountFontSettings(header);
+  mountFontSettings(header, {
+    // `content` is created just below; the export runs on a click, long after.
+    exportTarget: () => ({ root: content, name: fileName(), title: document.title }),
+  });
 
   const layout = document.createElement('div');
   layout.className = 'layout';

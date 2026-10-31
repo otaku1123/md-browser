@@ -554,7 +554,14 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   }
   document.querySelector('.brand')?.after(badge);
 }
-mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
+mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, {
+  onScanLimitChange: () => void rescanFolder(),
+  exportTarget: () => {
+    if (!currentDoc) return null;
+    const name = currentDoc.path.slice(currentDoc.path.lastIndexOf('/') + 1);
+    return { root: contentEl, name, title: contentEl.querySelector('h1')?.textContent?.trim() || name };
+  },
+});
 mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
 /** A search hit: the document is opened (or kept) at that line with the query's matches highlighted. */
 function openHit(path: string, hit: SearchHit, query: string): void {
