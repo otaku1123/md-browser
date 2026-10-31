@@ -8,7 +8,7 @@
 
 - Chrome ウェブストアのデベロッパー登録が済んでいる（登録料 $5、一度だけ）
 - Google アカウントで 2 段階認証が有効になっている
-- リリース PR（`develop` → `main`）がマージ済み
+- リリース PR（`develop` → `main`）がマージ済み。リリース PR では CI の `release-check` ジョブ（`scripts/release-check.mjs`）が、バージョンの上げ忘れ、manifest の権限面の変更、ストア用 zip のサイズ増（+25% 超）、名前・概要の文字数上限を検査する。権限面を意図して変えるときは PR に `store-permissions` ラベルを付け、本書の権限説明と `privacy.html` を更新する
 - 提出するコミットに `v<version>` タグを付けて push 済み（ストアの版とコードを対応づけるため）
   ```sh
   git fetch && git tag -a v<version> origin/main -m "Release <version>" && git push origin v<version>
