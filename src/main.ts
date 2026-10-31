@@ -15,6 +15,12 @@ import { addHeadingLinks } from './core/heading-link';
 import { enableImageZoom, prepareImageZoom } from './core/image-zoom';
 import { applyMediaSizes, loadMediaDoc, prepareMediaSizes, showMediaSizes } from './core/media-sizes';
 import { mountSkipLink } from './core/skip-link';
+import { mountQuickSwitcher } from './core/quick-switcher';
+import { mountSearchPanel } from './core/search-panel';
+import { createSearchCorpus, type SearchCorpus } from './core/search-corpus';
+import { parseQuery, type SearchHit } from './core/search';
+import { clearSearchHighlight, highlightSearch, jumpToLine } from './core/search-jump';
+import { noteRecentDoc, recentDocs } from './core/recent-docs';
 import { onReturn } from './core/on-return';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
@@ -22,6 +28,7 @@ import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
 import { loadHiddenDirs, saveHiddenDirs } from './core/hidden-dirs-store';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import {
+  corpusSource,
   fromDirectoryHandle,
   fromFileHandle,
   fromFiles,
@@ -45,18 +52,31 @@ const filesEl = $<HTMLElement>('files');
 const filesToggle = $<HTMLButtonElement>('toggle-files');
 const overlay = $<HTMLElement>('drop-overlay');
 const toc = createToc(tocEl);
+/** Opens a document of the workspace by path (sidebar, quick switcher). */
+function openPath(path: string): void {
+  const doc = ws?.docs.find((d) => d.path === path);
+  if (doc && doc !== currentDoc) void showDoc(doc, { keepScroll: false });
+}
+
+/** Key for the documents opened recently in this tab: the folder name, like the hidden folders. */
+const recentRoot = (w: Workspace) => w.folder ?? '';
+
 const fileTree = createFileTree(
   filesEl,
-  (path) => {
-    const doc = ws?.docs.find((d) => d.path === path);
-    if (doc && doc !== currentDoc) void showDoc(doc, { keepScroll: false });
-  },
+  openPath,
   { onHide: (dir) => queueSetHidden(dir, true), onUnhide: (dir) => queueSetHidden(dir, false) },
 );
 
 let ws: Workspace | null = null;
+/** The open folder's texts for full-text search; new per opened folder, follows `ws` on a rescan. */
+let corpus: SearchCorpus | null = null;
+/** The search terms highlighted on the page while the search panel is open, and the line jumped to. */
+let searchTerms: string[] = [];
+let jumpLine: number | null = null;
 let currentDoc: DocEntry | null = null;
 let lastStamp = '';
+/** The shown document's source, for the search panel's "this file" scope. */
+let lastText = '';
 let renderSeq = 0;
 let releaseAssets: () => void = () => {};
 let pollTimer: number | undefined;
@@ -68,7 +88,7 @@ let pollFailures = 0;
 
 // ---- rendering ------------------------------------------------------------
 
-async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<void> {
+async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number }): Promise<void> {
   if (!ws) return;
   const seq = ++renderSeq;
   const workspace = ws;
@@ -111,13 +131,22 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean }): Promise<vo
   if (currentDoc !== doc) {
     toc.reset();
     sourceView.reset();
+    jumpLine = null;
     if (recentHandle) void saveRecent({ handle: recentHandle, docPath: doc.path });
+    noteRecentDoc(recentRoot(workspace), doc.path);
   }
   currentDoc = doc;
   lastStamp = content.stamp;
+  lastText = content.text;
+  corpus?.put(doc.path, content.text, content.stamp);
   sourceView.setSource(content.text);
   toc.render(tocItems);
   window.scrollTo(0, opts.keepScroll ? scrollY : 0);
+  // A search hit: scroll to its line once; the highlights are ranges, so a re-render renews them.
+  if (opts.line !== undefined) {
+    jumpLine = opts.line;
+    jumpToLine(contentEl, opts.line, searchTerms);
+  } else highlightSearch(contentEl, searchTerms, jumpLine ?? undefined);
   fileTree.setActive(doc.path);
   toc.update();
   // File name first: narrow tabs only show the start of the title.
@@ -141,6 +170,11 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
     return;
   }
   ws = next;
+  corpus = createSearchCorpus({
+    paths: () => ws?.docs.map((d) => d.path) ?? [],
+    read: (path, known) => (ws ? corpusSource(ws).read(path, known) : Promise.reject(new Error('no folder'))),
+  });
+  searchPanel.setAvailable(true);
   recentHandle = opts.handle ?? null;
   // The history stays, but a reload must not bring back an older item over one that can't be remembered.
   if (!recentHandle) void skipResume();
@@ -522,7 +556,35 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
 }
 mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
 mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
+/** A search hit: the document is opened (or kept) at that line with the query's matches highlighted. */
+function openHit(path: string, hit: SearchHit, query: string): void {
+  const doc = ws?.docs.find((d) => d.path === path);
+  if (!doc) return;
+  searchTerms = parseQuery(query);
+  if (doc === currentDoc) {
+    jumpLine = hit.line;
+    jumpToLine(contentEl, hit.line, searchTerms);
+  } else void showDoc(doc, { keepScroll: false, line: hit.line });
+}
+
+const searchPanel = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
+  corpus: () => corpus,
+  current: () => (currentDoc ? { path: currentDoc.path, text: lastText } : null),
+  truncated: () => !!ws?.truncatedAt,
+  onOpen: openHit,
+  onClose: () => {
+    searchTerms = [];
+    jumpLine = null;
+    clearSearchHighlight();
+  },
+});
 mountSkipLink(document.querySelector<HTMLElement>('.toolbar')!);
+mountQuickSwitcher({
+  paths: () => ws?.docs.map((d) => d.path) ?? [],
+  current: () => currentDoc?.path ?? null,
+  recent: () => (ws ? recentDocs(recentRoot(ws)) : []),
+  onOpen: openPath,
+});
 const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl).then(() => applyMediaSizes(contentEl)));

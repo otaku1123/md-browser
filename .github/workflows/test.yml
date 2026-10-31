@@ -38,9 +38,11 @@ jobs:
       - name: E2E tests (web app + extension)
         if: ${{ !inputs.update_screenshots }}
         run: npm run test:e2e
+      # =all: the default ("changed") keeps a baseline whose difference is within the 1% tolerance, so
+      # a small intended change (a label, a few pixels) would never reach the committed image.
       - name: Update screenshot baselines
         if: ${{ inputs.update_screenshots }}
-        run: npm run test:visual -- --update-snapshots
+        run: npm run test:visual -- --update-snapshots=all
       - uses: actions/upload-artifact@v7
         if: ${{ inputs.update_screenshots }}
         with:
@@ -55,3 +57,34 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # Release PRs (develop -> main) only: catches what the tests above don't — a forgotten version
+  # bump, a changed extension permission surface (store re-review + user warning), a store zip that
+  # grew, or store text over the limits. See scripts/release-check.mjs. An intended permission
+  # change is accepted by adding the `store-permissions` label to the PR and re-running the job.
+  release-check:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: base
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            base/package-lock.json
+      - name: Build the store zip (PR)
+        run: npm ci && npm run pack:ext
+      - name: Build the store zip (main)
+        working-directory: base
+        run: npm ci && npm run pack:ext
+      - name: Compare with main
+        env:
+          ALLOW_MANIFEST_CHANGE: ${{ contains(github.event.pull_request.labels.*.name, 'store-permissions') }}
+        run: node scripts/release-check.mjs --base base

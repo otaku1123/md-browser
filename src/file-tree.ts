@@ -58,8 +58,10 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
     for (const name of [...node.dirs.keys()].sort(byName)) {
       const li = document.createElement('li');
       li.className = 'file-tree-dir';
+      // Closed by default: a big folder stays short, and only the open document's folders expand
+      // (setActive), so the current place stands out.
       const details = document.createElement('details');
-      details.open = true;
+      details.dataset.dir = `${prefix}${name}`;
       const summary = document.createElement('summary');
       summary.textContent = name;
       details.append(summary, renderDir(node.dirs.get(name)!, `${prefix}${name}/`));
@@ -128,6 +130,59 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
     if (btn) onOpen(btn.dataset.path!);
   });
 
+  const ROW = '.file-tree summary, .file-tree .file-tree-file';
+  /** The folder holding a row or a folder's <details>, or null at the top level. */
+  const parentFolder = (node: HTMLElement): HTMLDetailsElement | null => {
+    const from = node.tagName === 'SUMMARY' ? node.parentElement! : node;
+    const d = from.parentElement?.closest('details') ?? null;
+    return d && el.contains(d) ? d : null;
+  };
+  /** Folder and file rows in order, leaving out those inside a closed folder. */
+  function visibleRows(): HTMLElement[] {
+    return Array.from(el.querySelectorAll<HTMLElement>(ROW)).filter((row) => {
+      for (let d = parentFolder(row); d; d = parentFolder(d)) if (!d.open) return false;
+      return true;
+    });
+  }
+
+  // Arrow keys move through the list like a tree view (#123). Enter and Space keep their native
+  // meaning: a <summary> opens or closes its folder, a file button opens the document.
+  el.addEventListener('keydown', (e) => {
+    const row = e.target as HTMLElement;
+    if (!row.matches?.(ROW) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const folder = row.tagName === 'SUMMARY' ? (row.parentElement as HTMLDetailsElement) : null;
+    const rows = visibleRows();
+    const i = rows.indexOf(row);
+    let next: HTMLElement | null | undefined;
+    switch (e.key) {
+      case 'ArrowDown':
+        next = rows[i + 1];
+        break;
+      case 'ArrowUp':
+        next = rows[i - 1];
+        break;
+      case 'Home':
+        next = rows[0];
+        break;
+      case 'End':
+        next = rows[rows.length - 1];
+        break;
+      case 'ArrowRight':
+        if (!folder) return; // a file: nothing to expand
+        if (folder.open) next = rows[i + 1]; // its first entry
+        else folder.open = true;
+        break;
+      case 'ArrowLeft':
+        if (folder?.open) folder.open = false;
+        else next = parentFolder(row)?.querySelector<HTMLElement>(':scope > summary');
+        break;
+      default:
+        return;
+    }
+    e.preventDefault(); // no page scroll
+    next?.focus();
+  });
+
   function setActive(path: string): void {
     activePath = path;
     const btn = buttons.get(path);
@@ -146,8 +201,11 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
       buttons = new Map();
       active = null;
       hideable = !!opts.onHide && hidden !== null;
+      // The folders the user expanded stay expanded across a re-render (e.g. after hiding one).
+      const expanded = new Set(Array.from(el.querySelectorAll<HTMLDetailsElement>('.file-tree details[open]'), (d) => d.dataset.dir));
       const list = renderDir(buildTree(paths), '');
       list.className = 'file-tree';
+      for (const d of list.querySelectorAll<HTMLDetailsElement>('details')) if (expanded.has(d.dataset.dir)) d.open = true;
       const extra = hidden?.length && opts.onUnhide ? [renderHidden(hidden)] : [];
       // Keep the resize handle (files-sidebar.ts), which lives in the sidebar too.
       el.replaceChildren(list, ...extra, ...el.querySelectorAll(`:scope > .${PANEL_RESIZER_CLASS}`));

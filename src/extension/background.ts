@@ -1,12 +1,14 @@
 import { updateFileAccessBadge } from './file-access-badge';
-import { chooseRoot, folderOf, listMarkdownTree, relativePath } from './dir-listing';
+import { chooseRoot, fileUrlBelow, folderOf, isDocPath, listMarkdownTree, relativePath } from './dir-listing';
 import { readSelf } from './read-self';
 import { addHiddenDir, normalizeHiddenDirs, removeHiddenDir } from '../core/hidden-dirs';
 import {
   MSG_LIST_SIBLINGS,
+  MSG_READ_FILE,
   MSG_READ_SELF,
   MSG_SET_HIDDEN_DIR,
   type ListSiblingsResponse,
+  type ReadFileResponse,
   type ReadSelfResponse,
   type SetHiddenDirResponse,
 } from './messages';
@@ -106,6 +108,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse: (r: SetHiddenDi
       else await chrome.storage.local.remove(hiddenKey(root));
       sendResponse({ ok: true, hidden });
     })
+    .catch((err: unknown) => sendResponse({ ok: false, error: String(err) }));
+  return true; // async response
+});
+
+// Reads one Markdown file of the tab's root for full-text search. Same checks as listing, and the
+// path is built below the root from checked segments (isDocPath), so nothing above it, and no
+// other kind of file, can be read. Like the page's own file, an unchanged file sends no text.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse: (r: ReadFileResponse) => void) => {
+  if (msg?.type !== MSG_READ_FILE) return false;
+  const url = sender.url?.split('#')[0] ?? '';
+  if (sender.id !== chrome.runtime.id || !MD_URL.test(url)) {
+    sendResponse({ ok: false, error: 'not a Markdown file URL' });
+    return false;
+  }
+  if (typeof msg.path !== 'string' || !isDocPath(msg.path)) {
+    sendResponse({ ok: false, error: 'bad path' });
+    return false;
+  }
+  tabRoot(sender.tab?.id, folderOf(url))
+    .then((root) => readSelf(fetch, fileUrlBelow(root, msg.path), typeof msg.known === 'string' ? msg.known : undefined))
+    .then(sendResponse)
     .catch((err: unknown) => sendResponse({ ok: false, error: String(err) }));
   return true; // async response
 });

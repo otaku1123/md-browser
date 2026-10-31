@@ -264,12 +264,17 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
     await expect(sidebar.locator('summary')).toHaveText(['sub dir']);
     await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
 
+    // Folders start collapsed (#122); the one holding the open document is expanded.
+    const subDir = sidebar.locator('details[data-dir="sub dir"]');
+    await expect(subDir).toHaveJSProperty('open', false);
+    await subDir.locator('summary').click();
     await sidebar.getByRole('button', { name: 'deep #1.md' }).click();
     await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
     await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
     // The tab keeps its root: same list, with the subfolder file active.
     await expect(sidebar.locator('.file-tree-file')).toHaveText(['deep #1.md', 'notes.md', 'README.md']);
     await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'sub dir/deep #1.md');
+    await expect(subDir).toHaveJSProperty('open', true);
     // Links resolve against the root, not the subfolder.
     await sidebar.getByRole('button', { name: 'notes.md' }).click();
     await expect(page).toHaveURL(/\/notes\.md$/);
@@ -299,6 +304,32 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
   }
 });
 
+test('switches files with the quick switcher and keeps the recent ones across file pages', async ({ context }) => {
+  const dir = await makeFolder({ 'README.md': '# Top', 'notes.md': '# Notes', 'sub dir/deep #1.md': '# Deep' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    await expect(page.locator('.files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+    const switcher = page.getByRole('dialog', { name: 'ファイルへ移動' });
+    await page.keyboard.press('ControlOrMeta+P');
+    await expect(switcher.getByRole('combobox')).toBeFocused();
+    await expectAccessible(page);
+    await page.keyboard.type('deep');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
+    await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
+
+    // A new page was loaded: the previous document is still listed first.
+    await expect(page.locator('.files [aria-current="page"]')).toHaveAttribute('data-path', 'sub dir/deep #1.md');
+    await page.keyboard.press('ControlOrMeta+P');
+    await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'README.md');
+    await page.keyboard.press('Escape');
+    await expect(switcher).toHaveCount(0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('hides folders from the file sidebar per root folder, and shows them again', async ({ context }) => {
   const dir = await makeFolder({
     'README.md': '# Top',
@@ -313,6 +344,7 @@ test('hides folders from the file sidebar per root folder, and shows them again'
     const sidebar = page.locator('.files');
     await expect(sidebar.locator('.file-tree-file')).toHaveText(['a.md', 'b.md', 'notes.md', 'README.md']);
 
+    await sidebar.locator('details[data-dir="src"] > summary').click(); // folders start collapsed; "src/gen" is inside
     await sidebar.getByRole('button', { name: '「src/gen」を一覧から隠す' }).click();
     await expect(sidebar.locator('.file-tree-file')).toHaveText(['b.md', 'notes.md', 'README.md']);
     await expect(sidebar.locator('.files-hidden summary')).toHaveText('非表示のフォルダ（1）');
@@ -418,4 +450,112 @@ test('passes the axe accessibility checks on a file page and the viewer', async 
   await page.goto(`chrome-extension://${extensionId}/index.html`);
   await expect(page.locator('.toolbar')).toBeVisible();
   await expectAccessible(page);
+});
+
+// #127: how long the service worker needs to read a folder's documents for full-text search —
+// fetch, SHA-256 and decode of each file, as readSelf does for MSG_READ_FILE. The time is recorded
+// in the report to guide the search design; the bound only catches a large regression.
+test('reads 500 files through the service worker in reasonable time', async ({ context }) => {
+  const body = `# Doc\n\n${'ここは本文です。BLE の再接続シーケンスについて説明します。 '.repeat(30)}\n`; // ~2 KB
+  const files: Record<string, string> = {};
+  for (let i = 0; i < 500; i++) files[`d${i % 10}/doc-${i}.md`] = body;
+  const dir = await makeFolder(files);
+  try {
+    const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    const urls = Object.keys(files).map((rel) => fileUrl(dir, rel));
+    const result = await sw.evaluate(async (urls: string[]) => {
+      const start = performance.now();
+      let chars = 0;
+      const queue = [...urls];
+      async function worker(): Promise<void> {
+        for (let url = queue.shift(); url; url = queue.shift()) {
+          const buf = await (await fetch(url, { cache: 'no-store' })).arrayBuffer();
+          await crypto.subtle.digest('SHA-256', buf);
+          chars += new TextDecoder().decode(buf).length;
+        }
+      }
+      await Promise.all(Array.from({ length: 8 }, worker)); // search-corpus.ts CONCURRENCY
+      return { ms: performance.now() - start, chars };
+    }, urls);
+    const line = `[perf] service worker: 500 files (${(500 * body.length) / 1000} K chars) fetched, hashed and decoded in ${result.ms.toFixed(0)} ms`;
+    console.log(line);
+    test.info().annotations.push({ type: 'perf', description: line });
+    expect(result.chars).toBe(500 * body.length);
+    expect(result.ms).toBeLessThan(15_000);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('searches the text of the files below the root through the service worker', async ({ context }) => {
+  const dir = await makeFolder({
+    'README.md': '# Top\n\nBLE の再接続について。',
+    'docs/a.md': '# A\n\n再接続は 3 秒待つ。\n\n```\n再接続()\n```\n',
+    'docs/b.md': '# B\n\nnothing here',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    await page.getByRole('button', { name: 'フォルダ内を検索' }).click();
+    const panel = page.getByRole('search', { name: 'フォルダ内を検索' });
+    await panel.getByRole('searchbox').fill('再接続');
+    await expect(panel.locator('.search-panel-status')).toHaveText('2 ファイルに 3 件');
+    await expect(panel.locator('.search-file-path')).toContainText(['docs/a.md', 'README.md']);
+    await expect(panel.locator('.search-hit-code')).toHaveText(['コード']);
+    await expectAccessible(page);
+    const hit = panel.locator('.search-file[aria-label="docs/a.md"] .search-hit').first();
+    await expect(hit).toHaveAttribute('data-line', '3');
+    await hit.click();
+    // The new page jumps to the line from the hash, then drops it, and shows the search again.
+    await expect(page.locator('.markdown-body h1')).toHaveText('A');
+    await expect(page).toHaveURL(/\/docs\/a\.md$/);
+    await expect(page.locator('.markdown-body [data-line="3"]')).toBeInViewport();
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('searchbox')).toHaveValue('再接続');
+    await expect(panel.getByRole('searchbox')).not.toBeFocused();
+    await expect(panel.locator('.search-panel-status')).toHaveText('2 ファイルに 3 件');
+    // A hit in the file already shown jumps without a page load: line 6 is inside the code block
+    // that starts on line 5, whose <code> carries that line.
+    const inCode = panel.locator('.search-file[aria-label="docs/a.md"] .search-hit').nth(1);
+    await expect(inCode).toHaveAttribute('data-line', '6');
+    await inCode.click();
+    await expect(page).toHaveURL(/\/docs\/a\.md$/);
+    await expect(page.locator('.markdown-body pre [data-line="5"]')).toBeInViewport();
+    await expect(panel.locator('.search-panel-status')).toHaveText('2 ファイルに 3 件 · 2 / 3'); // docs/a.md is listed first (more matches)
+    // "This file" needs nothing from the service worker.
+    await panel.getByRole('button', { name: 'このファイル', exact: true }).click();
+    await expect(panel.locator('.search-panel-status')).toHaveText('1 ファイルに 2 件');
+    await expect(panel.locator('.search-file-path')).toHaveText(['docs/a.md2']);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// #137: the listing's limits (500 files, 4 levels): everything listed is searched, and the panel
+// says when the folder has more. The time of the first search, through the service worker, is reported.
+test('searches a folder of 500 files below the root, reporting how long the first search takes', async ({ context }) => {
+  const para = 'ここは本文です。BLE の接続について説明します。 The quick brown fox jumps over the lazy dog. ';
+  const files: Record<string, string> = { 'README.md': '# Big folder\n' };
+  for (let i = 0; i < 499; i++) files[`d${i % 10}/s${i % 5}/doc-${i}.md`] = `# Doc ${i}\n\n${para.repeat(25)}\n\n再接続シーケンス ${i}\n`;
+  files['a/b/c/d/e/deep.md'] = '# Too deep\n\n再接続シーケンス deep\n'; // 5 levels: beyond the walk, so the listing is cut
+  const dir = await makeFolder(files);
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    await expect(page.locator('.files .file-tree-file')).toHaveCount(500);
+    const panel = page.getByRole('search', { name: 'フォルダ内を検索' });
+    const started = Date.now();
+    await page.keyboard.press('ControlOrMeta+Shift+F');
+    await panel.getByRole('searchbox').fill('シーケンス');
+    await expect(panel.locator('.search-panel-status')).toHaveText('499 ファイルに 499 件', { timeout: 30_000 });
+    const ms = Date.now() - started;
+    const line = `[perf] extension: 500 files read through the service worker and searched ${ms} ms after opening the panel`;
+    console.log(line);
+    test.info().annotations.push({ type: 'perf', description: line });
+    expect(ms).toBeLessThan(15_000);
+    await expect(panel.locator('.search-panel-note')).toHaveText('一覧が上限に達しているため、一部のファイルは検索対象外です。');
+    await expectAccessible(page);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });

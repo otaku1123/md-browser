@@ -1,6 +1,7 @@
 import { resolvePath, type AssetResolver } from './core/assets';
 import { SCAN_LIMIT_DEFAULT } from './core/scan-limit';
 import { isDefaultSkippedDir, isHiddenDir } from './core/hidden-dirs';
+import type { CorpusSource } from './core/search-corpus';
 
 export interface DocEntry {
   /** Path relative to the workspace root, e.g. "docs/guide.md". */
@@ -34,6 +35,22 @@ export interface Workspace {
   stat(doc: DocEntry): Promise<string>;
   /** Creates a resolver for one render pass. Call the returned release() before the next pass. */
   assetResolver(doc: DocEntry): { resolve: AssetResolver | null; release: () => void };
+}
+
+/**
+ * The workspace's documents for full-text search (search-corpus.ts). stat() is the cheap check:
+ * the text is read only when the stamp differs from the one the corpus already has.
+ */
+export function corpusSource(ws: Workspace): CorpusSource {
+  return {
+    paths: () => ws.docs.map((d) => d.path),
+    async read(path, known) {
+      const doc = { path };
+      if (known !== undefined && (await ws.stat(doc)) === known) return 'unchanged';
+      const { text, stamp } = await ws.read(doc);
+      return { text, version: stamp };
+    },
+  };
 }
 
 const MD_EXT = /\.(md|markdown|mdown|mkd)$/i;

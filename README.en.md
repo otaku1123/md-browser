@@ -20,14 +20,18 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 - Emoji shortcodes (`:smile:`, `:+1:`; like GitHub, not inside code and not emoticons such as `:)`)
 - Copy buttons on code blocks
 - Markdown source view (the `<>` toolbar button, or Ctrl+Shift+M / ⌘+Shift+M on Mac) with line numbers, highlighting and copy-all; follows auto-reload
+- Quick file switcher (Ctrl+P / ⌘+P on Mac): fuzzy-find a Markdown file of the open folder by name (↑↓, Enter, Esc); with an empty query, documents recently opened in the tab come first. Active only with two or more files, so a single file still prints; the shortcut can be changed to ⌘/Ctrl+K, ⌘/Ctrl+Shift+P or turned off in the display settings
 - Hover a heading to show 🔗; click it to copy a link to that heading
 - Table of contents sidebar with scroll-synced highlighting; toggle it from the toolbar and resize it by dragging, with the arrow keys, or double-click to reset (saved and shared across tabs)
 - Mermaid diagrams (lazy-loaded); click to enlarge, save as SVG / PNG
 - Math with KaTeX (`$...$`, `$$...$$`, ` ```math `; same syntax as GitHub, lazy-loaded)
 - PlantUML diagrams (` ```plantuml ` / `puml` / `uml`); the official in-browser engine is bundled and lazy-loaded, nothing is sent to a server. The standard library, sprites and emoji are not bundled. Click to enlarge, save as SVG / PNG
+- Full-text search in the folder (Ctrl+Shift+F / ⌘+Shift+F on Mac, or the 🔍 toolbar button): searches the text of every Markdown file of the open folder and lists the matches per file with the line number, the heading they are under and an excerpt. Clicking a match opens the file at that line and highlights the matches on the page (the ones on that line in another colour; cleared when the search is closed). Enter / Shift+Enter (or the ↓ ↑ buttons) go to the next / previous match; the "This file" scope searches only the shown document (an in-page find). Ignores case and character width (half-width kana too); several words are ANDed. No index: the files are read when the panel opens, so nothing is stored. Ctrl+F stays the browser's find
 - Images with relative paths (when a folder is opened)
 - Auto-reload when the local file changes (1 s polling, Chrome / Edge)
 - Relative links to other `.md` files in the folder
+- The file sidebar shows folders collapsed; only the open document's folders are expanded (folders you expand stay open when the list refreshes)
+- The file sidebar works with the keyboard: ↑↓, Home and End move, → expands a folder / enters it, ← collapses it / goes to the parent, Enter opens a file or toggles a folder
 - Hide folders you don't need from the file sidebar (the eye button next to a folder name). Hidden folders are not scanned at all, so opening is faster; show them again from "Hidden folders" below the list. Saved per folder, only in this browser
 - When a folder is opened, names starting with `.` and `node_modules`, `bower_components`, `vendor`, `dist`, `build`, `out`, `target`, `coverage`, `venv` and `__pycache__` are skipped (web app and extension alike)
 - Display settings (gear button): theme (system / light / dark), text size, content width, image and diagram size (50–200% of their own size, never wider than the text), body and code fonts. Stored in `chrome.storage.sync` (extension) or `localStorage` (web) and applied to other tabs immediately
@@ -52,7 +56,7 @@ Open a file or a folder with the buttons, or drop it onto the page.
 
 - Opening `file:///…/*.md` renders the file in place (TOC, diagrams, relative images, links to other Markdown files)
 - Saving the file re-renders it in about a second, keeping the scroll position
-- Lists Markdown files in the same folder and its subfolders in a left sidebar (when there are two or more; names starting with `.` and `node_modules`, `bower_components`, `vendor`, `dist`, `build`, `out`, `target`, `coverage`, `venv` and `__pycache__` are skipped). Folders can be hidden with the button next to their name (saved per root folder in `chrome.storage.local`, not synced)
+- Lists Markdown files in the same folder and its subfolders in a left sidebar (when there are two or more; names starting with `.` and `node_modules`, `bower_components`, `vendor`, `dist`, `build`, `out`, `target`, `coverage`, `venv` and `__pycache__` are skipped). Folders start collapsed; only the open document's folders are expanded. Folders can be hidden with the button next to their name (saved per root folder in `chrome.storage.local`, not synced)
 - Clicking the toolbar icon opens the same viewer as the web app inside the extension
 
 ### Install from the Chrome Web Store
@@ -74,7 +78,7 @@ Expected result: the file is rendered with a table of contents, and "Auto-reload
 ### How it works
 
 - A `file://` page cannot re-read itself because of CORS, so the extension's service worker reads the file and hands it to the page
-- The service worker only reads the `.md` file that the requesting tab itself has open
+- The service worker only reads the `.md` file that the requesting tab itself has open and, for full-text search, `.md` files below the tab's root folder that the page names by a root-relative path (`..` and absolute paths are refused)
 - The file list is read only from the folder of the file the tab first opened and below (from Chrome's folder listing page; never parent folders; up to 4 levels, 500 files and 200 folders). Excluded and user-hidden folders are never listed. Hide / show requests get the same tab check, and the page sends only a path relative to the root
 
 ## Development

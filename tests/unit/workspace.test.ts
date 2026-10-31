@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromDirectoryHandle, fromFiles } from '../../src/workspace';
+import { corpusSource, fromDirectoryHandle, fromFiles } from '../../src/workspace';
 
 /** File as produced by <input webkitdirectory>, which sets webkitRelativePath. */
 function picked(rel: string): File {
@@ -122,5 +122,18 @@ describe('fromDirectoryHandle', () => {
     const all = await ws.rescan!(['docs']);
     expect(all.docs.map((d) => d.path)).toEqual(['app/app.md']);
     expect(all.truncatedAt).toBe(10); // same limit as before
+  });
+});
+
+describe('corpusSource', () => {
+  it('reads the text with its stamp, and answers unchanged when the stamp is the known one', async () => {
+    const file = picked('proj/a.md');
+    const ws = fromFiles([file, picked('proj/b.md')]);
+    const source = corpusSource(ws);
+    expect(source.paths()).toEqual(['proj/a.md', 'proj/b.md']);
+    const first = await source.read('proj/a.md');
+    expect(first).toEqual({ text: '# x', version: `${file.lastModified}:${file.size}` });
+    expect(await source.read('proj/a.md', (first as { version: string }).version)).toBe('unchanged');
+    expect(await source.read('proj/a.md', 'stale')).toEqual(first);
   });
 });

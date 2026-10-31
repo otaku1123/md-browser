@@ -16,6 +16,13 @@ import { mountSourceView } from '../core/source-view';
 import { mountFontSettings } from '../core/font-settings';
 import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
 import { createFileTree } from '../file-tree';
+import { mountQuickSwitcher } from '../core/quick-switcher';
+import { mountSearchPanel, type SearchPanel } from '../core/search-panel';
+import { createSearchCorpus, type SearchCorpus } from '../core/search-corpus';
+import { parseQuery, type SearchHit } from '../core/search';
+import { clearSearchHighlight, highlightSearch, jumpHash, jumpToLine, parseJumpHash } from '../core/search-jump';
+import { fileCorpusSource } from './file-corpus';
+import { noteRecentDoc, recentDocs } from '../core/recent-docs';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
 import { sha256Hex } from './read-self';
@@ -56,6 +63,18 @@ function fileName(): string {
   return decodeURIComponent(location.pathname.split('/').pop() ?? 'document.md');
 }
 
+/** Full-text search over the tab's root, once its files are listed (showSiblings). */
+let searchCorpus: SearchCorpus | null = null;
+let searchTruncated = false;
+/** This document's root-relative path, as the listing names it. */
+let currentPath: string | null = null;
+let openHit: (path: string, hit: SearchHit, query: string) => void = () => {};
+/** A search hit this page was opened for (search-jump.ts); read before the hash is removed. */
+const pendingJump = parseJumpHash(location.hash);
+/** The search terms highlighted on the page, and the line jumped to (kept across re-renders). */
+let searchTerms: string[] = pendingJump ? parseQuery(pendingJump.query) : [];
+let jumpLine: number | null = pendingJump?.line ?? null;
+
 async function listSiblings(): Promise<ListSiblingsResponse | undefined> {
   try {
     return await chrome.runtime.sendMessage({ type: MSG_LIST_SIBLINGS });
@@ -68,7 +87,7 @@ async function listSiblings(): Promise<ListSiblingsResponse | undefined> {
  * Lists the Markdown files in this file's folder and below, then offers them in the sidebar.
  * Lists again when the user comes back to the tab, so added or removed files show up (#109).
  */
-async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement): Promise<void> {
+async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement, search: SearchPanel, contentEl: HTMLElement): Promise<void> {
   const res = await listSiblings();
   if (!res?.ok) return;
   // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
@@ -86,22 +105,27 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
     });
   };
 
-  const tree = createFileTree(
-    filesEl,
-    (path) => {
-      // Paths are relative to the root; encode each segment so names like "a#b.md" survive.
-      location.href = new URL(path.split('/').map(encodeURIComponent).join('/'), rootUrl).href;
-    },
-    { onHide: (dir) => setHidden(dir, true), onUnhide: (dir) => setHidden(dir, false) },
-  );
+  // Paths are relative to the root; encode each segment so names like "a#b.md" survive.
+  const openPath = (path: string) => {
+    location.href = new URL(path.split('/').map(encodeURIComponent).join('/'), rootUrl).href;
+  };
+  const tree = createFileTree(filesEl, openPath, {
+    onHide: (dir) => setHidden(dir, true),
+    onUnhide: (dir) => setHidden(dir, false),
+  });
   const sidebar = mountFilesSidebar(filesToggle, filesEl);
 
   type Listing = Extract<ListSiblingsResponse, { ok: true }>;
   const key = (list: Listing) => JSON.stringify([list.paths, list.hidden, list.truncated]);
   let shown = '';
+  /** The latest listing, for the quick switcher. */
+  let listed: Listing = res;
 
   function show(list: Listing): void {
+    listed = list;
     shown = key(list);
+    searchTruncated = list.truncated;
+    currentPath = list.current;
     tree.render(list.paths, list.hidden);
     if (list.truncated) {
       const note = document.createElement('p');
@@ -115,6 +139,27 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
   }
 
   show(res);
+  noteRecentDoc(rootUrl.href, res.current);
+  // A hit in this file: jump now. In another: that page jumps, and reopens the search, from its hash.
+  openHit = (path, hit, query) => {
+    if (path === listed.current) {
+      searchTerms = parseQuery(query);
+      jumpLine = hit.line;
+      jumpToLine(contentEl, hit.line, searchTerms);
+    } else location.href = new URL(path.split('/').map(encodeURIComponent).join('/'), rootUrl).href + jumpHash(hit.line, query);
+  };
+  searchCorpus = createSearchCorpus(fileCorpusSource(() => listed.paths));
+  search.setAvailable(true);
+  if (pendingJump) {
+    search.setQuery(pendingJump.query);
+    search.open(false); // the reader's place is the hit, not the field
+  }
+  mountQuickSwitcher({
+    paths: () => listed.paths,
+    current: () => listed.current,
+    recent: () => recentDocs(rootUrl.href),
+    onOpen: openPath,
+  });
   onReturn(() => {
     busy = busy.then(async () => {
       const next = await listSiblings();
@@ -175,6 +220,8 @@ function buildShell(): {
 async function main(): Promise<void> {
   const initial = readPlainTextSource();
   if (initial === null) return;
+  // The jump is ours, not an anchor: taken out of the URL so a reload or a copied link stays plain.
+  if (pendingJump) history.replaceState(null, '', location.pathname + location.search);
 
   const { content, tocEl, filesEl, filesToggle, status } = buildShell();
   initFavicon();
@@ -207,6 +254,9 @@ async function main(): Promise<void> {
     toc.render(items);
     if (keepScroll) window.scrollTo(0, y);
     else if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    // The first render after a search hit scrolls to it; later ones (auto-reload) only renew the highlights.
+    if (!keepScroll && jumpLine !== null) jumpToLine(content, jumpLine, searchTerms);
+    else highlightSearch(content, searchTerms, jumpLine ?? undefined);
     toc.update();
     const h1 = items.find((i) => i.level === 1)?.text;
     // File name first: narrow tabs only show the start of the title.
@@ -217,7 +267,18 @@ async function main(): Promise<void> {
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
   onThemeChange(() => void renderDiagrams(content).then(() => applyMediaSizes(content)));
   enableImageZoom(content);
-  void showSiblings(filesEl, filesToggle);
+  const search = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
+    corpus: () => searchCorpus,
+    current: () => (currentPath !== null ? { path: currentPath, text: current } : null),
+    truncated: () => searchTruncated,
+    onOpen: (path, hit, query) => openHit(path, hit, query),
+    onClose: () => {
+      searchTerms = [];
+      jumpLine = null;
+      clearSearchHighlight();
+    },
+  });
+  void showSiblings(filesEl, filesToggle, search, content);
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
   // Its hash is what the polls compare against (kept here, as the service worker keeps no state).
@@ -242,6 +303,9 @@ async function main(): Promise<void> {
     return;
   }
   status.textContent = t('autoReloadOn');
+  // The search reads this file through the service worker too; the version it has skips that.
+  const noteShown = () => currentPath !== null && searchCorpus?.put(currentPath, current, hash);
+  noteShown();
 
   let busy = false;
   let hiddenTicks = 0;
@@ -255,6 +319,7 @@ async function main(): Promise<void> {
       if (next !== 'unchanged') {
         current = next.text;
         hash = next.hash;
+        noteShown();
         await render(next.text, true);
         status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
         status.classList.remove('error');

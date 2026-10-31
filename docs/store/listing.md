@@ -8,7 +8,7 @@
 
 - Chrome ウェブストアのデベロッパー登録が済んでいる（登録料 $5、一度だけ）
 - Google アカウントで 2 段階認証が有効になっている
-- リリース PR（`develop` → `main`）がマージ済み
+- リリース PR（`develop` → `main`）がマージ済み。リリース PR では CI の `release-check` ジョブ（`scripts/release-check.mjs`）が、バージョンの上げ忘れ、manifest の権限面の変更、ストア用 zip のサイズ増（+25% 超）、名前・概要の文字数上限を検査する。権限面を意図して変えるときは PR に `store-permissions` ラベルを付け、本書の権限説明と `privacy.html` を更新する
 - 提出するコミットに `v<version>` タグを付けて push 済み（ストアの版とコードを対応づけるため）
   ```sh
   git fetch && git tag -a v<version> origin/main -m "Release <version>" && git push origin v<version>
@@ -25,7 +25,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.9.1.zip` |
+| アップロードするファイル | `release/md-browser-1.10.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -52,6 +52,8 @@ FEATURES
 • GitHub-style rendering: tables, task lists, syntax-highlighted code blocks
 • Sidebar table of contents that follows your scroll position; hide it or drag to resize
 • Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable, and folders you don't need can be hidden
+• Full-text search across the folder (Ctrl/⌘+Shift+F): matches grouped by file with the line, the heading and an excerpt; click one to jump there with the matches highlighted. Ignores case and character width; "This file" searches only the open document. No index, nothing stored
+• Quick file switcher (Ctrl/⌘+P): open any file of the folder by typing part of its name
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
 • PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
@@ -70,7 +72,7 @@ FEATURES
 • Report a bug or suggest an idea from the settings panel: it opens a GitHub issue form, and nothing is sent unless you submit it
 
 PRIVACY
-Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only reads the Markdown file you are viewing and, for the file sidebar, the names of the files in that file's folder and below.
+Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only reads the Markdown file you are viewing and, for the file sidebar, the names of the files in that file's folder and below; their contents are read only when you search the folder, in the page and in memory only — nothing is indexed or saved.
 
 SETUP (important)
 Chrome requires one extra step for extensions that read local files:
@@ -136,7 +138,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 ### 単一用途の説明（Single purpose）
 
 ```text
-Render local Markdown (.md) files opened in Chrome as formatted documents with a table of contents and Mermaid diagrams, and re-render them when the file changes. It can also list the other Markdown files in the same folder in a sidebar.
+Render local Markdown (.md) files opened in Chrome as formatted documents with a table of contents and Mermaid diagrams, and re-render them when the file changes. It can also list the other Markdown files in the same folder in a sidebar and search their text.
 ```
 
 ### ホスト権限（Host permissions）
@@ -146,13 +148,13 @@ manifest の `permissions` は `storage` だけで、`host_permissions` はな�
 審査で理由を聞かれたときは、次の文面で返信する。
 
 ```text
-The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders, common dependency and build output folders such as node_modules and dist, and folders the user chose to hide are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. No file contents other than the viewed file are read, no other pages are accessed, and no network requests are made by the extension.
+The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders, common dependency and build output folders such as node_modules and dist, and folders the user chose to hide are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. The contents of those listed files are read only when the user searches the folder's text (⌘/Ctrl+Shift+F), each by a checked root-relative path below the same root, and only to show the matches on the page. No other files are read, no other pages are accessed, and no network requests are made by the extension.
 ```
 
 ### storage 権限が必要な理由（Permission justification: storage）
 
 ```text
-Stores the user's display preferences (theme, text size, content width, image and diagram size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. chrome.storage.local keeps, on this computer only and never synced, the subfolders the user chose to hide from the file sidebar (per starting folder) and the sizes the user set for individual images and diagrams (per document URL). Only these preferences, folder locations and document URLs are stored; no file contents or personal data are saved.
+Stores the user's display preferences (theme, text size, content width, image and diagram size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths, and the shortcut for the quick file switcher) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. chrome.storage.local keeps, on this computer only and never synced, the subfolders the user chose to hide from the file sidebar (per starting folder) and the sizes the user set for individual images and diagrams (per document URL). Only these preferences, folder locations and document URLs are stored; no file contents or personal data are saved.
 ```
 
 ### リモートコード（Remote code）

@@ -71,6 +71,13 @@ test('shows the settings panel', async ({ page }) => {
   await expect(page.locator('.font-settings-panel')).toHaveScreenshot('settings-panel.png');
 });
 
+test('shows the quick switcher with matches marked', async ({ page }) => {
+  await openVisualFolder(page);
+  await page.keyboard.press('ControlOrMeta+P');
+  await page.keyboard.type('dg');
+  await expect(page.locator('.quick-switcher-dialog')).toHaveScreenshot('quick-switcher.png');
+});
+
 test('shows the file list and the TOC', async ({ page }) => {
   await openVisualFolder(page);
   await expect(page.locator('#files')).toHaveScreenshot('files-sidebar.png');
@@ -90,4 +97,13 @@ test('shows the size buttons of an image on hover', async ({ page }) => {
   await frame.hover();
   await expect(frame.locator('.media-size')).toHaveCSS('opacity', '1');
   await expect(frame).toHaveScreenshot('image-size-buttons.png');
+});
+
+test('shows the search panel', async ({ page }) => {
+  await openVisualFolder(page);
+  await page.keyboard.press('ControlOrMeta+Shift+F');
+  const panel = page.locator('.search-panel');
+  await panel.getByRole('searchbox').fill('test');
+  await expect(panel.locator('.search-file')).toHaveCount(2);
+  await expect(panel).toHaveScreenshot('search-panel.png');
 });

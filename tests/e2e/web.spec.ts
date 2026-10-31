@@ -38,6 +38,17 @@ async function openSampleFolder(page: Page): Promise<void> {
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
 }
 
+/** Clicks a document in the sidebar. Folders start collapsed (#122), so its folders are opened first. */
+async function openFromSidebar(page: Page, path: string): Promise<void> {
+  const files = page.locator('#files');
+  const segs = path.split('/');
+  for (let i = 1; i < segs.length; i++) {
+    const details = files.locator(`details[data-dir="${segs.slice(0, i).join('/')}"]`);
+    if (!(await details.evaluate((d: HTMLDetailsElement) => d.open))) await details.locator(':scope > summary').click();
+  }
+  await files.locator(`[data-path="${path}"]`).click();
+}
+
 // The build ships a Content-Security-Policy (vite.config.ts); every test must run without violating it.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -92,6 +103,7 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('img.img-missing')).toHaveCount(1);
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
   await expect(page.locator('#files summary')).toHaveText(['docs']);
+  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', false); // folders start collapsed (#122)
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
   await expect(page.locator('#workspace-name')).toHaveText('sample/');
 });
@@ -127,19 +139,22 @@ test('opens another folder in the same tab', async ({ page }) => {
 
 test('reopens the last folder and document after a reload', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files [data-path="docs/other.md"]').click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   await page.waitForTimeout(300); // the remembered document is saved asynchronously
   await page.reload();
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  // The open document's folder is expanded, so the marked file is in view.
+  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', true);
+  await expect(page.locator('#files [data-path="docs/other.md"]')).toBeVisible();
   await expect(page.locator('.welcome')).toHaveCount(0);
 });
 
 test('hides a folder from the sidebar, remembers it, and shows it again', async ({ page }) => {
   await openSampleFolder(page);
   const files = page.locator('#files');
-  await files.locator('[data-path="docs/other.md"]').click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
   // Hiding the open document's folder falls back to the README.
   await files.getByRole('button', { name: 'Hide "docs" from the list' }).click();
@@ -185,7 +200,7 @@ test('offers a button when the permission must be asked again', async ({ page })
 
 test('lists recent folders, most recent first, and removes them', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files [data-path="docs/other.md"]').click();
+  await openFromSidebar(page, 'docs/other.md');
   await page.waitForTimeout(300);
   // A second folder, opened later, goes on top.
   await page.evaluate(() => {
@@ -219,6 +234,35 @@ test('lists recent folders, most recent first, and removes them', async ({ page 
   await expect(page.locator('#recent')).toBeHidden();
 });
 
+test('opens a document with the quick switcher, recent ones first, with the shortcut from the settings', async ({ page }) => {
+  await openSampleFolder(page);
+  const switcher = page.getByRole('dialog', { name: 'Go to file' });
+  await page.keyboard.press('ControlOrMeta+P');
+  await expect(switcher.getByRole('combobox')).toBeFocused();
+  await expect(switcher.getByRole('option').first()).toBeVisible();
+  await expectAccessible(page);
+  await page.keyboard.type('othr');
+  await expect(switcher.getByRole('option')).toHaveText(['other.mddocs']);
+  await page.keyboard.press('Enter');
+  await expect(switcher).toHaveCount(0);
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+
+  // Empty query: the previous document first, so Enter goes back.
+  await page.keyboard.press('ControlOrMeta+P');
+  await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'README.md');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+
+  // Another shortcut from the display settings, shared with the other tabs through storage.
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radiogroup', { name: 'Go to file' }).getByText(/K$/).click();
+  await page.locator('.font-settings-toggle').click();
+  await page.keyboard.press('ControlOrMeta+K');
+  await expect(switcher).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(switcher).toHaveCount(0);
+});
+
 test('follows relative links between documents', async ({ page }) => {
   await openSampleFolder(page);
   await page.getByRole('link', { name: '別のMDファイル' }).click();
@@ -227,7 +271,7 @@ test('follows relative links between documents', async ({ page }) => {
 
 test('opens files from the sidebar and toggles it', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files').getByRole('button', { name: 'other.md' }).click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   const toggle = page.getByRole('button', { name: 'Files' });
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -238,10 +282,46 @@ test('opens files from the sidebar and toggles it', async ({ page }) => {
   await expect(page.locator('#files')).toBeVisible();
 });
 
+// #123: the arrow keys move through the sidebar like a tree view.
+test('moves through the file sidebar with the keyboard', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  const docs = files.locator('.file-tree summary', { hasText: 'docs' });
+  const docsFolder = docs.locator('..');
+  await page.evaluate(() => document.querySelectorAll<HTMLDetailsElement>('#files details').forEach((d) => (d.open = false)));
+  await docs.focus();
+  await page.keyboard.press('ArrowDown'); // the closed folder's files are skipped
+  await expect(files.locator('[data-path="README.md"]')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowRight'); // opens the folder…
+  await expect(docsFolder).toHaveJSProperty('open', true);
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowRight'); // …then enters it
+  await expect(files.locator('[data-path="docs/other.md"]')).toBeFocused();
+  await page.keyboard.press('ArrowLeft'); // a file: back to its folder
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('ArrowLeft'); // closes it
+  await expect(docsFolder).toHaveJSProperty('open', false);
+  await page.keyboard.press('End');
+  await expect(files.locator('[data-path="xss.md"]')).toBeFocused();
+  await page.keyboard.press('Enter'); // a file row opens the document
+  await expect(page.locator('.markdown-body h1')).toHaveText('XSS');
+  await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'xss.md');
+  // xss.md's inline handlers are reported by DOMPurify's DOMParser (see the XSS test); nothing else may be.
+  const violations = await page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations.splice(0));
+  for (const v of violations) expect(v).toMatch(/^script-src-attr inline /);
+  await page.keyboard.press('Home');
+  await expect(docs).toBeFocused();
+  await page.keyboard.press('Enter'); // a folder row toggles, as a <summary> does
+  await expect(docsFolder).toHaveJSProperty('open', true);
+});
+
 // #109: files added outside show up when the user comes back to the tab, on the same document.
 test('lists the folder again when the user comes back to the tab', async ({ page }) => {
   await openSampleFolder(page);
   await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await page.locator('#files details[data-dir="docs"] summary').click(); // expanded by the user: stays so after the re-render
   await page.evaluate(async () => {
     await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/added.md', '# Added');
     window.dispatchEvent(new Event('focus'));
@@ -684,7 +764,7 @@ test('resizes the file list, keeps the handle across documents, and resets on do
   expect(await page.evaluate(() => localStorage.getItem('md-browser:files-sidebar'))).toBe('{"open":true,"width":160}');
 
   // Opening another document re-renders the list; the handle stays.
-  await files.locator('[data-path="docs/other.md"]').click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(files.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   await expect(handle).toBeVisible();
   await handle.dblclick();
@@ -828,7 +908,7 @@ test('switches to the Markdown source and back, and starts each document in the 
   // Another document opens in the preview.
   await page.keyboard.press('ControlOrMeta+Shift+M');
   await expect(source).toBeVisible();
-  await page.locator('#files').getByRole('button', { name: 'other.md' }).click();
+  await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
   await expect(source).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
@@ -955,4 +1035,123 @@ test('opens a PlantUML diagram large and saves it as SVG and PNG', async ({ page
   expect(pngDownload.suggestedFilename()).toBe('diagram-3.png');
   expect((await readFile((await pngDownload.path())!)).subarray(1, 4).toString()).toBe('PNG');
   await expect(zoom.locator('.diagram-save-error')).toBeEmpty();
+});
+
+test('searches the text of every file in the folder from a panel', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.keyboard.press('ControlOrMeta+Shift+F');
+  const panel = page.getByRole('search', { name: 'Search in folder' });
+  await expect(panel).toBeVisible();
+  const input = panel.getByRole('searchbox');
+  await expect(input).toBeFocused();
+  await input.fill('ファイル');
+  await expect(panel.locator('.search-panel-status')).toHaveText(/^\d+ matches in 2 files$/);
+  // Most matches first: the README mentions files many times, docs/other.md once in its title.
+  await expect(panel.locator('.search-file-path')).toContainText(['README.md', 'docs/other.md']);
+  const other = panel.locator('.search-file[aria-label="docs/other.md"]'); // the README's excerpts mention that path too
+  await expect(other.locator('.search-hit mark')).toHaveText(['ファイル']);
+  await expect(other.locator('.search-hit-line')).toHaveText(['L1']);
+  await expectAccessible(page);
+  await other.locator('.search-hit').first().click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  await expect(panel).toBeVisible(); // stays open to browse the other matches
+
+  // A hit further down the README: the page opens it scrolled to that block, with the matches
+  // highlighted (CSS Custom Highlight API) and the ones on that line marked as current.
+  const highlights = () =>
+    page.evaluate(() => ({
+      all: CSS.highlights.get('md-browser-search')?.size ?? 0,
+      current: CSS.highlights.get('md-browser-search-current')?.size ?? 0,
+    }));
+  expect(await highlights()).toEqual({ all: 1, current: 1 });
+  const linkHit = panel.locator('.search-file[aria-label="README.md"] .search-hit', { hasText: '別のMDファイル' });
+  const line = await linkHit.getAttribute('data-line');
+  await linkHit.click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect(page.locator(`.markdown-body [data-line="${line}"]`)).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  const marked = await highlights();
+  expect(marked.all).toBeGreaterThan(marked.current);
+  expect(marked.current).toBeGreaterThan(0);
+  // The highlights are ranges of the rendered nodes: a re-render renews them.
+  await page.evaluate(async () => {
+    await (window as unknown as { __appendToFile(rel: string, text: string): Promise<void> }).__appendToFile('README.md', '\n\nもう一つのファイル\n');
+  });
+  await expect(page.locator('.markdown-body p', { hasText: 'もう一つのファイル' })).toBeVisible();
+  expect((await highlights()).all).toBe(marked.all + 1);
+
+  // "This file": only the shown document, and Enter / Shift+Enter walk its matches.
+  await panel.getByRole('button', { name: 'This file', exact: true }).click();
+  await expect(panel.locator('.search-panel-status')).toHaveText(/^\d+ matches in 1 files$/);
+  await expect(panel.locator('.search-file-path')).toHaveCount(1);
+  await input.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.locator('.search-panel-status')).toHaveText(/ · 1 \/ \d+$/);
+  await expect(panel.locator('.search-hit[aria-current="true"]')).toHaveAttribute('data-line', /^\d+$/);
+  const firstLine = await panel.locator('.search-hit[aria-current="true"]').getAttribute('data-line');
+  await page.keyboard.press('Enter');
+  await expect(panel.locator('.search-panel-status')).toHaveText(/ · 2 \/ \d+$/);
+  await expect(panel.locator('.search-hit[aria-current="true"]')).not.toHaveAttribute('data-line', firstLine!);
+  expect((await highlights()).current).toBeGreaterThan(0);
+  await page.keyboard.press('Shift+Enter');
+  await expect(panel.locator('.search-panel-status')).toHaveText(/ · 1 \/ \d+$/);
+  await expectAccessible(page);
+
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Search in folder' })).toHaveAttribute('aria-expanded', 'false');
+  expect(await highlights()).toEqual({ all: 0, current: 0 }); // closing the search clears them
+});
+
+/** Opens a generated folder: README.md plus `count` ~2 KB documents spread over nested subfolders. */
+async function openGeneratedFolder(page: Page, count: number): Promise<void> {
+  await page.addInitScript((count: number) => {
+    Object.assign(window, {
+      showDirectoryPicker: async () => {
+        const root = await navigator.storage.getDirectory();
+        await root.removeEntry('big', { recursive: true }).catch(() => {});
+        const dir = await root.getDirectoryHandle('big', { create: true });
+        const write = async (rel: string, text: string) => {
+          let d = dir;
+          const parts = rel.split('/');
+          for (const part of parts.slice(0, -1)) d = await d.getDirectoryHandle(part, { create: true });
+          const w = await (await d.getFileHandle(parts[parts.length - 1], { create: true })).createWritable();
+          await w.write(text);
+          await w.close();
+        };
+        await write('README.md', '# Big folder\n');
+        const para = 'ここは本文です。BLE の接続について説明します。 The quick brown fox jumps over the lazy dog. ';
+        for (let i = 0; i < count; i++) {
+          await write(`d${i % 10}/s${i % 5}/doc-${i}.md`, `# Doc ${i}\n\n${para.repeat(25)}\n\n再接続シーケンス ${i}\n`);
+        }
+        return dir;
+      },
+    });
+  }, count);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open folder' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('Big folder');
+}
+
+// #137: a folder of 500 documents (~1 MB): the first search reads them all; the time is reported.
+test('searches a folder of 500 files, reporting how long the first search takes', async ({ page }) => {
+  await openGeneratedFolder(page, 500);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(501);
+  const panel = page.getByRole('search', { name: 'Search in folder' });
+  const started = Date.now();
+  await page.keyboard.press('ControlOrMeta+Shift+F');
+  await panel.getByRole('searchbox').fill('シーケンス');
+  await expect(panel.locator('.search-panel-status')).toHaveText('500 matches in 500 files', { timeout: 30_000 });
+  const ms = Date.now() - started;
+  const line = `[perf] web app: 500 files read and searched ${ms} ms after opening the panel`;
+  console.log(line);
+  test.info().annotations.push({ type: 'perf', description: line });
+  expect(ms).toBeLessThan(15_000);
+  // Every later keystroke searches in memory.
+  const again = Date.now();
+  await panel.getByRole('searchbox').fill('シーケンス 499');
+  await expect(panel.locator('.search-panel-status')).toHaveText('2 matches in 1 files'); // "Doc 499" and "シーケンス 499"
+  console.log(`[perf] web app: the next search took ${Date.now() - again} ms`);
+  await expect(panel.locator('.search-file')).toHaveAttribute('aria-label', 'd9/s4/doc-499.md');
+  await expectAccessible(page);
 });
