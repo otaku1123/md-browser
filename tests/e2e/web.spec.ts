@@ -1197,3 +1197,32 @@ test('exports the document as one HTML file, and prints for PDF', async ({ page,
   await panel.getByRole('button', { name: 'Save as PDF' }).click();
   expect(await page.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(1);
 });
+
+test('folds TOC sections and remembers them per document', async ({ page }) => {
+  await openSampleFolder(page);
+  const toc = page.locator('.toc');
+  await expect(toc.locator('a')).toHaveCount(11);
+  await expect(toc.locator('.toc-fold')).toHaveCount(3); // the h1, 画像 (h2 with an h3) and 深い見出し (h3 with an h4)
+  const images = toc.locator('a[data-target]', { hasText: /^画像$/ }).locator('..');
+  await images.locator(':scope > .toc-fold').click();
+  await expect(images.locator(':scope > .toc-fold')).toHaveAttribute('aria-expanded', 'false');
+  await expect(toc.locator('a:visible')).toHaveCount(9);
+  await expect(toc.locator('a', { hasText: '深い見出し' }).first()).toBeHidden();
+  // Inside the folded section, the section itself is the current entry; it is not unfolded.
+  await page.locator('#content h4').evaluate((el) => el.scrollIntoView());
+  await expect(toc.locator('a.active')).toHaveText('画像');
+  await expect(toc.locator('a:visible')).toHaveCount(9);
+  await expectAccessible(page);
+
+  await openFromSidebar(page, 'docs/other.md');
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  await openFromSidebar(page, 'README.md');
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect(toc.locator('a:visible')).toHaveCount(9);
+
+  await images.locator(':scope > a').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(toc.locator('a:visible')).toHaveCount(11);
+  await page.keyboard.press('ArrowRight');
+  await expect(toc.locator('a', { hasText: '深い見出し' }).first()).toBeFocused();
+});

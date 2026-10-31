@@ -229,6 +229,7 @@ async function main(): Promise<void> {
   const { content, tocEl, filesEl, filesToggle, status } = buildShell();
   initFavicon();
   const toc = createToc(tocEl);
+  toc.setDoc(location.pathname); // one document per file:// page
   const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, content, tocEl, () => toc.update());
   let current = initial;
   let seq = 0;
