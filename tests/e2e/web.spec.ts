@@ -1102,3 +1102,56 @@ test('searches the text of every file in the folder from a panel', async ({ page
   await expect(page.getByRole('button', { name: 'Search in folder' })).toHaveAttribute('aria-expanded', 'false');
   expect(await highlights()).toEqual({ all: 0, current: 0 }); // closing the search clears them
 });
+
+/** Opens a generated folder: README.md plus `count` ~2 KB documents spread over nested subfolders. */
+async function openGeneratedFolder(page: Page, count: number): Promise<void> {
+  await page.addInitScript((count: number) => {
+    Object.assign(window, {
+      showDirectoryPicker: async () => {
+        const root = await navigator.storage.getDirectory();
+        await root.removeEntry('big', { recursive: true }).catch(() => {});
+        const dir = await root.getDirectoryHandle('big', { create: true });
+        const write = async (rel: string, text: string) => {
+          let d = dir;
+          const parts = rel.split('/');
+          for (const part of parts.slice(0, -1)) d = await d.getDirectoryHandle(part, { create: true });
+          const w = await (await d.getFileHandle(parts[parts.length - 1], { create: true })).createWritable();
+          await w.write(text);
+          await w.close();
+        };
+        await write('README.md', '# Big folder\n');
+        const para = 'ここは本文です。BLE の接続について説明します。 The quick brown fox jumps over the lazy dog. ';
+        for (let i = 0; i < count; i++) {
+          await write(`d${i % 10}/s${i % 5}/doc-${i}.md`, `# Doc ${i}\n\n${para.repeat(25)}\n\n再接続シーケンス ${i}\n`);
+        }
+        return dir;
+      },
+    });
+  }, count);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open folder' }).click();
+  await expect(page.locator('.markdown-body h1')).toHaveText('Big folder');
+}
+
+// #137: a folder of 500 documents (~1 MB): the first search reads them all; the time is reported.
+test('searches a folder of 500 files, reporting how long the first search takes', async ({ page }) => {
+  await openGeneratedFolder(page, 500);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(501);
+  const panel = page.getByRole('search', { name: 'Search in folder' });
+  const started = Date.now();
+  await page.keyboard.press('ControlOrMeta+Shift+F');
+  await panel.getByRole('searchbox').fill('シーケンス');
+  await expect(panel.locator('.search-panel-status')).toHaveText('500 matches in 500 files', { timeout: 30_000 });
+  const ms = Date.now() - started;
+  const line = `[perf] web app: 500 files read and searched ${ms} ms after opening the panel`;
+  console.log(line);
+  test.info().annotations.push({ type: 'perf', description: line });
+  expect(ms).toBeLessThan(15_000);
+  // Every later keystroke searches in memory.
+  const again = Date.now();
+  await panel.getByRole('searchbox').fill('シーケンス 499');
+  await expect(panel.locator('.search-panel-status')).toHaveText('2 matches in 1 files'); // "Doc 499" and "シーケンス 499"
+  console.log(`[perf] web app: the next search took ${Date.now() - again} ms`);
+  await expect(panel.locator('.search-file')).toHaveAttribute('aria-label', 'd9/s4/doc-499.md');
+  await expectAccessible(page);
+});

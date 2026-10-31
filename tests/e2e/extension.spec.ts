@@ -477,7 +477,9 @@ test('reads 500 files through the service worker in reasonable time', async ({ c
       await Promise.all(Array.from({ length: 8 }, worker)); // search-corpus.ts CONCURRENCY
       return { ms: performance.now() - start, chars };
     }, urls);
-    test.info().annotations.push({ type: 'perf', description: `500 files (${(500 * body.length) / 1000} K chars) read in the service worker: ${result.ms.toFixed(0)} ms` });
+    const line = `[perf] service worker: 500 files (${(500 * body.length) / 1000} K chars) fetched, hashed and decoded in ${result.ms.toFixed(0)} ms`;
+    console.log(line);
+    test.info().annotations.push({ type: 'perf', description: line });
     expect(result.chars).toBe(500 * body.length);
     expect(result.ms).toBeLessThan(15_000);
   } finally {
@@ -524,6 +526,35 @@ test('searches the text of the files below the root through the service worker',
     await panel.getByRole('button', { name: 'このファイル', exact: true }).click();
     await expect(panel.locator('.search-panel-status')).toHaveText('1 ファイルに 2 件');
     await expect(panel.locator('.search-file-path')).toHaveText(['docs/a.md2']);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// #137: the listing's limits (500 files, 4 levels): everything listed is searched, and the panel
+// says when the folder has more. The time of the first search, through the service worker, is reported.
+test('searches a folder of 500 files below the root, reporting how long the first search takes', async ({ context }) => {
+  const para = 'ここは本文です。BLE の接続について説明します。 The quick brown fox jumps over the lazy dog. ';
+  const files: Record<string, string> = { 'README.md': '# Big folder\n' };
+  for (let i = 0; i < 499; i++) files[`d${i % 10}/s${i % 5}/doc-${i}.md`] = `# Doc ${i}\n\n${para.repeat(25)}\n\n再接続シーケンス ${i}\n`;
+  files['a/b/c/d/e/deep.md'] = '# Too deep\n\n再接続シーケンス deep\n'; // 5 levels: beyond the walk, so the listing is cut
+  const dir = await makeFolder(files);
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    await expect(page.locator('.files .file-tree-file')).toHaveCount(500);
+    const panel = page.getByRole('search', { name: 'フォルダ内を検索' });
+    const started = Date.now();
+    await page.keyboard.press('ControlOrMeta+Shift+F');
+    await panel.getByRole('searchbox').fill('シーケンス');
+    await expect(panel.locator('.search-panel-status')).toHaveText('499 ファイルに 499 件', { timeout: 30_000 });
+    const ms = Date.now() - started;
+    const line = `[perf] extension: 500 files read through the service worker and searched ${ms} ms after opening the panel`;
+    console.log(line);
+    test.info().annotations.push({ type: 'perf', description: line });
+    expect(ms).toBeLessThan(15_000);
+    await expect(panel.locator('.search-panel-note')).toHaveText('一覧が上限に達しているため、一部のファイルは検索対象外です。');
+    await expectAccessible(page);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
