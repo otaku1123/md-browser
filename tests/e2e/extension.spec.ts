@@ -578,3 +578,27 @@ test('exports a file:// document as one HTML file, keeping local image paths', a
   expect(html).not.toContain('data-line=');
   expect(html.match(/<svg/g)?.length ?? 0).toBeGreaterThanOrEqual(4); // 2 Mermaid + 2 PlantUML
 });
+
+test('keeps TOC folds across auto-reload and when coming back to the document', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  const toc = page.locator('.toc');
+  await expect(toc.locator('a')).toHaveCount(11);
+  const images = toc.locator('a[data-target]', { hasText: /^画像$/ }).locator('..');
+  await expect(images.locator(':scope > .toc-fold')).toHaveAccessibleName('節を折りたたむ');
+  await images.locator(':scope > .toc-fold').click();
+  await expect(images.locator(':scope > .toc-fold')).toHaveAccessibleName('節を展開');
+  await expect(toc.locator('a:visible')).toHaveCount(9);
+
+  await fs.appendFile(path.join(workdir, 'README.md'), '\n## 追加した見出し\n');
+  await expect(toc.locator('a', { hasText: '追加した見出し' })).toBeVisible();
+  await expect(toc.locator('a:visible')).toHaveCount(10);
+  await expect(toc.locator('a', { hasText: '深い見出し' }).first()).toBeHidden();
+
+  await page.getByRole('link', { name: '別のMDファイル' }).click();
+  await expect(page).toHaveURL(/docs\/other\.md$/);
+  await page.goBack();
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect(toc.locator('a:visible')).toHaveCount(10);
+  await expectAccessible(page);
+});

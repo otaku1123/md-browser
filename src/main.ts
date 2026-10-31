@@ -130,6 +130,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
   releaseAssets = assets.release;
   if (currentDoc !== doc) {
     toc.reset();
+    toc.setDoc(`${recentRoot(workspace)}/${doc.path}`);
     sourceView.reset();
     jumpLine = null;
     if (recentHandle) void saveRecent({ handle: recentHandle, docPath: doc.path });
