@@ -67,6 +67,7 @@ FEATURES
 • Works from the keyboard and with screen readers: a skip link to the document, and Enter opens diagrams and images
 • Relative images and links to other .md files just work
 • Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars
+• Export: save the document as one self-contained HTML file (styles, diagrams and images embedded, in the current theme and size), or save it as PDF
 • Tab icon shows which tabs are rendered by MD Browser, and marks files that changed (or can't be read) while the tab was in the background
 • Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree and the folder name in the toolbar; a list of recently opened files and folders, and an adjustable scan limit for very large folders
 • Report a bug or suggest an idea from the settings panel: it opens a GitHub issue form, and nothing is sent unless you submit it
@@ -107,6 +108,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • キーボードやスクリーンリーダーでも操作しやすい（本文へのスキップリンク、Enter で図や画像を拡大）
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
 • 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）
+• エクスポート: 文書をスタイル・図・画像を埋め込んだ 1 ファイルの HTML として保存（いまのテーマ・文字サイズのまま）、または PDF として保存
 • タブのアイコンで MD Browser が表示しているタブがひと目でわかり、裏のタブでファイルが更新された（または読めなくなった）ことも表示
 • ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリーとフォルダ名の表示付き。最近開いたファイル・フォルダの一覧。大きなフォルダの走査上限は変更可能）
 • 設定パネルから不具合の報告や要望の投稿ができる（GitHub の Issue フォームが開きます。送信するまで何も送られません）

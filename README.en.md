@@ -37,6 +37,7 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 - Display settings (gear button): theme (system / light / dark), text size, content width, image and diagram size (50–200% of their own size, never wider than the text), body and code fonts. Stored in `chrome.storage.sync` (extension) or `localStorage` (web) and applied to other tabs immediately
 - Resize single images and diagrams: hover (or focus with the keyboard) to show "− / n% / +" at the top right (25–300%; "n%" goes back to the display setting; always shown on touch screens). Saved per document, only in this browser (by file URL on `file://` pages, by opened folder name + path in the web app and viewer; not synced)
 - Print / PDF output without the toolbar and sidebars, in light colors on white
+- Export (display settings ⚙ → Export): save the shown document as one HTML file with the styles, diagrams and images embedded, in the current theme, text size and width (on file:// pages images keep their local paths instead of being embedded). "Save as PDF" opens the browser's print dialog
 - Restores the last file / folder after a reload (web app and viewer). The start screen lists up to 10 recently opened items
 - Japanese and English UI, following the browser language
 

@@ -1155,3 +1155,45 @@ test('searches a folder of 500 files, reporting how long the first search takes'
   await expect(panel.locator('.search-file')).toHaveAttribute('aria-label', 'd9/s4/doc-499.md');
   await expectAccessible(page);
 });
+
+test('exports the document as one HTML file, and prints for PDF', async ({ page, context }) => {
+  await openSampleFolder(page);
+  await expect(page.locator('img[alt="diagram"]')).toHaveAttribute('src', /^blob:/);
+  await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  await panel.getByRole('radiogroup', { name: 'Text size' }).getByRole('radio', { name: 'Large', exact: true }).check();
+  await expectAccessible(page);
+
+  const [download] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Save as HTML' }).click()]);
+  expect(download.suggestedFilename()).toBe('README.html');
+  const html = await readFile((await download.path())!, 'utf8');
+  expect(html).toMatch(/^<!doctype html>\n<html lang="en" data-theme="light">/);
+  expect(html).toContain('<title>MD Browser サンプル</title>');
+  expect(html).toContain('<main class="content markdown-body"><details class="front-matter">');
+  expect(html).toMatch(/<h1 id="[^"]+">MD Browser サンプル<\/h1>/);
+  expect(html).toContain('--doc-font-size: 18px');
+  // The viewer's controls and source-line attributes are left out; the diagrams and the images come along.
+  for (const marker of ['class="copy-button"', 'class="heading-link"', 'class="media-size', 'class="diagram-actions"', 'data-line=', '<script', 'blob:']) {
+    expect(html, marker).not.toContain(marker);
+  }
+  expect(html).toMatch(/<img src="data:image\/svg\+xml;base64,[^"]+"[^>]*alt="diagram"/);
+  expect(html).toMatch(/<img src="data:image\/gif;base64,[^"]+"[^>]*alt="animation"/);
+  expect(html.match(/<svg/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+
+  // The file stands on its own: no scripts, styles inline, images embedded.
+  const saved = await context.newPage();
+  await saved.setContent(html);
+  await expect(saved.locator('h1')).toHaveText('MD Browser サンプル');
+  await expect(saved.locator('img[alt="diagram"]')).toHaveJSProperty('naturalWidth', 240);
+  expect(await saved.locator('main').evaluate((el) => getComputedStyle(el).fontSize)).toBe('18px');
+  await expect(saved.locator('button')).toHaveCount(0);
+  await saved.close();
+
+  await page.evaluate(() => {
+    (window as unknown as { __printed: number }).__printed = 0;
+    window.print = () => void ((window as unknown as { __printed: number }).__printed += 1);
+  });
+  await panel.getByRole('button', { name: 'Save as PDF' }).click();
+  expect(await page.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(1);
+});

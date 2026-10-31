@@ -982,6 +982,11 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
 .scan-limit-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .quick-open-setting .font-settings-hint { margin-bottom: 0; }
 .scan-limit-setting .font-settings-hint { margin-bottom: 0; }
+.export-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.export-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.export-status { margin: 0 0 8px; font-size: 12px; color: var(--error); }
+.export-status:empty { display: none; }
+.export-setting .font-settings-hint { margin-bottom: 0; }
 .feedback-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; }
 .feedback-links a { color: var(--accent); }
 
