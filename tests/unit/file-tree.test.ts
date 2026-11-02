@@ -44,6 +44,20 @@ describe('createFileTree', () => {
     expect(el.querySelectorAll('.active')).toHaveLength(1);
   });
 
+  it('reveals a folder: expands it with its parents, and focuses its row', () => {
+    const { el, tree } = setup();
+    document.body.append(el);
+    tree.reveal('docs/api');
+    const dirs = [...el.querySelectorAll<HTMLDetailsElement>('details')];
+    expect(dirs.map((d) => d.open)).toEqual([true, true]);
+    expect(document.activeElement).toBe(el.querySelector('details[data-dir="docs/api"] > summary'));
+    tree.reveal('');
+    expect(document.activeElement).toBe(el.querySelector('.file-tree summary'));
+    tree.reveal('nope'); // not listed: nothing changes
+    expect(dirs.map((d) => d.open)).toEqual([true, true]);
+    el.remove();
+  });
+
   it('offers no hide buttons without onHide, or when render() gets null', () => {
     const { el } = setup();
     expect(el.querySelector('.file-tree-hide')).toBeNull();

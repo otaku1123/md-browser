@@ -16,6 +16,7 @@ import { mountSourceView } from '../core/source-view';
 import { mountFontSettings } from '../core/font-settings';
 import { mountEditorLink } from '../core/editor-link';
 import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
+import { createBreadcrumb, type Breadcrumb } from '../core/breadcrumb';
 import { createFileTree } from '../file-tree';
 import { mountQuickSwitcher } from '../core/quick-switcher';
 import { mountSearchPanel, type SearchPanel } from '../core/search-panel';
@@ -70,6 +71,8 @@ let searchTruncated = false;
 /** This document's root-relative path, as the listing names it. */
 let currentPath: string | null = null;
 let openHit: (path: string, hit: SearchHit, query: string) => void = () => {};
+/** A breadcrumb folder was clicked: show it in the sidebar (set once the files are listed). */
+let revealDir: (dir: string) => void = () => {};
 /** A search hit this page was opened for (search-jump.ts); read before the hash is removed. */
 const pendingJump = parseJumpHash(location.hash);
 /** The search terms highlighted on the page, and the line jumped to (kept across re-renders). */
@@ -88,11 +91,18 @@ async function listSiblings(): Promise<ListSiblingsResponse | undefined> {
  * Lists the Markdown files in this file's folder and below, then offers them in the sidebar.
  * Lists again when the user comes back to the tab, so added or removed files show up (#109).
  */
-async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement, search: SearchPanel, contentEl: HTMLElement): Promise<void> {
+async function showSiblings(
+  filesEl: HTMLElement,
+  filesToggle: HTMLButtonElement,
+  search: SearchPanel,
+  contentEl: HTMLElement,
+  breadcrumb: Breadcrumb,
+): Promise<void> {
   const res = await listSiblings();
   if (!res?.ok) return;
   // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
   const rootUrl = new URL('../'.repeat(res.current.split('/').length - 1) || './', location.href);
+  const rootName = decodeURIComponent(rootUrl.pathname.split('/').filter(Boolean).pop() ?? '') || null;
 
   let busy = Promise.resolve();
   /** The background saves the change for the tab's root, then the folder is listed again. */
@@ -136,8 +146,14 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
     }
     tree.setActive(list.current); // not listed (e.g. below the depth limit or hidden): nothing is marked
     // Hidden folders keep the sidebar, so they can always be shown again.
-    sidebar.setAvailable(list.paths.length >= 2 || list.hidden.length > 0);
+    const available = list.paths.length >= 2 || list.hidden.length > 0;
+    sidebar.setAvailable(available);
+    breadcrumb.set(rootName, list.current, available);
   }
+  revealDir = (dir) => {
+    sidebar.open();
+    tree.reveal(dir);
+  };
 
   show(res);
   noteRecentDoc(rootUrl.href, res.current);
@@ -175,6 +191,7 @@ function buildShell(): {
   filesEl: HTMLElement;
   filesToggle: HTMLButtonElement;
   status: HTMLElement;
+  breadcrumb: Breadcrumb;
 } {
   const style = document.createElement('style');
   style.textContent = css;
@@ -193,13 +210,13 @@ function buildShell(): {
   filesEl.setAttribute('aria-label', t('files'));
   filesEl.hidden = true;
   const filesToggle = createFilesToggle(filesEl);
-  const brand = document.createElement('strong');
-  brand.className = 'brand';
-  brand.textContent = fileName();
+  // The file name alone until the folder is listed; then its path from the root (showSiblings).
+  const breadcrumb = createBreadcrumb((dir) => revealDir(dir));
+  breadcrumb.set(null, fileName(), false);
   const status = document.createElement('span');
   status.className = 'status';
   status.setAttribute('role', 'status');
-  header.append(filesToggle, brand, status);
+  header.append(filesToggle, breadcrumb.el, status);
   mountFontSettings(header, {
     // `content` is created just below; the export runs on a click, long after.
     exportTarget: () => ({ root: content, name: fileName(), title: document.title }),
@@ -219,7 +236,7 @@ function buildShell(): {
   mountTocPanel(header, tocEl);
   mountSkipLink(header);
   document.body.removeAttribute('style');
-  return { content, tocEl, filesEl, filesToggle, status };
+  return { content, tocEl, filesEl, filesToggle, status, breadcrumb };
 }
 
 async function main(): Promise<void> {
@@ -228,7 +245,7 @@ async function main(): Promise<void> {
   // The jump is ours, not an anchor: taken out of the URL so a reload or a copied link stays plain.
   if (pendingJump) history.replaceState(null, '', location.pathname + location.search);
 
-  const { content, tocEl, filesEl, filesToggle, status } = buildShell();
+  const { content, tocEl, filesEl, filesToggle, status, breadcrumb } = buildShell();
   initFavicon();
   const toc = createToc(tocEl);
   toc.setDoc(location.pathname); // one document per file:// page
@@ -285,7 +302,7 @@ async function main(): Promise<void> {
       clearSearchHighlight();
     },
   });
-  void showSiblings(filesEl, filesToggle, search, content);
+  void showSiblings(filesEl, filesToggle, search, content, breadcrumb);
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
   // Its hash is what the polls compare against (kept here, as the service worker keeps no state).

@@ -8,6 +8,8 @@ import { createSettingsStore } from './settings-store';
 export interface FilesSidebar {
   /** The sidebar is only offered when there is more than one document. */
   setAvailable(available: boolean): void;
+  /** Shows the sidebar (when offered), e.g. to reveal a folder from the breadcrumb. */
+  open(): void;
 }
 
 export const FILES_WIDTH_DEFAULT = 240;
@@ -97,6 +99,9 @@ export function mountFilesSidebar(toggle: HTMLButtonElement, filesEl: HTMLElemen
     setAvailable(next) {
       available = next;
       apply();
+    },
+    open() {
+      if (available && !current.open) commit({ ...current, open: true });
     },
   };
 }

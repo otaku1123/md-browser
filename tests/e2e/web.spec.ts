@@ -80,7 +80,7 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Open file' })).toBeVisible();
   await expect(page.locator('.toc')).toHaveClass(/empty/);
-  await expect(page.locator('#workspace-name')).toBeHidden();
+  await expect(page.locator('.breadcrumb')).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
 
@@ -105,7 +105,28 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('#files summary')).toHaveText(['docs']);
   await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', false); // folders start collapsed (#122)
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
-  await expect(page.locator('#workspace-name')).toHaveText('sample/');
+  await expect(page.locator('.breadcrumb li')).toHaveText(['sample', 'README.md']);
+});
+
+test('shows the document path as a breadcrumb whose folders reveal themselves in the sidebar', async ({ page }) => {
+  await openSampleFolder(page);
+  await openFromSidebar(page, 'docs/other.md');
+  const crumbs = page.locator('.breadcrumb li');
+  await expect(crumbs).toHaveText(['sample', 'docs', 'other.md']);
+  await expect(page.locator('.breadcrumb [aria-current="page"]')).toHaveText('other.md');
+  // Close the sidebar and collapse the folder, then the crumb brings both back and focuses the folder.
+  await page.locator('#files details[data-dir="docs"] > summary').click();
+  await page.locator('#toggle-files').click();
+  await expect(page.locator('#files')).toBeHidden();
+  const crumb = page.locator('.breadcrumb button[data-dir="docs"]');
+  await expect(crumb).toHaveAttribute('title', 'Show "docs" in the file list');
+  await crumb.click();
+  await expect(page.locator('#files')).toBeVisible();
+  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', true);
+  await expect(page.locator('#files details[data-dir="docs"] > summary')).toBeFocused();
+  // Narrow window: only the file name.
+  await page.setViewportSize({ width: 600, height: 700 });
+  await expect(crumbs.filter({ visible: true })).toHaveText(['other.md']);
 });
 
 test('jumps between a footnote reference and its note', async ({ page }) => {
@@ -132,7 +153,7 @@ test('opens another folder in the same tab', async ({ page }) => {
   await page.getByRole('button', { name: 'Open folder' }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Notes');
   await expect(page.locator('#status')).toHaveText(/^notes\.md · /);
-  await expect(page.locator('#workspace-name')).toHaveText('other/');
+  await expect(page.locator('.breadcrumb-root')).toHaveText('other');
   await page.waitForTimeout(1500); // a poll of the previous folder's document would report an error
   await expect(page.locator('#status')).not.toHaveClass(/error/);
 });
@@ -213,7 +234,7 @@ test('lists recent folders, most recent first, and removes them', async ({ page 
     };
   });
   await page.getByRole('button', { name: 'Open folder' }).click();
-  await expect(page.locator('#workspace-name')).toHaveText('other/');
+  await expect(page.locator('.breadcrumb-root')).toHaveText('other');
   await page.waitForTimeout(300);
   // Permission has lapsed after the reload: the list is shown instead of reopening.
   await page.addInitScript(() => {
