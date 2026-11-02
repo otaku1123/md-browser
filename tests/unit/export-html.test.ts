@@ -66,6 +66,20 @@ describe('cleanedCopy', () => {
     expect(copy.querySelector('img[alt="relative"]')?.getAttribute('src')).toBe('http://localhost:3000/img/rel.png');
   });
 
+  it('flattens a <picture> to the image the page shows', async () => {
+    const root = rendered();
+    root.insertAdjacentHTML(
+      'beforeend',
+      '<picture><source media="all" data-media="(prefers-color-scheme: dark)" srcset="blob:http://x/dark"><img src="blob:http://x/light" alt="themed"></picture>',
+    );
+    const live = root.querySelector<HTMLImageElement>('img[alt="themed"]')!;
+    Object.defineProperty(live, 'currentSrc', { value: 'blob:http://x/dark' }); // jsdom never picks a source
+    const copy = await cleanedCopy(root, fakeFetch());
+    expect(copy.querySelector('picture source')).toBeNull();
+    expect(copy.querySelector('img[alt="themed"]')?.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+    expect(root.querySelector('picture source')).not.toBeNull();
+  });
+
   it('does not touch the live document', async () => {
     const root = rendered();
     await cleanedCopy(root, fakeFetch());

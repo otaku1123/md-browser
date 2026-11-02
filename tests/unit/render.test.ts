@@ -72,6 +72,13 @@ describe('sanitizing', () => {
     for (const { id } of toc) expect(root.querySelector(`h2[id="${id}"]`)).not.toBeNull();
   });
 
+  it('keeps GitHub-style <picture> markup with its theme sources', () => {
+    const root = dom(renderMarkdown('<picture>\n<source media="(prefers-color-scheme: dark)" srcset="dark.png">\n<img src="light.png" alt="a">\n</picture>').html);
+    expect(root.querySelector('picture > source')?.getAttribute('srcset')).toBe('dark.png');
+    expect(root.querySelector('picture > source')?.getAttribute('media')).toBe('(prefers-color-scheme: dark)');
+    expect(root.querySelector('picture > img')?.getAttribute('src')).toBe('light.png');
+  });
+
   it('still drops clobbering ids and names on other elements', () => {
     const root = dom(renderMarkdown('<img src="x.png" id="cookie" name="title">\n\n<p id="location">x</p>').html);
     expect(root.querySelector('img')!.hasAttribute('id')).toBe(false);

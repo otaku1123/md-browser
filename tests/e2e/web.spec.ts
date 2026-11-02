@@ -607,6 +607,62 @@ test('redraws diagrams when the OS theme changes after loading', async ({ page }
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(4); // screen + print copies
 });
 
+// #156: GitHub's theme-specific images follow the shown theme, and printing uses the light ones.
+const THEMED_MD = [
+  '# Themed',
+  '![light](../img/diagram.svg#gh-light-mode-only)',
+  '![dark](../img/loading.gif#gh-dark-mode-only)',
+  '<picture>',
+  '<source media="(prefers-color-scheme: dark)" srcset="../img/loading.gif">',
+  '<img src="../img/diagram.svg" alt="pic">',
+  '</picture>',
+].join('\n\n');
+const pictureShows = (page: Page) =>
+  page.locator('picture').evaluate((p) => {
+    const img = p.querySelector('img')!;
+    return img.currentSrc === p.querySelector('source')!.srcset ? 'dark' : img.currentSrc === img.src ? 'light' : img.currentSrc;
+  });
+
+test('shows the images for the current theme (GitHub #gh-…-mode-only and <picture>)', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  await page.evaluate(async (md) => {
+    await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/themed.md', md);
+    window.dispatchEvent(new Event('focus'));
+  }, THEMED_MD);
+  await openFromSidebar(page, 'docs/themed.md');
+  const light = page.locator('img[alt="light"]');
+  const dark = page.locator('img[alt="dark"]');
+  await expect(light).toBeVisible();
+  await expect(dark).toBeHidden();
+  await expect(light).toHaveAttribute('src', /^blob:/); // the marker was read before the ref was resolved
+  await expect(page.locator('picture source')).toHaveAttribute('srcset', /^blob:/);
+  await expect.poll(() => pictureShows(page)).toBe('light');
+
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: 'Dark' }).check();
+  await expect(dark).toBeVisible();
+  await expect(light).toBeHidden();
+  await expect.poll(() => pictureShows(page)).toBe('dark');
+  await expectAccessible(page);
+
+  // Printing (beforeprint / afterprint) switches to the light images and back.
+  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+  await expect(light).toBeVisible();
+  await expect(dark).toBeHidden();
+  await expect.poll(() => pictureShows(page)).toBe('light');
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  await expect(dark).toBeVisible();
+  await expect.poll(() => pictureShows(page)).toBe('dark');
+
+  // Back to the OS setting, then the OS flips: the images follow without a re-render.
+  await page.getByRole('radio', { name: 'System' }).check();
+  await expect(light).toBeVisible();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(dark).toBeVisible();
+  await expect.poll(() => pictureShows(page)).toBe('dark');
+});
+
 test('keeps sequence diagram box colours readable in the dark theme', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await openSampleFolder(page);

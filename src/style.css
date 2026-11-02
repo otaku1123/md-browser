@@ -689,6 +689,9 @@ body {
   color: var(--error);
   font-size: 13px;
 }
+/* Images for the other theme (theme-images.ts): the rules above must not bring them back. */
+.markdown-body img[hidden],
+.markdown-body .media-frame[hidden] { display: none; }
 .markdown-body blockquote {
   margin: 0 0 1em;
   padding: 0 1em;
