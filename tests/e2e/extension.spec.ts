@@ -134,6 +134,44 @@ test('shares the theme between file tabs', async ({ context, workdir }) => {
   await expect(b.locator('html')).not.toHaveAttribute('data-theme', /.*/);
 });
 
+// #156: GitHub's theme-specific images on a file:// page, where the refs stay relative.
+test('shows the images for the current theme on a file:// page', async ({ context, workdir }) => {
+  await fs.writeFile(
+    path.join(workdir, 'docs/themed.md'),
+    [
+      '# Themed',
+      '![light](../img/diagram.svg#gh-light-mode-only)',
+      '![dark](../img/loading.gif#gh-dark-mode-only)',
+      '<picture>',
+      '<source media="(prefers-color-scheme: dark)" srcset="../img/loading.gif">',
+      '<img src="../img/diagram.svg" alt="pic">',
+      '</picture>',
+    ].join('\n\n'),
+  );
+  const page = await context.newPage();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(fileUrl(workdir, 'docs/themed.md'));
+  const light = page.locator('img[alt="light"]');
+  const dark = page.locator('img[alt="dark"]');
+  const pictureSrc = () => page.locator('picture img').evaluate((img) => img.currentSrc.split('/').pop());
+  await expect(light).toBeVisible();
+  await expect(dark).toBeHidden();
+  await expect.poll(pictureSrc).toBe('diagram.svg');
+
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: 'ダーク' }).check();
+  await expect(dark).toBeVisible();
+  await expect(light).toBeHidden();
+  await expect.poll(pictureSrc).toBe('loading.gif');
+
+  // Still right after a re-render (the file changed).
+  await fs.appendFile(path.join(workdir, 'docs/themed.md'), '\n\nMore text.\n');
+  await expect(page.locator('.markdown-body p', { hasText: 'More text.' })).toBeVisible();
+  await expect(dark).toBeVisible();
+  await expect(light).toBeHidden();
+  await expect.poll(pictureSrc).toBe('loading.gif');
+});
+
 test('remembers the size of one image and one diagram per file across reloads', async ({ context, extensionId, workdir }) => {
   expect(extensionId).toBeTruthy(); // the service worker is up
   const page = await context.newPage();

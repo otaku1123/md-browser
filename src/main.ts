@@ -28,6 +28,7 @@ import { scanLimitStore } from './core/scan-limit';
 import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
 import { loadHiddenDirs, saveHiddenDirs } from './core/hidden-dirs-store';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
+import { applyThemeImages, watchThemeImages } from './core/theme-images';
 import {
   corpusSource,
   fromDirectoryHandle,
@@ -118,6 +119,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
   // Folder name + path, like the hidden folders: browsers give no absolute path.
   const media = loadMediaDoc(workspace.folder !== undefined ? `${workspace.folder}/${doc.path}` : doc.path);
   const assets = workspace.assetResolver(doc);
+  applyThemeImages(staging.content); // reads the "#gh-…-mode-only" markers before the refs change
   await resolveImages(staging.content, assets.resolve);
   await renderDiagrams(staging.content);
   await renderMath(staging.content);
@@ -612,6 +614,7 @@ mountQuickSwitcher({
 const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl).then(() => applyMediaSizes(contentEl)));
+watchThemeImages(contentEl);
 enableImageZoom(contentEl);
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));

@@ -4,6 +4,7 @@ import { renderMarkdown } from '../core/render';
 import { renderDiagrams } from '../core/diagrams';
 import { renderMath } from '../core/math';
 import { onThemeChange } from '../core/theme';
+import { applyThemeImages, watchThemeImages } from '../core/theme-images';
 import { addCopyButtons } from '../core/code-copy';
 import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom, prepareImageZoom } from '../core/image-zoom';
@@ -264,6 +265,7 @@ async function main(): Promise<void> {
     // Per-item sizes are remembered by the file's URL (without the heading in the hash).
     const media = loadMediaDoc(location.href.split('#')[0]);
     // Relative images/links resolve natively against the file:// URL.
+    applyThemeImages(staging.content);
     await renderDiagrams(staging.content);
     await renderMath(staging.content);
     addCopyButtons(staging.content);
@@ -290,6 +292,7 @@ async function main(): Promise<void> {
   await render(current, false);
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
   onThemeChange(() => void renderDiagrams(content).then(() => applyMediaSizes(content)));
+  watchThemeImages(content);
   enableImageZoom(content);
   const search = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
     corpus: () => searchCorpus,

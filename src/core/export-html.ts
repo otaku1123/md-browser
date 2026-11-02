@@ -60,6 +60,15 @@ export async function cleanedCopy(root: HTMLElement, fetchImpl: typeof fetch = f
   for (const el of copy.querySelectorAll('[tabindex]')) el.removeAttribute('tabindex');
   copy.removeAttribute('id');
   copy.removeAttribute('tabindex');
+  // A <picture> is flattened to the version the page shows (theme-images.ts picked it for the
+  // current theme): its <source>s point at blob: URLs or files that are not part of the export.
+  const livePictures = root.querySelectorAll('picture');
+  copy.querySelectorAll('picture').forEach((picture, i) => {
+    const img = picture.querySelector('img');
+    const shown = livePictures[i]?.querySelector('img')?.currentSrc;
+    if (img && shown) img.setAttribute('src', shown);
+    for (const source of picture.querySelectorAll('source')) source.remove();
+  });
   // Sized images keep their width via --media-w (media-sizes.ts); the live scale comes along.
   await Promise.all(
     Array.from(copy.querySelectorAll<HTMLImageElement>('img[src]')).map(async (img) => {
