@@ -8,6 +8,7 @@ import { applyTheme, normalizeTheme, type ThemePreference } from './theme';
 import { setGlobalMediaScale } from './media-sizes';
 import { feedbackLinks } from './feedback';
 import { QUICK_OPEN_KEYS, quickOpenKeyLabel, quickOpenKeyStore, type QuickOpenKey } from './quick-open-key';
+import { CUSTOM_EXAMPLE, EDITOR_DEFAULT, editorStore, isValidTemplate, normalizeEditorSettings, type Editor, type EditorSettings } from './editor-link';
 import { buildStandaloneHtml, downloadHtml, exportFilename, mathCss } from './export-html';
 
 // Values for the document only: the toolbar and TOC keep their size.
@@ -238,9 +239,52 @@ function exportRow(target: () => ExportTarget | null): HTMLElement {
   return section;
 }
 
+/** "Editor" section (editor-link.ts): which editor the toolbar link opens, and its URL when custom. */
+function editorRow(id: string): HTMLElement {
+  const store = editorStore();
+  let current = EDITOR_DEFAULT;
+  const section = document.createElement('div');
+  section.className = 'editor-setting';
+  const labels: Record<Editor, string> = { off: t('editorOff'), vscode: 'VS Code', cursor: 'Cursor', custom: t('editorCustom') };
+  const choice = choiceRow<Editor>(`${id}-editor`, t('editor'), labels, (editor) => save({ ...current, editor }));
+  const row = document.createElement('label');
+  row.className = 'font-settings-row';
+  const text = document.createElement('span');
+  text.textContent = t('editorCustomUrl');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = CUSTOM_EXAMPLE;
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.addEventListener('change', () => save({ ...current, custom: input.value }));
+  row.append(text, input);
+  const status = document.createElement('p');
+  status.className = 'editor-status';
+  status.setAttribute('role', 'alert');
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('editorHint', { example: CUSTOM_EXAMPLE });
+  section.append(choice.row, row, status, hint);
+
+  const show = (s: EditorSettings) => {
+    current = s;
+    choice.set(s.editor);
+    row.hidden = s.editor !== 'custom';
+    if (document.activeElement !== input) input.value = s.custom;
+    status.textContent = s.editor === 'custom' && s.custom && !isValidTemplate(s.custom) ? t('editorInvalid') : '';
+  };
+  const save = (next: EditorSettings) => {
+    show(normalizeEditorSettings(next));
+    void store.save(current);
+  };
+  void store.load().then(show);
+  store.onChange(show);
+  return section;
+}
+
 export function mountFontSettings(
   toolbar: HTMLElement,
-  opts: { onScanLimitChange?: (limit: number) => void; exportTarget?: () => ExportTarget | null } = {},
+  opts: { onScanLimitChange?: (limit: number) => void; exportTarget?: () => ExportTarget | null; editor?: boolean } = {},
 ): void {
   const store = createSettingsStore(STORAGE_KEY, normalizeFontSettings);
   const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
@@ -327,6 +371,8 @@ export function mountFontSettings(
   // Only the viewer opens folders; the file:// page shows a single document.
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
   if (opts.exportTarget) panel.append(exportRow(opts.exportTarget));
+  // Only file:// pages know the file's absolute path (editor-link.ts).
+  if (opts.editor) panel.append(editorRow(id));
   panel.append(feedbackLinks());
   wrap.append(toggle, panel);
   toolbar.append(wrap);

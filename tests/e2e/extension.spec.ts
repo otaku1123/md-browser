@@ -602,3 +602,62 @@ test('keeps TOC folds across auto-reload and when coming back to the document', 
   await expect(toc.locator('a:visible')).toHaveCount(10);
   await expectAccessible(page);
 });
+
+test('opens the file in the chosen editor at the line shown, from a toolbar link', async ({ context }) => {
+  const paragraphs = Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1}.\n`);
+  const text = ['# Top', '', ...paragraphs, '## Deep', '', ...paragraphs, ''].join('\n'); // long after it too, so it can reach the top
+  const deepLine = text.split('\n').indexOf('## Deep') + 1;
+  const dir = await makeFolder({ 'my notes.md': text });
+  try {
+    const page = await context.newPage();
+    const url = fileUrl(dir, 'my notes.md');
+    await page.goto(url);
+    const link = page.locator('.editor-link');
+    await expect(link).toBeHidden(); // off by default: it launches another application
+    // Leave and re-enter: that is when the href is renewed. By coordinates: hover() would scroll the
+    // page to the sticky toolbar's static position.
+    const hoverLink = async () => {
+      const box = (await link.boundingBox())!;
+      await page.mouse.move(0, 0);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    };
+
+    await page.locator('.font-settings-toggle').click();
+    const panel = page.locator('.font-settings-panel');
+    await panel.getByRole('radio', { name: 'VS Code' }).check();
+    await expect(link).toBeVisible();
+    await hoverLink();
+    await expect(link).toHaveAttribute('href', `vscode://file${new URL(url).pathname}:1`);
+
+    // The line is the block at the top of the view, below the toolbar.
+    await page.keyboard.press('Escape'); // close the panel (it is taller than the window and would be scrolled)
+    await page.evaluate(() => document.querySelector('h2')!.scrollIntoView({ behavior: 'instant' }));
+    await hoverLink();
+    await expect(link).toHaveAttribute('href', `vscode://file${new URL(url).pathname}:${deepLine}`);
+
+    // A custom template gets the decoded path; an unusable one hides the link and says why.
+    await page.locator('.font-settings-toggle').click();
+    await panel.getByRole('radio', { name: 'カスタム' }).check();
+    const template = panel.getByRole('textbox', { name: 'URL' });
+    await template.fill('zed://file{path}:{line}');
+    await template.press('Enter');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => document.querySelector('h2')!.scrollIntoView({ behavior: 'instant' })); // the panel actions scrolled the page
+    await hoverLink();
+    await expect(link).toHaveAttribute('href', `zed://file${path.join(dir, 'my notes.md')}:${deepLine}`);
+    await page.locator('.font-settings-toggle').click();
+    await template.fill('javascript:alert(1)');
+    await template.press('Enter');
+    await expect(panel.getByRole('alert')).toHaveText(/スキームが必要/);
+    await expect(link).toBeHidden();
+
+    // Another tab shares the choice.
+    const other = await context.newPage();
+    await other.goto(url);
+    await other.locator('.font-settings-toggle').click();
+    await expect(other.locator('.font-settings-panel').getByRole('radio', { name: 'カスタム' })).toBeChecked();
+    await expect(other.locator('.editor-link')).toBeHidden();
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
