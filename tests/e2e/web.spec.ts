@@ -284,6 +284,46 @@ test('opens a document with the quick switcher, recent ones first, with the shor
   await expect(switcher).toHaveCount(0);
 });
 
+// #159: starred documents sit above the tree and first in the quick switcher; remembered per folder name.
+test('stars documents as favorites, lists them first, and remembers them', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  await expect(files.locator('.files-favorites')).toHaveCount(0);
+  await openFromSidebar(page, 'docs/other.md');
+  const star = files.locator('.file-tree').getByRole('button', { name: 'Add "docs/other.md" to favorites' });
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await star.click();
+  const section = files.locator('.files-favorites');
+  await expect(section.locator('summary')).toHaveText('Favorites (1)');
+  await expect(section.locator('.file-tree-file')).toHaveText(['other.md']);
+  // Both rows of the open document are marked.
+  await expect(files.locator('[aria-current="page"]')).toHaveCount(2);
+  await expect(files.locator('.file-tree').getByRole('button', { name: 'Remove "docs/other.md" from favorites' })).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:favorites'))).toBe('{"sample":["docs/other.md"]}');
+  await expectAccessible(page);
+
+  // The quick switcher offers the favorites first, then the recent documents.
+  await files.locator('.file-tree').getByRole('button', { name: 'Add "xss.md" to favorites' }).click();
+  await expect(section.locator('.file-tree-file')).toHaveText(['other.md', 'xss.md']);
+  await openFromSidebar(page, 'README.md');
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル'); // shown: it is the current document now
+  await page.keyboard.press('ControlOrMeta+P');
+  const switcher = page.getByRole('dialog', { name: 'Go to file' });
+  await expect(switcher.getByRole('option')).toHaveText(['other.mddocs', 'xss.md', 'README.md']); // then the rest, the current one included
+  await page.keyboard.press('Escape');
+
+  // Opening a favorite from its section; the stars survive a reload.
+  await section.locator('button[data-path="docs/other.md"]').click(); // by name: the star's label has the path too
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  await page.waitForTimeout(300); // the remembered document is saved asynchronously
+  await page.reload();
+  await expect(section.locator('.file-tree-file')).toHaveText(['other.md', 'xss.md']);
+  await section.getByRole('button', { name: 'Remove "xss.md" from favorites' }).click();
+  await section.getByRole('button', { name: 'Remove "docs/other.md" from favorites' }).click();
+  await expect(section).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:favorites'))).toBe('{}');
+});
+
 test('follows relative links between documents', async ({ page }) => {
   await openSampleFolder(page);
   await page.getByRole('link', { name: '別のMDファイル' }).click();
@@ -350,7 +390,7 @@ test('lists the folder again when the user comes back to the tab', async ({ page
   await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
   await expect(page.locator('#files [data-path="docs/added.md"]')).toBeVisible();
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
-  await page.locator('#files').getByRole('button', { name: 'added.md' }).click();
+  await page.locator('#files').getByRole('button', { name: 'added.md', exact: true }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Added');
 });
 
@@ -362,7 +402,7 @@ test('re-renders when the file changes', async ({ page }) => {
 
 test('does not execute scripts embedded in Markdown', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files').getByRole('button', { name: 'xss.md' }).click();
+  await page.locator('#files').getByRole('button', { name: 'xss.md', exact: true }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('XSS');
   await expect(page.locator('a[href^="javascript:" i]')).toHaveCount(0);
   await page.waitForTimeout(500);

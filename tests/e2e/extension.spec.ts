@@ -306,7 +306,7 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
     const subDir = sidebar.locator('details[data-dir="sub dir"]');
     await expect(subDir).toHaveJSProperty('open', false);
     await subDir.locator('summary').click();
-    await sidebar.getByRole('button', { name: 'deep #1.md' }).click();
+    await sidebar.getByRole('button', { name: 'deep #1.md', exact: true }).click();
     await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
     await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
     // The tab keeps its root: same list, with the subfolder file active.
@@ -314,7 +314,7 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
     await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'sub dir/deep #1.md');
     await expect(subDir).toHaveJSProperty('open', true);
     // Links resolve against the root, not the subfolder.
-    await sidebar.getByRole('button', { name: 'notes.md' }).click();
+    await sidebar.getByRole('button', { name: 'notes.md', exact: true }).click();
     await expect(page).toHaveURL(/\/notes\.md$/);
     await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'notes.md');
 
@@ -363,6 +363,40 @@ test('switches files with the quick switcher and keeps the recent ones across fi
     await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'README.md');
     await page.keyboard.press('Escape');
     await expect(switcher).toHaveCount(0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// #159: favorites on file:// pages are remembered for the tab's root folder, across file pages.
+test('stars documents as favorites per root folder, across file pages', async ({ context }) => {
+  const dir = await makeFolder({ 'README.md': '# Top', 'notes.md': '# Notes', 'sub dir/deep #1.md': '# Deep' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const sidebar = page.locator('.files');
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['deep #1.md', 'notes.md', 'README.md']);
+    await sidebar.locator('details[data-dir="sub dir"] > summary').click();
+    await sidebar.locator('.file-tree').getByRole('button', { name: '「sub dir/deep #1.md」をお気に入りに追加' }).click();
+    const section = sidebar.locator('.files-favorites');
+    await expect(section.locator('summary')).toHaveText('お気に入り（1）');
+    await expect(section.locator('.file-tree-file')).toHaveText(['deep #1.md']);
+    await expectAccessible(page);
+
+    // Another file of the same root lists the same favorites; the switcher offers them first.
+    await page.goto(fileUrl(dir, 'notes.md'));
+    await expect(section.locator('.file-tree-file')).toHaveText(['deep #1.md']);
+    await page.keyboard.press('ControlOrMeta+P');
+    const switcher = page.getByRole('dialog', { name: 'ファイルへ移動' });
+    await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'sub dir/deep #1.md');
+    await page.keyboard.press('Escape');
+
+    // Opened from its section: the favorite's row and the tree's row are both marked.
+    await section.locator('button[data-path="sub dir/deep #1.md"]').click(); // by name: the star's label has the path too
+    await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveCount(2);
+    await section.getByRole('button', { name: '「sub dir/deep #1.md」をお気に入りから外す' }).click();
+    await expect(section).toHaveCount(0);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

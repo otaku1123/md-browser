@@ -27,6 +27,7 @@ import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
 import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
 import { loadHiddenDirs, saveHiddenDirs } from './core/hidden-dirs-store';
+import { loadFavorites, saveFavorites, toggleFavorite } from './core/favorites-store';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
 import { applyThemeImages, watchThemeImages } from './core/theme-images';
 import {
@@ -63,11 +64,11 @@ function openPath(path: string): void {
 /** Key for the documents opened recently in this tab: the folder name, like the hidden folders. */
 const recentRoot = (w: Workspace) => w.folder ?? '';
 
-const fileTree = createFileTree(
-  filesEl,
-  openPath,
-  { onHide: (dir) => queueSetHidden(dir, true), onUnhide: (dir) => queueSetHidden(dir, false) },
-);
+const fileTree = createFileTree(filesEl, openPath, {
+  onHide: (dir) => queueSetHidden(dir, true),
+  onUnhide: (dir) => queueSetHidden(dir, false),
+  onToggleFavorite: (path) => void setFavorite(path),
+});
 // "folder/ › docs › guide.md" after the brand; a folder crumb shows that folder in the sidebar.
 const breadcrumb = createBreadcrumb((dir) => {
   filesSidebar.open();
@@ -192,6 +193,9 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   // The list lives in the welcome screen, which is gone once a document has been shown.
   const recentEl = document.getElementById('recent');
   if (recentEl) recentEl.hidden = true;
+  // Starred documents are remembered by the folder's name, like the hidden folders.
+  favorites = next.folder !== undefined ? await loadFavorites(next.folder) : [];
+  if (ws !== next) return; // another folder was opened meanwhile
   renderFileTree();
   await showDoc(startDoc(next, opts.docPath), { keepScroll: false });
   startPolling();
@@ -209,10 +213,23 @@ function startDoc(next: Workspace, docPath?: string): DocEntry {
 
 const filesSidebar = mountFilesSidebar(filesToggle, filesEl);
 
+/** The open folder's starred documents (favorites-store.ts); none for a single file or dropped files. */
+let favorites: string[] = [];
+
 function renderFileTree(): void {
-  // null: this workspace can't hide folders (single file, plain dropped files), so no hide buttons.
-  fileTree.render(ws?.docs.map((d) => d.path) ?? [], ws?.rescan ? (ws.hiddenDirs ?? []) : null);
+  // null: this workspace can't hide folders (single file, plain dropped files), so no hide buttons;
+  // the same workspaces have no folder name to remember favorites under.
+  fileTree.render(ws?.docs.map((d) => d.path) ?? [], ws?.rescan ? (ws.hiddenDirs ?? []) : null, ws?.folder !== undefined ? favorites : null);
   updateSidebar();
+}
+
+/** Stars a document, or removes its star: the sidebar shows it at once, the choice is saved. */
+async function setFavorite(path: string): Promise<void> {
+  const current = ws;
+  if (!current || current.folder === undefined) return;
+  favorites = toggleFavorite(favorites, path);
+  renderFileTree();
+  await saveFavorites(current.folder, favorites);
 }
 
 /** The sidebar is offered when there is more than one document, or hidden folders to show again. */
@@ -609,6 +626,7 @@ mountQuickSwitcher({
   paths: () => ws?.docs.map((d) => d.path) ?? [],
   current: () => currentDoc?.path ?? null,
   recent: () => (ws ? recentDocs(recentRoot(ws)) : []),
+  favorites: () => (ws?.folder !== undefined ? favorites : []),
   onOpen: openPath,
 });
 const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());

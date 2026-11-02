@@ -54,6 +54,7 @@ FEATURES
 • Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable, and folders you don't need can be hidden
 • Full-text search across the folder (Ctrl/⌘+Shift+F): matches grouped by file with the line, the heading and an excerpt; click one to jump there with the matches highlighted. Ignores case and character width; "This file" searches only the open document. No index, nothing stored
 • Quick file switcher (Ctrl/⌘+P): open any file of the folder by typing part of its name
+• Favorites: star the documents you open often to keep them at the top of the file sidebar and first in the quick switcher
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
 • PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
@@ -97,6 +98,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • GitHub 風の表示：表・タスクリスト・シンタックスハイライト付きコードブロック
 • スクロール位置に連動する目次サイドバー（表示の切り替え、ドラッグで幅を変更）
 • 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能。不要なフォルダは非表示にできる）
+• お気に入り：よく開く文書に ☆ を付けると、ファイル一覧の上部とクイック切り替えの先頭に表示
 • Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
 • PlantUML 図（ブラウザ内で描画し、PlantUML のサーバーには送信しません）
 • KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
@@ -160,7 +162,7 @@ The content script runs only on local Markdown files (file:///*.md, *.markdown, 
 ### storage 権限が必要な理由（Permission justification: storage）
 
 ```text
-Stores the user's display preferences (theme, text size, content width, image and diagram size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths, and the shortcut for the quick file switcher) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. chrome.storage.local keeps, on this computer only and never synced, the subfolders the user chose to hide from the file sidebar (per starting folder) and the sizes the user set for individual images and diagrams (per document URL). Only these preferences, folder locations and document URLs are stored; no file contents or personal data are saved.
+Stores the user's display preferences (theme, text size, content width, image and diagram size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths, and the shortcut for the quick file switcher) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. chrome.storage.local keeps, on this computer only and never synced, the subfolders the user chose to hide from the file sidebar and the documents the user starred as favorites (both per starting folder), and the sizes the user set for individual images and diagrams (per document URL). Only these preferences, folder locations and document URLs are stored; no file contents or personal data are saved.
 ```
 
 ### リモートコード（Remote code）

@@ -26,6 +26,7 @@ import { parseQuery, type SearchHit } from '../core/search';
 import { clearSearchHighlight, highlightSearch, jumpHash, jumpToLine, parseJumpHash } from '../core/search-jump';
 import { fileCorpusSource } from './file-corpus';
 import { noteRecentDoc, recentDocs } from '../core/recent-docs';
+import { loadFavorites, saveFavorites, toggleFavorite } from '../core/favorites-store';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
 import { sha256Hex } from './read-self';
@@ -104,6 +105,9 @@ async function showSiblings(
   // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
   const rootUrl = new URL('../'.repeat(res.current.split('/').length - 1) || './', location.href);
   const rootName = decodeURIComponent(rootUrl.pathname.split('/').filter(Boolean).pop() ?? '') || null;
+  // Starred documents, remembered for the tab's root like the hidden folders (but read here: the
+  // listing doesn't depend on them, so the background is not involved).
+  let favorites = await loadFavorites(rootUrl.href);
 
   let busy = Promise.resolve();
   /** The background saves the change for the tab's root, then the folder is listed again. */
@@ -124,6 +128,11 @@ async function showSiblings(
   const tree = createFileTree(filesEl, openPath, {
     onHide: (dir) => setHidden(dir, true),
     onUnhide: (dir) => setHidden(dir, false),
+    onToggleFavorite: (path) => {
+      favorites = toggleFavorite(favorites, path);
+      show(listed);
+      void saveFavorites(rootUrl.href, favorites);
+    },
   });
   const sidebar = mountFilesSidebar(filesToggle, filesEl);
 
@@ -138,7 +147,7 @@ async function showSiblings(
     shown = key(list);
     searchTruncated = list.truncated;
     currentPath = list.current;
-    tree.render(list.paths, list.hidden);
+    tree.render(list.paths, list.hidden, favorites);
     if (list.truncated) {
       const note = document.createElement('p');
       note.className = 'files-note';
@@ -176,6 +185,7 @@ async function showSiblings(
     paths: () => listed.paths,
     current: () => listed.current,
     recent: () => recentDocs(rootUrl.href),
+    favorites: () => favorites,
     onOpen: openPath,
   });
   onReturn(() => {
