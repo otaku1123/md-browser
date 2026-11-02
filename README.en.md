@@ -110,6 +110,19 @@ gh run download <run-id> -n screenshots -D tests/e2e/__screenshots__
 git diff --stat tests/e2e/__screenshots__   # review the images, then commit
 ```
 
+### Comparing with GitHub's rendering
+
+`tests/fixtures/gfm/*.md` are small Markdown files, one per construct, with the HTML the GitHub Markdown API returned for each saved next to it as `*.github.html`. The unit test `tests/unit/gfm-compat.test.ts` normalizes both sides (`tests/unit/gfm-normalize.ts` drops presentation attributes such as class, id and `dir`, and GitHub's own wrappers) and compares the structure, so a failing fixture is a difference from GitHub. Known differences are listed with their reason in `GAPS` in that test and are removed once fixed; intended differences (keeping `style` attributes and `<abbr>`, drawing PlantUML, removing unsafe HTML instead of showing it as text) are absorbed by the normalizer, each with a comment.
+
+After editing a fixture, fetch GitHub's side again (this is the only command that goes online; CI uses the saved files):
+
+```sh
+npm run gfm:fetch              # only fixtures that changed (unauthenticated: 60 requests per hour; uses gh auth token when available)
+npm run gfm:fetch -- --force   # all of them (GitHub changed its output)
+```
+
+The API's `markdown` mode matches how a README is shown, except that alerts, task lists and math are added later on github.com and are left alone by the API. Fixtures for those start with `<!-- gfm-fixture mode: gfm -->` to use the `gfm` mode (the comment renderer: line breaks become `<br>` and headings get no anchors).
+
 On a diff failure, the `playwright-report` artifact holds the expected, actual and diff images. To try them locally on any OS, `VISUAL_LOCAL=<temp dir> npx playwright test --project=visual-web --project=visual-extension --update-snapshots` writes the images outside the repo.
 
 Branching, release and store submission notes are in the [Japanese README](README.md).

@@ -1,0 +1,56 @@
+<!-- gfm-fixture sha256=560befa7fe37ab3262427f8ea52f57b23f2ef84a9ef89ece9903f30d8d30ed75 mode=markdown -->
+<div class="markdown-heading"><h1 class="heading-element">Tables</h1><a id="user-content-tables" class="anchor" aria-label="Permalink: Tables" href="#tables"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<table>
+<thead>
+<tr>
+<th align="left">Left</th>
+<th align="center">Center</th>
+<th align="right">Right</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">a</td>
+<td align="center">b</td>
+<td align="right">c</td>
+<td>d</td>
+</tr>
+<tr>
+<td align="left"><strong>bold</strong></td>
+<td align="center"><code>code</code></td>
+<td align="right"><a href="https://example.com" rel="nofollow">link</a></td>
+<td><del>gone</del></td>
+</tr>
+<tr>
+<td align="left">escaped | pipe</td>
+<td align="center"></td>
+<td align="right">empty before</td>
+<td>too many</td>
+</tr>
+<tr>
+<td align="left">short</td>
+<td align="center"></td>
+<td align="right"></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Without outer pipes:</p>
+<table>
+<thead>
+<tr>
+<th>a</th>
+<th>b</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<p>Not a table (no delimiter row):</p>
+<p>| a | b |
+| 1 | 2 |</p>

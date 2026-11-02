@@ -71,6 +71,19 @@ npx playwright install chromium   # 初回のみ
 npm run test:e2e             # Web 版と拡張機能をビルドして E2E テスト（Playwright）
 ```
 
+#### GitHub との表示比較
+
+`tests/fixtures/gfm/*.md` は記法ごとの小さな Markdown で、GitHub Markdown API が返した HTML を隣の `*.github.html` に保存してある。単体テスト `tests/unit/gfm-compat.test.ts` は両方を正規化（class・id・`dir` などの見た目の属性や GitHub 固有の包みを除く。`tests/unit/gfm-normalize.ts`）して構造を比べるので、落ちた項目がそのまま GitHub との差分になる。既知の差は同テストの `GAPS` に理由つきで登録し、直したら登録を外す。意図した差（`style` 属性や `<abbr>` を残す、PlantUML を図にする、危険な HTML を文字列でなく除去する）は正規化の中でコメントつきで吸収している。
+
+fixture を書き換えたら GitHub 側を取り直す（ネットに出るのはこのコマンドだけ。CI は保存済みのファイルを使う）:
+
+```sh
+npm run gfm:fetch              # 変更した fixture だけ取得（無認証は 60 回/時。gh auth token があれば使う）
+npm run gfm:fetch -- --force   # 全部取り直す（GitHub 側の出力が変わったとき）
+```
+
+API の `markdown` モードは README の表示と同じだが、アラート・タスクリスト・数式は github.com 側で後から付くため変換されない。それらの fixture は先頭行に `<!-- gfm-fixture mode: gfm -->` を書いて `gfm` モード（コメント欄と同じ変換。改行が `<br>` になり見出しのアンカーが付かない）で取得する。
+
 push と PR のたびに GitHub Actions（`.github/workflows/test.yml`）で型チェック・単体テスト・E2E テストが走る。失敗時はレポートが Artifacts に保存される。
 
 #### スクリーンショット比較
