@@ -129,17 +129,16 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand { margin-right: 8px; white-space: nowrap; }
-/* What is open (folder / file name), next to the brand. */
-.workspace-name {
-  max-width: 24ch;
-  margin-right: 8px;
-  font-size: 13px;
-  color: var(--fg-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.workspace-name[hidden] { display: none; }
+/* Where the document is (breadcrumb.ts): "folder/ / docs / guide.md", next to the brand. */
+.breadcrumb { min-width: 0; margin-right: 8px; font-size: 13px; }
+.breadcrumb[hidden] { display: none; }
+.breadcrumb ol { display: flex; align-items: center; margin: 0; padding: 0; list-style: none; white-space: nowrap; }
+.breadcrumb li { display: flex; align-items: center; min-width: 0; }
+.breadcrumb li + li::before { content: '/'; margin: 0 4px; color: var(--fg-muted); }
+.breadcrumb-dir { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; color: var(--fg-muted); }
+.toolbar button.breadcrumb-dir { padding: 2px 4px; margin: 0 -4px; background: none; border-color: transparent; }
+.toolbar button.breadcrumb-dir:hover { color: var(--fg); background: var(--bg); border-color: var(--border); }
+.breadcrumb-file { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .toolbar button,
 .toolbar select,
 .toolbar a.icon-button {
@@ -425,6 +424,10 @@ body {
   }
   .content { padding: 16px 16px 80px; }
   .brand { display: none; }
+  /* Only the file name, kept whole (the status line shrinks instead): the folders are in the sidebar. */
+  .breadcrumb { flex-shrink: 0; }
+  .breadcrumb li:not(.breadcrumb-file) { display: none; }
+  .breadcrumb li.breadcrumb-file::before { display: none; }
 }
 
 /* ---- drop overlay ---- */

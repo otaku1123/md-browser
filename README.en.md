@@ -30,6 +30,7 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 - Images with relative paths (when a folder is opened)
 - Auto-reload when the local file changes (1 s polling, Chrome / Edge)
 - Relative links to other `.md` files in the folder
+- Breadcrumb: the toolbar shows the document's path from the opened folder (`sample/ / docs / setup.md`; from the listed root on extension `file://` pages). Clicking a folder reveals it in the sidebar; narrow windows show the file name only
 - The file sidebar shows folders collapsed; only the open document's folders are expanded (folders you expand stay open when the list refreshes)
 - The file sidebar works with the keyboard: ↑↓, Home and End move, → expands a folder / enters it, ← collapses it / goes to the parent, Enter opens a file or toggles a folder
 - Hide folders you don't need from the file sidebar (the eye button next to a folder name). Hidden folders are not scanned at all, so opening is faster; show them again from "Hidden folders" below the list. Saved per folder, only in this browser

@@ -7,6 +7,7 @@ import { mountTocPanel } from './core/toc-panel';
 import { mountSourceView } from './core/source-view';
 import { createFileTree } from './file-tree';
 import { mountFilesSidebar } from './core/files-sidebar';
+import { createBreadcrumb } from './core/breadcrumb';
 import { renderDiagrams } from './core/diagrams';
 import { renderMath } from './core/math';
 import { onThemeChange } from './core/theme';
@@ -66,6 +67,12 @@ const fileTree = createFileTree(
   openPath,
   { onHide: (dir) => queueSetHidden(dir, true), onUnhide: (dir) => queueSetHidden(dir, false) },
 );
+// "folder/ › docs › guide.md" after the brand; a folder crumb shows that folder in the sidebar.
+const breadcrumb = createBreadcrumb((dir) => {
+  filesSidebar.open();
+  fileTree.reveal(dir);
+});
+document.querySelector('.brand')!.after(breadcrumb.el);
 
 let ws: Workspace | null = null;
 /** The open folder's texts for full-text search; new per opened folder, follows `ws` on a rescan. */
@@ -149,6 +156,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
     jumpToLine(contentEl, opts.line, searchTerms);
   } else highlightSearch(contentEl, searchTerms, jumpLine ?? undefined);
   fileTree.setActive(doc.path);
+  showBreadcrumb(workspace, doc);
   toc.update();
   // File name first: narrow tabs only show the start of the title.
   const slash = doc.path.lastIndexOf('/');
@@ -182,10 +190,6 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   // The list lives in the welcome screen, which is gone once a document has been shown.
   const recentEl = document.getElementById('recent');
   if (recentEl) recentEl.hidden = true;
-  const nameEl = $('workspace-name');
-  nameEl.textContent = next.label;
-  nameEl.title = next.label;
-  nameEl.hidden = false;
   renderFileTree();
   await showDoc(startDoc(next, opts.docPath), { keepScroll: false });
   startPolling();
@@ -210,8 +214,17 @@ function renderFileTree(): void {
 }
 
 /** The sidebar is offered when there is more than one document, or hidden folders to show again. */
+function sidebarAvailable(w: Workspace | null): boolean {
+  return (w?.docs.length ?? 0) > 1 || (w?.hiddenDirs?.length ?? 0) > 0;
+}
+
 function updateSidebar(): void {
-  filesSidebar.setAvailable((ws?.docs.length ?? 0) > 1 || (ws?.hiddenDirs?.length ?? 0) > 0);
+  filesSidebar.setAvailable(sidebarAvailable(ws));
+}
+
+/** The label first (a single file is its own label: shown once), then the document's path. */
+function showBreadcrumb(w: Workspace, doc: DocEntry): void {
+  breadcrumb.set(w.label === doc.path ? null : w.label, doc.path, sidebarAvailable(w));
 }
 
 let hiddenQueue = Promise.resolve();
@@ -265,7 +278,10 @@ async function refreshFileList(): Promise<void> {
     ws = next;
     if (currentDoc) currentDoc = next.docs.find((d) => d.path === currentDoc!.path) ?? currentDoc;
     renderFileTree();
-    if (currentDoc) fileTree.setActive(currentDoc.path);
+    if (currentDoc) {
+      fileTree.setActive(currentDoc.path);
+      showBreadcrumb(next, currentDoc);
+    }
   } catch {
     // The folder is unreadable for now (permission, sync tool): keep the list; polling reports errors.
   }

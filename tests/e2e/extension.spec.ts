@@ -661,3 +661,29 @@ test('opens the file in the chosen editor at the line shown, from a toolbar link
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('shows the path from the listed root as a breadcrumb on a file:// page', async ({ context }) => {
+  const dir = await makeFolder({ 'README.md': '# Top', 'sub dir/deep #1.md': '# Deep' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const crumbs = page.locator('.breadcrumb li');
+    await expect(crumbs).toHaveText([path.basename(dir), 'README.md']); // the tab's root is this file's folder
+    // Opened from the sidebar, the root stays: the path is shown from it.
+    await page.locator('#md-files details[data-dir="sub dir"] > summary').click();
+    await page.locator('#md-files [data-path="sub dir/deep #1.md"]').click();
+    await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
+    await expect(crumbs).toHaveText([path.basename(dir), 'sub dir', 'deep #1.md']);
+    await page.locator('#md-files details[data-dir="sub dir"] > summary').click(); // collapse it
+    await page.locator('.toolbar button[aria-controls="md-files"]').click(); // the skip link targets it too
+    await expect(page.locator('#md-files')).toBeHidden();
+    const crumb = page.locator('.breadcrumb button[data-dir="sub dir"]');
+    await expect(crumb).toHaveAttribute('title', 'ファイル一覧で「sub dir」を表示');
+    await crumb.click();
+    await expect(page.locator('#md-files')).toBeVisible();
+    await expect(page.locator('#md-files details[data-dir="sub dir"]')).toHaveJSProperty('open', true);
+    await expect(page.locator('#md-files details[data-dir="sub dir"] > summary')).toBeFocused();
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

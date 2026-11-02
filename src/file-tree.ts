@@ -11,6 +11,8 @@ export interface FileTreeController {
   render(paths: string[], hidden?: string[] | null): void;
   /** Highlights the open document and expands the folders containing it. */
   setActive(path: string): void;
+  /** Expands the folder ('' for the root) and its parents, scrolls to it and focuses its row. */
+  reveal(dir: string): void;
 }
 
 interface DirNode {
@@ -196,6 +198,16 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
     scrollIntoPanel(btn, el);
   }
 
+  function reveal(dir: string): void {
+    const details = dir ? el.querySelector<HTMLDetailsElement>(`details[data-dir="${CSS.escape(dir)}"]`) : null;
+    if (dir && !details) return; // not listed (hidden, or below the depth limit)
+    for (let d = details; d; d = d.parentElement?.closest('details') ?? null) d.open = true;
+    const row = details?.querySelector<HTMLElement>(':scope > summary') ?? el.querySelector<HTMLElement>('.file-tree summary, .file-tree button');
+    if (!row) return;
+    scrollIntoPanel(row, el);
+    row.focus();
+  }
+
   return {
     render(paths, hidden = []) {
       buttons = new Map();
@@ -213,5 +225,6 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
       if (activePath !== null) setActive(activePath);
     },
     setActive,
+    reveal,
   };
 }
