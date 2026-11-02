@@ -38,6 +38,7 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 - Resize single images and diagrams: hover (or focus with the keyboard) to show "− / n% / +" at the top right (25–300%; "n%" goes back to the display setting; always shown on touch screens). Saved per document, only in this browser (by file URL on `file://` pages, by opened folder name + path in the web app and viewer; not synced)
 - Print / PDF output without the toolbar and sidebars, in light colors on white
 - Export (display settings ⚙ → Export): save the shown document as one HTML file with the styles, diagrams and images embedded, in the current theme, text size and width (on file:// pages images keep their local paths instead of being embedded). "Save as PDF" opens the browser's print dialog
+- Open in editor (extension `file://` pages only): choose VS Code, Cursor or a custom URL (`{path}` and `{line}` are filled in, e.g. `idea://open?file={path}&line={line}`) under "Editor" in the display settings ⚙, and a toolbar button opens the file at the line shown at the top. Off by default, since it launches another application (the browser asks before doing so)
 - Restores the last file / folder after a reload (web app and viewer). The start screen lists up to 10 recently opened items
 - Japanese and English UI, following the browser language
 

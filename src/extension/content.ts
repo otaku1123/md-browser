@@ -14,6 +14,7 @@ import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
 import { mountSourceView } from '../core/source-view';
 import { mountFontSettings } from '../core/font-settings';
+import { mountEditorLink } from '../core/editor-link';
 import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
 import { createFileTree } from '../file-tree';
 import { mountQuickSwitcher } from '../core/quick-switcher';
@@ -202,6 +203,7 @@ function buildShell(): {
   mountFontSettings(header, {
     // `content` is created just below; the export runs on a click, long after.
     exportTarget: () => ({ root: content, name: fileName(), title: document.title }),
+    editor: true,
   });
 
   const layout = document.createElement('div');
@@ -231,6 +233,7 @@ async function main(): Promise<void> {
   const toc = createToc(tocEl);
   toc.setDoc(location.pathname); // one document per file:// page
   const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, content, tocEl, () => toc.update());
+  mountEditorLink(document.querySelector<HTMLElement>('.toolbar')!, content);
   let current = initial;
   let seq = 0;
 
