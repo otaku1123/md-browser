@@ -1,10 +1,14 @@
 // PlantUML diagrams, drawn in the browser by the official TeaVM build (@plantuml/core) with its
 // built-in Smetana layout. Graphviz (viz-global.js) is not bundled: it is WebAssembly, which the
 // web viewer's CSP blocks, and Smetana lays out the same diagrams without it.
-// Nothing is fetched: the engine loads themes, icons, emoji and the standard library through a
-// hook we replace, so only the files bundled here can load; everything else fails with a message.
+// The engine loads themes, icons, emoji and the standard library through a hook we replace: the
+// files bundled here load from the package; a standard library bundle ("<lib>.min.js") is
+// fetched from the host the user named in the settings, as data (plantuml-stdlib.ts), and only
+// then; everything else fails with a message. The diagram source never leaves the page.
 import DOMPurify from 'dompurify';
 import { t } from '../i18n';
+import { installStdlibBundle, normalizeStdlibUrl, parseStdlibBundle } from './plantuml-stdlib';
+import { createSettingsStore, type SettingsStore } from './settings-store';
 
 type Engine = typeof import('@plantuml/core');
 type Loader = (name: string, ok: () => void, fail: (message: string) => void) => boolean;
@@ -14,6 +18,37 @@ const BUNDLED: Record<string, () => Promise<unknown>> = {
   'openiconic.js': () => import('@plantuml/core/openiconic.js'),
 };
 
+export interface PlantUmlSettings {
+  /** Where "<lib>.min.js" bundles are fetched from; empty: the standard library is unavailable. */
+  stdlibUrl: string;
+}
+
+export const PLANTUML_KEY = 'md-browser:plantuml';
+
+export function normalizePlantUmlSettings(raw: unknown): PlantUmlSettings {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof PlantUmlSettings, unknown>>;
+  return { stdlibUrl: normalizeStdlibUrl(o.stdlibUrl) };
+}
+
+export function plantUmlSettingsStore(): SettingsStore<PlantUmlSettings> {
+  return createSettingsStore(PLANTUML_KEY, normalizePlantUmlSettings);
+}
+
+let stdlibUrl = '';
+
+/** The settings panel keeps this current (loaded once, then on every change). */
+export function setPlantUmlSettings(s: PlantUmlSettings): void {
+  stdlibUrl = s.stdlibUrl;
+}
+
+/** Fetches and installs one standard library bundle; the message of the error says what failed. */
+async function fetchStdlib(name: string, base: string): Promise<void> {
+  const url = base + name;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  installStdlibBundle(parseStdlibBundle(await res.text()));
+}
+
 let enginePromise: Promise<Engine> | null = null;
 
 // The engine is ~3MB, so load it only when a document actually contains a PlantUML diagram.
@@ -22,7 +57,8 @@ function loadEngine(): Promise<Engine> {
     const loader: Loader = (name, ok, fail) => {
       const load = BUNDLED[name];
       if (load) load().then(ok, (err: unknown) => fail(String(err)));
-      else fail(t('plantumlNotBundled', { name }));
+      else if (name.endsWith('.min.js') && stdlibUrl) fetchStdlib(name, stdlibUrl).then(ok, (err: unknown) => fail(t('plantumlStdlibFailed', { name, error: err instanceof Error ? err.message : String(err) })));
+      else fail(t(name.endsWith('.min.js') ? 'plantumlStdlibOff' : 'plantumlNotBundled', { name }));
       return true;
     };
     (globalThis as { PLANTUML_STDLIB_LOADER?: Loader }).PLANTUML_STDLIB_LOADER = loader;

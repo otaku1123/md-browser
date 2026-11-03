@@ -49,7 +49,7 @@
         <li>No analytics, tracking, advertising, or telemetry.</li>
         <li>No accounts, cookies, or remote servers operated by us.</li>
         <li>No remote code: all code is bundled in the extension package.</li>
-        <li>Diagrams (Mermaid, PlantUML) and math are drawn inside your browser; nothing is sent to a diagram server such as plantuml.com.</li>
+        <li>Diagrams (Mermaid, PlantUML) and math are drawn inside your browser; the diagram source is never sent to a diagram server such as plantuml.com. If you name a host for PlantUML's standard library in the display settings (off by default), the one library bundle a diagram includes (for example <code>c4.min.js</code>) is fetched from that host and read as data, never run as a script; the host sees the library's name, not your document.</li>
       </ul>
 
       <h2>Third-party content in your documents</h2>
@@ -87,7 +87,7 @@
           <li>アクセス解析・トラッキング・広告・テレメトリは一切行いません。</li>
           <li>アカウント・Cookie・当方が運営するサーバーはありません。</li>
           <li>リモートコードは使用しません。すべてのコードは拡張機能のパッケージに含まれています。</li>
-          <li>図（Mermaid・PlantUML）と数式はブラウザ内で描画します。plantuml.com などの描画サーバーには送信しません。</li>
+          <li>図（Mermaid・PlantUML）と数式はブラウザ内で描画します。図のソースを plantuml.com などの描画サーバーに送信することはありません。表示設定で PlantUML の標準ライブラリの取得先を指定した場合（既定はオフ）に限り、図が include したライブラリ 1 つ分（例: <code>c4.min.js</code>）をその取得先から取得し、スクリプトとして実行せずデータとして読み込みます。取得先に渡るのはライブラリ名だけで、文書の内容は渡りません。</li>
         </ul>
 
         <h2>ドキュメント内の外部コンテンツ</h2>
