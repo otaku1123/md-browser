@@ -16,9 +16,6 @@ const HEADER = /^<!-- gfm-fixture sha256=([0-9a-f]{64}) mode=(markdown|gfm) -->\
 
 /** Known differences, by fixture: GitHub renders these and md-browser does not (yet). */
 const GAPS: Record<string, string> = {
-  'autolink-www': 'www.example.com is linked on GitHub, not by markdown-it linkify',
-  'autolink-ftp': 'ftp://… is linked by markdown-it linkify, not on GitHub',
-  'strikethrough-tildes': '~text~ (one tilde) is strikethrough on GitHub and ~~~text~~~ (three) is not; markdown-it does the opposite',
   'headings-unicode': 'GitHub drops non-ASCII punctuation (：！“—) from heading ids; ours keeps it',
 };
 

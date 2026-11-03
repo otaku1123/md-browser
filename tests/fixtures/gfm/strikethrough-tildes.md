@@ -4,4 +4,6 @@
 
 Three ~~~tildes~~~ are not strikethrough.
 
-A path like ~/home or a~b stays text.
+Nested ~~a ~b~ c~~ and ~a ~~b~~ c~ work; ~~a~ b~~ mixes lengths and stays text.
+
+One tilde pairs like emphasis does: ~/home or a~b, but ~ spaced ~ and a lone ~/path stay text.
