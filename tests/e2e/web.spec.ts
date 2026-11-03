@@ -476,6 +476,65 @@ test('applies custom CSS to the document only and remembers it', async ({ page }
   await expect(css).toHaveValue('');
 });
 
+test('prints with the paper, link URLs, table of contents and page breaks from the settings', async ({ page }) => {
+  await openSampleFolder(page);
+  // Two more top-level sections (auto-reload picks the change up), for the page breaks.
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile(r: string, t: string): Promise<void> }).__appendToFile('README.md', '\n\n# Second part\n\nMore text.\n\n# Third part\n\nThe end.\n'),
+  );
+  await expect(page.locator('.markdown-body h1')).toHaveCount(3);
+  const pages = async () => ((await page.pdf({ preferCSSPageSize: true })).toString('latin1').match(/\/Type \/Page\b/g) ?? []).length;
+  const linkAfter = () => page.locator('.markdown-body a[href^="http"]').first().evaluate((a) => getComputedStyle(a, '::after').content);
+
+  // Defaults: A4 portrait, nothing added.
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('.print-toc')).toBeHidden();
+  expect(await linkAfter()).toBe('none');
+  const plainPdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  expect(plainPdf).toMatch(/MediaBox \[0 0 59[45](\.\d+)? 84[12](\.\d+)?\]/); // 210 × 297 mm in points
+  const plainPages = await pages();
+  await page.emulateMedia({ media: 'screen' });
+
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  await panel.getByRole('radiogroup', { name: 'Paper' }).getByRole('radio', { name: 'Letter' }).check();
+  await panel.getByRole('radiogroup', { name: 'Orientation' }).getByRole('radio', { name: 'Landscape' }).check();
+  await panel.getByRole('radiogroup', { name: 'Margins' }).getByRole('radio', { name: 'Narrow' }).check();
+  await panel.getByRole('checkbox', { name: 'Write the URL after each link' }).check();
+  await panel.getByRole('checkbox', { name: 'Table of contents on the first page' }).check();
+  await panel.getByRole('checkbox', { name: 'New page before each h1' }).check();
+  await expectAccessible(page);
+  // The screen is untouched.
+  await expect(page.locator('.print-toc')).toBeHidden();
+  expect(await linkAfter()).toBe('none');
+
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('.print-toc')).toBeVisible();
+  await expect(page.locator('.print-toc li').first()).toHaveText('MD Browser サンプル');
+  expect(await page.locator('.print-toc li').count()).toBeGreaterThan(3);
+  expect(await linkAfter()).toBe('" (https://example.com)"');
+  const pdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  expect(pdf).toMatch(/MediaBox \[0 0 79[12](\.\d+)? 61[12](\.\d+)?\]/); // 11 × 8.5 in
+  // The TOC page, then a new page for the second and third h1.
+  expect(await pages()).toBeGreaterThanOrEqual(plainPages + 3);
+
+  // Remembered.
+  await page.emulateMedia({ media: 'screen' });
+  await page.reload();
+  await expect(page.locator('.markdown-body h1')).toHaveCount(3);
+  await page.locator('.font-settings-toggle').click();
+  await expect(panel.getByRole('radio', { name: 'Landscape' })).toBeChecked();
+  await expect(panel.getByRole('checkbox', { name: 'New page before each h1' })).toBeChecked();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('md-browser:print')!))).toEqual({
+    paper: 'letter',
+    orientation: 'landscape',
+    margin: 'narrow',
+    linkUrls: true,
+    toc: true,
+    breakBeforeH1: true,
+  });
+});
+
 test('applies the folder scan limit from the settings', async ({ page }) => {
   await page.goto('/');
   await page.locator('.font-settings-toggle').click();

@@ -11,6 +11,7 @@ import { QUICK_OPEN_KEYS, quickOpenKeyLabel, quickOpenKeyStore, type QuickOpenKe
 import { CUSTOM_EXAMPLE, EDITOR_DEFAULT, editorStore, isValidTemplate, normalizeEditorSettings, type Editor, type EditorSettings } from './editor-link';
 import { buildStandaloneHtml, downloadHtml, exportFilename, mathCss } from './export-html';
 import { applyCustomCss, CUSTOM_CSS_MAX, customCssStore, type CustomCss, EMPTY_CUSTOM_CSS, normalizeCustomCss, scopedCustomCss } from './custom-css';
+import { applyPrintSettings, DEFAULT_PRINT, type Margin, normalizePrintSettings, type Orientation, type Paper, type PrintSettings, printSettingsStore } from './print-settings';
 
 // Values for the document only: the toolbar and TOC keep their size.
 const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
@@ -282,6 +283,60 @@ function customCssRow(id: string): { section: HTMLElement; exportCss(): string }
   return { section, exportCss: () => (current.exported ? scopedCustomCss(current) : '') };
 }
 
+/** "Print / PDF" section (print-settings.ts): paper, orientation, margins and the extras; saved at once. */
+function printRow(id: string): HTMLElement {
+  const store = printSettingsStore();
+  let current: PrintSettings = { ...DEFAULT_PRINT };
+  const section = document.createElement('div');
+  section.className = 'print-setting';
+  const title = document.createElement('p');
+  title.className = 'font-settings-title';
+  title.textContent = t('printTitle');
+  const paper = choiceRow<Paper>(`${id}-paper`, t('printPaper'), texts({ a4: 'printA4', letter: 'printLetter' }), (v) => save({ ...current, paper: v }));
+  const orientation = choiceRow<Orientation>(`${id}-orientation`, t('printOrientation'), texts({ portrait: 'printPortrait', landscape: 'printLandscape' }), (v) =>
+    save({ ...current, orientation: v }),
+  );
+  const margin = choiceRow<Margin>(`${id}-margin`, t('printMargin'), texts({ narrow: 'printNarrow', normal: 'printNormal', wide: 'printWide' }), (v) =>
+    save({ ...current, margin: v }),
+  );
+  const options = document.createElement('div');
+  options.className = 'print-options';
+  const checkbox = (label: string, key: 'linkUrls' | 'toc' | 'breakBeforeH1') => {
+    const wrap = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.addEventListener('change', () => save({ ...current, [key]: input.checked }));
+    wrap.append(input, label);
+    options.append(wrap);
+    return input;
+  };
+  const linkUrls = checkbox(t('printLinkUrls'), 'linkUrls');
+  const toc = checkbox(t('printToc'), 'toc');
+  const breakBeforeH1 = checkbox(t('printBreakH1'), 'breakBeforeH1');
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('printHint');
+  section.append(title, paper.row, orientation.row, margin.row, options, hint);
+
+  const show = (s: PrintSettings) => {
+    current = s;
+    applyPrintSettings(current);
+    paper.set(s.paper);
+    orientation.set(s.orientation);
+    margin.set(s.margin);
+    linkUrls.checked = s.linkUrls;
+    toc.checked = s.toc;
+    breakBeforeH1.checked = s.breakBeforeH1;
+  };
+  const save = (next: PrintSettings) => {
+    show(normalizePrintSettings(next));
+    void store.save(current);
+  };
+  void store.load().then(show);
+  store.onChange(show);
+  return section;
+}
+
 /** "Export" section: the document as a standalone .html file, or the print dialog for a PDF. */
 function exportRow(target: () => ExportTarget | null, customCss: () => string): HTMLElement {
   const section = document.createElement('div');
@@ -459,7 +514,7 @@ export function mountFontSettings(
   // Only the viewer opens folders; the file:// page shows a single document.
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
   const customCss = customCssRow(id);
-  panel.append(customCss.section);
+  panel.append(customCss.section, printRow(id));
   if (opts.exportTarget) panel.append(exportRow(opts.exportTarget, customCss.exportCss));
   // Only file:// pages know the file's absolute path (editor-link.ts).
   if (opts.editor) panel.append(editorRow(id));

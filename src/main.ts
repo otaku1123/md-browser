@@ -3,6 +3,7 @@ import { applyI18n, lang, t } from './i18n';
 import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
 import { loadHighlightLanguages } from './core/highlight';
+import { printToc } from './core/print-settings';
 import { createToc } from './core/toc';
 import { mountTocPanel } from './core/toc-panel';
 import { mountSourceView } from './core/source-view';
@@ -117,6 +118,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
   // <template> content is inert, so images don't start loading unresolved relative URLs.
   const staging = document.createElement('template');
   staging.innerHTML = html;
+  staging.content.prepend(printToc(tocItems));
   // Before the refs are resolved: per-item sizes are keyed by the image refs as written.
   prepareMediaSizes(staging.content);
   // Folder name + path, like the hidden folders: browsers give no absolute path.
