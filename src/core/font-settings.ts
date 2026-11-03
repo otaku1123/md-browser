@@ -12,6 +12,8 @@ import { CUSTOM_EXAMPLE, EDITOR_DEFAULT, editorStore, isValidTemplate, normalize
 import { buildStandaloneHtml, DEFAULT_EXPORT, downloadHtml, exportFilename, type ExportSettings, type ExportTheme, exportSettingsStore, mathCss, normalizeExportSettings } from './export-html';
 import { applyCustomCss, CUSTOM_CSS_MAX, customCssStore, type CustomCss, EMPTY_CUSTOM_CSS, normalizeCustomCss, scopedCustomCss } from './custom-css';
 import { applyPrintSettings, DEFAULT_PRINT, type Margin, normalizePrintSettings, type Orientation, type Paper, type PrintSettings, printSettingsStore } from './print-settings';
+import { normalizePlantUmlSettings, type PlantUmlSettings, plantUmlSettingsStore, setPlantUmlSettings } from './plantuml';
+import { normalizeStdlibUrl, OFFICIAL_STDLIB_URL } from './plantuml-stdlib';
 
 // Values for the document only: the toolbar and TOC keep their size.
 const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
@@ -283,6 +285,65 @@ function customCssRow(id: string): { section: HTMLElement; exportCss(): string }
   return { section, exportCss: () => (current.exported ? scopedCustomCss(current) : '') };
 }
 
+/** "PlantUML" section (plantuml.ts): the host of the standard library bundles; saved when committed (blur / Enter). */
+function plantUmlRow(id: string): HTMLElement {
+  const store = plantUmlSettingsStore();
+  let current: PlantUmlSettings = { stdlibUrl: '' };
+  const section = document.createElement('div');
+  section.className = 'plantuml-setting';
+  const title = document.createElement('p');
+  title.className = 'font-settings-title';
+  title.textContent = t('plantumlTitle');
+  const row = document.createElement('label');
+  row.className = 'font-settings-row';
+  const text = document.createElement('span');
+  text.textContent = t('plantumlStdlibUrl');
+  const input = document.createElement('input');
+  input.type = 'url';
+  input.id = `${id}-plantuml-stdlib`;
+  input.placeholder = OFFICIAL_STDLIB_URL;
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.addEventListener('change', () => save(input.value));
+  row.append(text, input);
+  const official = document.createElement('button');
+  official.type = 'button';
+  official.textContent = t('plantumlStdlibOfficial');
+  official.addEventListener('click', () => {
+    input.value = OFFICIAL_STDLIB_URL;
+    save(OFFICIAL_STDLIB_URL);
+  });
+  const status = document.createElement('p');
+  status.className = 'editor-status';
+  status.setAttribute('role', 'alert');
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('plantumlStdlibHint');
+  section.append(title, row, official, status, hint);
+
+  const show = (s: PlantUmlSettings) => {
+    current = s;
+    setPlantUmlSettings(s);
+    if (document.activeElement !== input) input.value = s.stdlibUrl;
+    status.textContent = '';
+  };
+  const save = (raw: string) => {
+    const next = normalizePlantUmlSettings({ stdlibUrl: raw });
+    show(next);
+    if (raw.trim() && !normalizeStdlibUrl(raw)) {
+      // What was typed stays in the field, with the reason it is not used.
+      input.value = raw;
+      status.textContent = t('plantumlStdlibInvalid');
+    } else {
+      input.value = next.stdlibUrl; // as normalized (trailing slash), even while the field has focus
+    }
+    void store.save(current);
+  };
+  void store.load().then(show);
+  store.onChange(show);
+  return section;
+}
+
 /** "Print / PDF" section (print-settings.ts): paper, orientation, margins and the extras; saved at once. */
 function printRow(id: string): HTMLElement {
   const store = printSettingsStore();
@@ -551,7 +612,7 @@ export function mountFontSettings(
   // Only the viewer opens folders; the file:// page shows a single document.
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
   const customCss = customCssRow(id);
-  panel.append(customCss.section, printRow(id));
+  panel.append(customCss.section, plantUmlRow(id), printRow(id));
   if (opts.exportTarget) panel.append(exportRow(id, opts.exportTarget, customCss.exportCss));
   // Only file:// pages know the file's absolute path (editor-link.ts).
   if (opts.editor) panel.append(editorRow(id));

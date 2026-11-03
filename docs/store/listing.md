@@ -56,7 +56,7 @@ FEATURES
 • Quick file switcher (Ctrl/⌘+P): open any file of the folder by typing part of its name
 • Favorites: star the documents you open often to keep them at the top of the file sidebar and first in the quick switcher
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
-• PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
+• PlantUML diagrams, drawn inside the browser (the diagram source is never sent to a PlantUML server; the standard library can be fetched from a host you name in the settings, off by default)
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
 • Live reload: save the file in your editor and the page re-renders within about a second, keeping your scroll position
 • GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
@@ -100,7 +100,7 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 • 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能。不要なフォルダは非表示にできる）
 • お気に入り：よく開く文書に ☆ を付けると、ファイル一覧の上部とクイック切り替えの先頭に表示
 • Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
-• PlantUML 図（ブラウザ内で描画し、PlantUML のサーバーには送信しません）
+• PlantUML 図（ブラウザ内で描画し、図のソースを PlantUML のサーバーに送信することはありません。標準ライブラリは設定で指定した取得先から取得できます。既定はオフ）
 • KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
 • 自動更新：エディタで保存すると約 1 秒で再描画（スクロール位置を保持）
 • GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示

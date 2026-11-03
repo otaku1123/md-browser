@@ -101,7 +101,7 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('.markdown-alert-note .markdown-alert-title')).toHaveText('Note');
   await expect(page.locator('img[alt="diagram"]')).toHaveAttribute('src', /^blob:/);
   await expect(page.locator('img.img-missing')).toHaveCount(1);
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
   await expect(page.locator('#files summary')).toHaveText(['docs']);
   await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', false); // folders start collapsed (#122)
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
@@ -165,7 +165,7 @@ test('reopens the last folder and document after a reload', async ({ page }) => 
   await page.waitForTimeout(300); // the remembered document is saved asynchronously
   await page.reload();
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
   // The open document's folder is expanded, so the marked file is in view.
   await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', true);
   await expect(page.locator('#files [data-path="docs/other.md"]')).toBeVisible();
@@ -194,7 +194,7 @@ test('hides a folder from the sidebar, remembers it, and shows it again', async 
   await section.locator('summary').click();
   await expectAccessible(page);
   await section.getByRole('button', { name: 'Show "docs" in the list' }).click();
-  await expect(files.locator('.file-tree-file')).toHaveCount(3);
+  await expect(files.locator('.file-tree-file')).toHaveCount(4); // README, xss, docs/other, docs/plantuml
   await expect(files.locator('.file-tree summary')).toHaveText(['docs']);
   await expect(section).toHaveCount(0);
   // The open document stays.
@@ -309,7 +309,7 @@ test('stars documents as favorites, lists them first, and remembers them', async
   await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル'); // shown: it is the current document now
   await page.keyboard.press('ControlOrMeta+P');
   const switcher = page.getByRole('dialog', { name: 'Go to file' });
-  await expect(switcher.getByRole('option')).toHaveText(['other.mddocs', 'xss.md', 'README.md']); // then the rest, the current one included
+  await expect(switcher.getByRole('option')).toHaveText(['other.mddocs', 'xss.md', 'plantuml.mddocs', 'README.md']); // then the rest, the current one included
   await page.keyboard.press('Escape');
 
   // Opening a favorite from its section; the stars survive a reload.
@@ -381,13 +381,13 @@ test('moves through the file sidebar with the keyboard', async ({ page }) => {
 // #109: files added outside show up when the user comes back to the tab, on the same document.
 test('lists the folder again when the user comes back to the tab', async ({ page }) => {
   await openSampleFolder(page);
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
   await page.locator('#files details[data-dir="docs"] summary').click(); // expanded by the user: stays so after the re-render
   await page.evaluate(async () => {
     await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/added.md', '# Added');
     window.dispatchEvent(new Event('focus'));
   });
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(5);
   await expect(page.locator('#files [data-path="docs/added.md"]')).toBeVisible();
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
   await page.locator('#files').getByRole('button', { name: 'added.md', exact: true }).click();
@@ -1267,6 +1267,60 @@ test('renders PlantUML diagrams offline, in both themes', async ({ page }) => {
   await expect(diagrams.nth(2).locator('pre')).toContainText('Person(u, "User")');
   await expect(diagrams.nth(2)).not.toHaveAttribute('role', 'button');
   expect(offsite).toEqual([]);
+});
+
+test('fetches a PlantUML standard library as data from the host named in the settings', async ({ page }) => {
+  // A bundle in the official host's shape, served by the test: a script that is read, never run.
+  // The engine only knows the real library names (c4, awslib, …) and looks paths up in lower case.
+  const bundle =
+    '(function(){window.PLANTUML_STDLIB_INFO=window.PLANTUML_STDLIB_INFO||{};window.PLANTUML_STDLIB_INFO.c4={name:"C4",display_name:"C4 (test)"};' +
+    'window.PLANTUML_STDLIB=window.PLANTUML_STDLIB||{};window.PLANTUML_STDLIB.c4=window.PLANTUML_STDLIB.c4||{};\n' +
+    'window.PLANTUML_STDLIB.c4["c4_context"]=\'rectangle "From the library" as lib;\\\' a PlantUML comment, not code\'.split(";")})();';
+  const requested: string[] = [];
+  await page.route('https://stdlib.test/**', (route) => {
+    requested.push(route.request().url());
+    void route.fulfill({ status: 200, contentType: 'application/javascript', headers: { 'access-control-allow-origin': '*' }, body: bundle });
+  });
+  await openSampleFolder(page);
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  const host = panel.getByRole('textbox', { name: 'Library host' });
+  await host.fill('ftp://stdlib.test/');
+  await host.press('Enter');
+  await expect(panel.locator('.plantuml-setting [role="alert"]')).toHaveText(/must start with https:\/\//);
+  await host.fill('https://stdlib.test/libs');
+  await host.press('Enter');
+  await expect(host).toHaveValue('https://stdlib.test/libs/');
+  await expect(panel.locator('.plantuml-setting [role="alert"]')).toBeEmpty();
+  await page.keyboard.press('Escape');
+
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile: (rel: string, text: string) => Promise<void> }).__appendToFile(
+      'README.md',
+      '\n```plantuml\n!include <C4/C4_Context>\nlib --> [App]\n```\n',
+    ),
+  );
+  const diagram = page.locator('.diagram-plantuml').nth(2);
+  await expect(diagram.locator('svg')).toHaveCount(1);
+  await expect(diagram).toContainText('From the library');
+  await expect(diagram).not.toHaveClass(/diagram-error/);
+  // One bundle, named after the library; the diagram source stays in the page.
+  expect(requested).toEqual(['https://stdlib.test/libs/c4.min.js']);
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:plantuml'))).toBe('{"stdlibUrl":"https://stdlib.test/libs/"}');
+});
+
+test('draws JSON, YAML, mind map, WBS and Gantt diagrams with PlantUML', async ({ page }) => {
+  await openSampleFolder(page);
+  await openFromSidebar(page, 'docs/plantuml.md');
+  const diagrams = page.locator('.diagram-plantuml');
+  await expect(diagrams).toHaveCount(6);
+  await expect(diagrams.locator('svg')).toHaveCount(5); // the standard library example has no host to fetch from
+  await expect(diagrams.filter({ hasText: 'md-browser' })).toHaveCount(2); // JSON and YAML
+  await expect(diagrams.nth(2)).toContainText('見出し');
+  await expect(diagrams.nth(3)).toContainText('単体テスト');
+  await expect(diagrams.nth(4)).toContainText('設計');
+  await expect(diagrams.nth(5)).toHaveClass(/diagram-error/);
+  await expect(diagrams.nth(5).locator('.diagram-error-message')).toContainText('cannot include <C4/C4_Context>');
 });
 
 test('opens a PlantUML diagram large and saves it as SVG and PNG', async ({ page }) => {
