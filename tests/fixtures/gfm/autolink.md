@@ -8,6 +8,6 @@ Trailing punctuation: https://example.com/a. Then https://example.com/b, then (h
 
 Bare email: me@example.com and first.last+tag@example.co.jp.
 
-Not links: example.com, localhost:8080, user@localhost.
+Not links: example.com, localhost:8080, user@localhost, ftp://example.com/file, //example.com/x.
 
 In code: `https://example.com/code` stays text.

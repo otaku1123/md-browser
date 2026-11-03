@@ -1,5 +1,6 @@
-<!-- gfm-fixture sha256=c790714d42a45160ecc3ecbbe95d37a4b4f2bb9cd98175a0fda5e3eb398dbbab mode=markdown -->
+<!-- gfm-fixture sha256=e4c0375f99ced4f139e8429a25d98acbf7ba3f9b7345c39f3ace2b1885ae0d74 mode=markdown -->
 <div class="markdown-heading"><h1 class="heading-element">Strikethrough with one or three tildes</h1><a id="user-content-strikethrough-with-one-or-three-tildes" class="anchor" aria-label="Permalink: Strikethrough with one or three tildes" href="#strikethrough-with-one-or-three-tildes"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
 <p><del>gone</del> with one tilde, and <del>two words</del> too.</p>
 <p>Three ~~~tildes~~~ are not strikethrough.</p>
-<p>A path like <del>/home or a</del>b stays text.</p>
+<p>Nested <del>a <del>b</del> c</del> and <del>a <del>b</del> c</del> work; ~~a~ b~~ mixes lengths and stays text.</p>
+<p>One tilde pairs like emphasis does: <del>/home or a</del>b, but ~ spaced ~ and a lone ~/path stay text.</p>

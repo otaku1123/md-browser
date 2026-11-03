@@ -60,6 +60,67 @@ const md = new MarkdownIt({
   // :smile: -> emoji. Text shortcuts like ":)" are off: GitHub does not convert them.
   .use(emoji, { shortcuts: {} });
 
+// Autolinks as on GitHub: http(s)://, mailto: and bare emails (linkify-it's defaults), plus
+// www.example.com, which GitHub links with an http:// prefix. GitHub does not link ftp:// or
+// protocol-relative //example.com, and neither side links a bare example.com (so linkify-it's
+// fuzzyLink stays off).
+let wwwValidator: RegExp | undefined;
+md.linkify
+  .add('ftp:', null)
+  .add('//', null)
+  .add('www.', {
+    validate(text, pos, self) {
+      // Host, optional port and path: the http:// validator without the "//" and user:password@.
+      wwwValidator ??= new RegExp(self.re.get_url_host_port().source + self.re.get_path().source, 'iy');
+      wwwValidator.lastIndex = pos;
+      return wwwValidator.exec(text)?.[0].length ?? 0;
+    },
+    normalize(match) {
+      match.url = `http://${match.url}`;
+    },
+  });
+
+// Strikethrough as in GFM (cmark-gfm's extension): a run of one or two tildes is a delimiter,
+// three or more are text, and only runs of the same length pair up. markdown-it's own rule only
+// knows "~~", and reads "~~~x~~~" as "~" + ~~x~~ + "~". A closer takes the nearest opener; when
+// the lengths differ both are dropped, as GitHub does ("~~a~ b~~" stays text).
+const TILDE = 0x7e;
+md.inline.ruler.at('strikethrough', (state, silent) => {
+  if (silent || state.src.charCodeAt(state.pos) !== TILDE) return false;
+  const scanned = state.scanDelims(state.pos, true);
+  const token = state.push('text', '', 0);
+  token.content = '~'.repeat(scanned.length);
+  if (scanned.length <= 2) {
+    state.delimiters.push({ marker: TILDE, length: scanned.length, token: state.tokens.length - 1, end: -1, open: scanned.can_open, close: scanned.can_close });
+  }
+  state.pos += scanned.length;
+  return true;
+});
+md.inline.ruler2.at('strikethrough', (state) => {
+  for (const delimiters of [state.delimiters, ...state.tokens_meta.map((m) => m?.delimiters)]) {
+    if (!delimiters) continue;
+    const openers: number[] = [];
+    for (let i = 0; i < delimiters.length; i++) {
+      const d = delimiters[i];
+      if (d.marker !== TILDE) continue;
+      if (d.close && openers.length) {
+        const o = delimiters[openers.pop()!];
+        if (o.length !== d.length) continue;
+        for (const [delim, type, nesting] of [[o, 's_open', 1], [d, 's_close', -1]] as const) {
+          const token = state.tokens[delim.token];
+          token.type = type;
+          token.tag = 's';
+          token.nesting = nesting;
+          token.markup = token.content;
+          token.content = '';
+        }
+      } else if (d.open) {
+        openers.push(i);
+      }
+    }
+  }
+});
+
 // GitHub alerts: a blockquote whose first line is only "[!NOTE]" (TIP, IMPORTANT, WARNING,
 // CAUTION; case-insensitive) becomes a callout. Anything else stays an ordinary blockquote.
 const ALERT_TITLES = {
