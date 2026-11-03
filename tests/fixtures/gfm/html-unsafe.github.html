@@ -1,0 +1,8 @@
+<!-- gfm-fixture sha256=8967a7bab94e809d5eb144f77ba3002832364127198f1afc190a2d0b4abb5bbf mode=markdown -->
+<div class="markdown-heading"><h1 class="heading-element">Unsafe HTML</h1><a id="user-content-unsafe-html" class="anchor" aria-label="Permalink: Unsafe HTML" href="#unsafe-html"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Both renderers must leave no script, no frame and no javascript: link; how they show the source may differ.</p>
+&lt;script&gt;alert(1)&lt;/script&gt;
+&lt;iframe src="<a href="https://example.com&quot;&gt;&lt;/iframe" rel="nofollow">https://example.com"&gt;&lt;/iframe</a>&gt;
+<p>js link</p>
+<p><a target="_blank" rel="noopener noreferrer" href="x"><img src="x" style="max-width: 100%;"></a></p>
+<p><a href="https://example.com" rel="nofollow">handler</a></p>
