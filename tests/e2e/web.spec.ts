@@ -535,6 +535,51 @@ test('prints with the paper, link URLs, table of contents and page breaks from t
   });
 });
 
+test('exports with the light theme, a table of contents and the math fonts it uses', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  await panel.getByRole('radiogroup', { name: 'Theme' }).first().getByRole('radio', { name: 'Dark' }).check();
+  await expect(page.locator('.diagram-print').first()).toBeAttached();
+  const save = async () => {
+    const [download] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Save as HTML' }).click()]);
+    return readFile((await download.path())!, 'utf8');
+  };
+
+  // Defaults: as shown (dark, both diagram copies), no TOC, the used math fonts embedded.
+  const shown = await save();
+  expect(shown).toContain('data-theme="dark"');
+  expect(shown).toContain('class="diagram-screen"');
+  expect(shown).not.toContain('<details class="export-toc"');
+  const faces = shown.match(/@font-face\{[^}]*\}/g) ?? [];
+  expect(faces.length).toBeGreaterThan(0);
+  expect(faces.length).toBeLessThan(19); // KaTeX ships 19; the sample's math uses a few
+  for (const face of faces) expect(face).toContain('src: url(data:font/woff2;base64,');
+  expect(shown).not.toMatch(/url\(https?:[^)]*\.woff2\)/);
+
+  const exportGroup = panel.locator('.export-setting');
+  await exportGroup.getByRole('radio', { name: 'Light' }).check();
+  await exportGroup.getByRole('checkbox', { name: 'Table of contents at the top' }).check();
+  await exportGroup.getByRole('checkbox', { name: 'Embed the math fonts (when there is math)' }).uncheck();
+  await expectAccessible(page);
+  const light = await save();
+  expect(light).toContain('data-theme="light"');
+  expect(light).not.toContain('class="diagram-screen"');
+  expect(light).not.toContain('class="diagram-print"');
+  expect(light).toContain('<details class="export-toc" open=""><summary>Table of contents</summary><ol class="toc-list">');
+  expect(light).not.toContain('@font-face');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('md-browser:export')!))).toEqual({ theme: 'light', toc: true, mathFonts: false });
+
+  // The saved file shows the TOC and the light diagrams.
+  const saved = await page.context().newPage();
+  await saved.setContent(light);
+  await expect(saved.locator('.export-toc li').first()).toHaveText('MD Browser サンプル');
+  expect(await saved.locator('.diagram svg').count()).toBeGreaterThanOrEqual(2);
+  await saved.close();
+});
+
 test('applies the folder scan limit from the settings', async ({ page }) => {
   await page.goto('/');
   await page.locator('.font-settings-toggle').click();
@@ -719,7 +764,8 @@ test('switches the theme from the display settings and redraws diagrams', async 
   await expect(page.locator('.diagram-print').first()).toBeVisible();
   await page.emulateMedia({ media: 'screen' });
 
-  await page.getByRole('radio', { name: 'Light' }).check();
+  // The export section has a "Light" too (its own theme choice).
+  await page.getByRole('radiogroup', { name: 'Theme' }).first().getByRole('radio', { name: 'Light' }).check();
   expect(await bodyBg(page)).toBe('rgb(255, 255, 255)');
   await expect.poll(() => nodeFill(page)).toBe(LIGHT_NODE);
 });

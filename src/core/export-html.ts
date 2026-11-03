@@ -5,20 +5,59 @@
 // URL and still show when the file is opened on the same computer. Diagrams are inline SVG already.
 // Downloads use a blob: URL and <a download>, like diagram-export.ts: no extension permission.
 import css from '../style.css?inline';
-import { currentTheme } from './theme';
+import { tocList } from './print-settings';
+import type { TocItem } from './render';
+import { createSettingsStore, type SettingsStore } from './settings-store';
+import { currentTheme, type Theme } from './theme';
+import { applyThemeImages } from './theme-images';
 
 // Controls the viewer adds to the rendered Markdown; none of them work without the page's scripts.
 const CONTROL_SELECTORS = ['.copy-button', '.heading-link', '.media-size', '.diagram-actions', '.print-toc'];
 // CSS variables font-settings.ts sets on <html>: carried over so the export looks like the page.
 const ROOT_VARIABLES = ['--font-body', '--font-code', '--doc-font-size', '--doc-max-width'];
 const EMBED_LIMIT = 20 * 1024 * 1024; // skip embedding an image bigger than this (the URL stays)
+const HEADINGS = 'h1, h2, h3, h4, h5, h6';
+
+/** "current": the theme the page shows; "light": the light theme whatever the page shows. */
+export type ExportTheme = 'current' | 'light';
+
+/** The export choices in the display settings, saved with the other settings. */
+export interface ExportSettings {
+  theme: ExportTheme;
+  /** A collapsible table of contents before the text. */
+  toc: boolean;
+  /** Embed the KaTeX fonts the document uses (only when it has math). */
+  mathFonts: boolean;
+}
+
+export const EXPORT_KEY = 'md-browser:export';
+export const DEFAULT_EXPORT: ExportSettings = { theme: 'current', toc: false, mathFonts: true };
+
+export function normalizeExportSettings(raw: unknown): ExportSettings {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ExportSettings, unknown>>;
+  return { theme: o.theme === 'light' ? 'light' : 'current', toc: o.toc === true, mathFonts: o.mathFonts !== false };
+}
+
+export function exportSettingsStore(): SettingsStore<ExportSettings> {
+  return createSettingsStore(EXPORT_KEY, normalizeExportSettings);
+}
 
 export interface ExportOptions {
   title: string;
-  /** Extra stylesheet text (KaTeX) appended after the page's; @font-face rules are dropped. */
+  /** Extra stylesheet text (KaTeX, custom CSS) appended after the page's. */
   extraCss?: string;
   /** Replaces fetch() in tests. */
   fetchImpl?: typeof fetch;
+  theme?: ExportTheme;
+  toc?: boolean;
+  /** The heading of the table of contents (translated by the caller). */
+  tocTitle?: string;
+  /**
+   * Keep the @font-face rules of extraCss whose fonts the document's math uses, with the font
+   * files embedded as data: URLs. Otherwise (and for fonts that can't be fetched) the rules are
+   * dropped and the math falls back to the reader's fonts.
+   */
+  embedFonts?: boolean;
 }
 
 export function exportFilename(docName: string): string {
@@ -52,20 +91,45 @@ async function toDataUrl(url: string, fetchImpl: typeof fetch): Promise<string |
   }
 }
 
-/** Removes the viewer's controls and embeds the images; returns the cleaned copy of `root`. */
-export async function cleanedCopy(root: HTMLElement, fetchImpl: typeof fetch = fetch): Promise<HTMLElement> {
+/** The first URL of a srcset ("url descriptor, url descriptor"; a data: URL has commas of its own), absolute. */
+function firstSrc(srcset: string | null, base: string): string | undefined {
+  const raw = /^\s*(\S+?),?(\s|$)/.exec(srcset ?? '')?.[1];
+  if (!raw) return undefined;
+  try {
+    return new URL(raw, base).href;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Removes the viewer's controls and embeds the images; returns the cleaned copy of `root`.
+ * `theme` picks the diagrams and theme images: the page's own, or the light ones.
+ */
+export async function cleanedCopy(root: HTMLElement, fetchImpl: typeof fetch = fetch, theme: Theme = currentTheme()): Promise<HTMLElement> {
   const copy = root.cloneNode(true) as HTMLElement;
   for (const el of copy.querySelectorAll(CONTROL_SELECTORS.join(','))) el.remove();
   for (const el of copy.querySelectorAll('[data-line]')) el.removeAttribute('data-line');
   for (const el of copy.querySelectorAll('[tabindex]')) el.removeAttribute('tabindex');
   copy.removeAttribute('id');
   copy.removeAttribute('tabindex');
-  // A <picture> is flattened to the version the page shows (theme-images.ts picked it for the
-  // current theme): its <source>s point at blob: URLs or files that are not part of the export.
+  const asShown = theme === currentTheme();
+  if (!asShown) {
+    // Dark pages draw diagrams twice (diagrams.ts): keep the light copy only, in the screen's place.
+    for (const print of copy.querySelectorAll('.diagram-print')) {
+      print.parentElement?.querySelector(':scope > .diagram-screen')?.remove();
+      print.replaceWith(...Array.from(print.childNodes));
+    }
+    applyThemeImages(copy, theme);
+  }
+  // A <picture> is flattened to the version shown (theme-images.ts picked it for the theme): its
+  // <source>s point at blob: URLs or files that are not part of the export.
   const livePictures = root.querySelectorAll('picture');
   copy.querySelectorAll('picture').forEach((picture, i) => {
     const img = picture.querySelector('img');
-    const shown = livePictures[i]?.querySelector('img')?.currentSrc;
+    const shown = asShown
+      ? livePictures[i]?.querySelector('img')?.currentSrc
+      : firstSrc(picture.querySelector('source[media="all"]')?.getAttribute('srcset') ?? null, root.ownerDocument.baseURI);
     if (img && shown) img.setAttribute('src', shown);
     for (const source of picture.querySelectorAll('source')) source.remove();
   });
@@ -82,9 +146,90 @@ export async function cleanedCopy(root: HTMLElement, fetchImpl: typeof fetch = f
   return copy;
 }
 
+/** The headings of a rendered document that have an id, as TOC entries. */
+function headingItems(root: ParentNode): TocItem[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(HEADINGS))
+    .filter((h) => h.id)
+    .map((h) => ({ level: Number(h.tagName[1]), text: h.textContent?.trim() ?? '', id: h.id }));
+}
+
+/** A collapsible table of contents for the top of the export (no script: a <details>). */
+export function exportToc(root: ParentNode, title: string): HTMLElement | null {
+  const items = headingItems(root);
+  if (!items.length) return null;
+  const doc = root.ownerDocument ?? document;
+  const details = doc.createElement('details');
+  details.className = 'export-toc';
+  details.open = true;
+  const summary = doc.createElement('summary');
+  summary.textContent = title;
+  details.append(summary, tocList(items, doc));
+  return details;
+}
+
+/**
+ * The font faces (family|weight|style) the document's math uses, read from the live elements'
+ * computed styles, so only the fonts a document needs are embedded.
+ */
+export function usedFontFaces(root: ParentNode): Set<string> {
+  const used = new Set<string>();
+  const view = root.ownerDocument?.defaultView ?? window;
+  for (const el of root.querySelectorAll<HTMLElement>('.katex, .katex *')) {
+    const cs = view.getComputedStyle(el);
+    const family = cs.fontFamily.split(',')[0]?.trim().replace(/^["']|["']$/g, '');
+    if (!family?.startsWith('KaTeX_')) continue;
+    const weight = cs.fontWeight === 'bold' || Number(cs.fontWeight) >= 600 ? '700' : '400';
+    used.add(`${family}|${weight}|${cs.fontStyle === 'italic' ? 'italic' : 'normal'}`);
+  }
+  return used;
+}
+
+const FONT_FACE = /@font-face\s*\{[^}]*\}/g;
+const FONT_LIMIT = 2 * 1024 * 1024;
+
+async function fontDataUrl(url: string, fetchImpl: typeof fetch): Promise<string | null> {
+  try {
+    const res = await fetchImpl(url);
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length > FONT_LIMIT) return null;
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return `data:font/woff2;base64,${btoa(binary)}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Keeps the @font-face rules of `text` for the faces in `used`, with their first font file
+ * embedded as a data: URL (the others are dropped, as are faces that cannot be fetched).
+ */
+export async function embedFontFaces(text: string, used: ReadonlySet<string>, fetchImpl: typeof fetch = fetch): Promise<string> {
+  const blocks = text.match(FONT_FACE) ?? [];
+  const replacements = await Promise.all(
+    blocks.map(async (block) => {
+      const family = /font-family:\s*["']?([^;"'}]+)/.exec(block)?.[1]?.trim();
+      const weight = /font-weight:\s*(\w+)/.exec(block)?.[1] ?? '400';
+      const style = /font-style:\s*(\w+)/.exec(block)?.[1] ?? 'normal';
+      const url = /url\(\s*["']?([^)"']+)/.exec(block)?.[1];
+      if (!family || !url || !used.has(`${family}|${weight === 'bold' ? '700' : weight}|${style}`)) return '';
+      const data = await fontDataUrl(url, fetchImpl);
+      return data ? block.replace(/src:[^;}]*/, `src: url(${data}) format("woff2")`) : '';
+    }),
+  );
+  let i = 0;
+  return text.replace(FONT_FACE, () => replacements[i++]);
+}
+
 /** The complete .html text for `root` (the rendered Markdown), as the page currently shows it. */
 export async function buildStandaloneHtml(root: HTMLElement, opts: ExportOptions): Promise<string> {
-  const body = await cleanedCopy(root, opts.fetchImpl);
+  const theme: Theme = opts.theme === 'light' ? 'light' : currentTheme();
+  const body = await cleanedCopy(root, opts.fetchImpl, theme);
+  if (opts.toc) {
+    const toc = exportToc(body, opts.tocTitle ?? 'Table of contents');
+    if (toc) body.prepend(toc);
+  }
   const rootStyle = document.documentElement.style;
   const vars = ROOT_VARIABLES.map((name) => {
     const value = rootStyle.getPropertyValue(name).trim();
@@ -92,12 +237,11 @@ export async function buildStandaloneHtml(root: HTMLElement, opts: ExportOptions
   })
     .filter(Boolean)
     .join(' ');
-  const styles = [stripFontFaces(css), opts.extraCss ? stripFontFaces(opts.extraCss) : '']
-    .filter(Boolean)
-    .join('\n');
+  const extra = !opts.extraCss ? '' : opts.embedFonts ? await embedFontFaces(opts.extraCss, usedFontFaces(root), opts.fetchImpl) : stripFontFaces(opts.extraCss);
+  const styles = [stripFontFaces(css), extra].filter(Boolean).join('\n');
   return [
     '<!doctype html>',
-    `<html lang="${escapeHtml(document.documentElement.lang || 'en')}" data-theme="${currentTheme()}">`,
+    `<html lang="${escapeHtml(document.documentElement.lang || 'en')}" data-theme="${theme}">`,
     '<head>',
     '<meta charset="UTF-8" />',
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />',
