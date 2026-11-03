@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildStandaloneHtml, cleanedCopy, exportFilename, stripFontFaces } from '../../src/core/export-html';
+import { buildStandaloneHtml, cleanedCopy, exportFilename, exportToc, normalizeExportSettings, stripFontFaces, usedFontFaces } from '../../src/core/export-html';
 
 vi.mock('../../src/style.css?inline', () => ({ default: 'body { color: red; } @font-face { font-family: X; src: url(x.woff2); }' }));
 
@@ -128,5 +128,72 @@ describe('helpers', () => {
 
   it('strips every @font-face block', () => {
     expect(stripFontFaces('a{} @font-face{font-family:X;src:url(a)} b{} @font-face { c: d }')).toBe('a{}  b{} ');
+  });
+});
+
+describe('export options', () => {
+  it('normalizes the saved choices', () => {
+    expect(normalizeExportSettings(undefined)).toEqual({ theme: 'current', toc: false, mathFonts: true });
+    expect(normalizeExportSettings({ theme: 'light', toc: true, mathFonts: false })).toEqual({ theme: 'light', toc: true, mathFonts: false });
+    expect(normalizeExportSettings({ theme: 'dark', toc: 'yes', mathFonts: 0 })).toEqual({ theme: 'current', toc: false, mathFonts: true });
+  });
+
+  it('fixes the light theme: the light diagram copy and the light theme images', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<div class="diagram"><div class="diagram-screen"><svg data-k="dark"></svg></div><div class="diagram-print"><svg data-k="light"></svg></div></div>',
+      '<img src="data:image/png;base64,AA" alt="d" data-theme-only="dark"><img src="data:image/png;base64,AA" alt="l" data-theme-only="light" hidden="">',
+      '<picture><source media="not all" data-media="(prefers-color-scheme: light)" srcset="data:image/png;base64,LL"><source media="all" data-media="(prefers-color-scheme: dark)" srcset="data:image/png;base64,DD"><img src="data:image/png;base64,FF" alt="p"></picture>',
+    ].join('');
+    const html = await buildStandaloneHtml(root, { title: 't', fetchImpl: fakeFetch(), theme: 'light' });
+    expect(html).toContain('data-theme="light"');
+    expect(html).toContain('<div class="diagram"><svg data-k="light"></svg></div>');
+    expect(html).not.toContain('diagram-screen');
+    expect(html).toMatch(/<img[^>]*alt="d"[^>]*hidden/);
+    expect(html).toMatch(/<img[^>]*alt="l"[^>]*>/);
+    expect(html).not.toMatch(/<img[^>]*alt="l"[^>]*hidden/);
+    expect(html).toContain('<picture><img src="data:image/png;base64,LL" alt="p"></picture>');
+    // As shown: the dark page's copies stay.
+    const asShown = await buildStandaloneHtml(root, { title: 't', fetchImpl: fakeFetch() });
+    expect(asShown).toContain('data-theme="dark"');
+    expect(asShown).toContain('diagram-screen');
+  });
+
+  it('puts a collapsible table of contents first when asked', async () => {
+    const root = document.createElement('main');
+    root.innerHTML = '<h1 id="a">A</h1><p>x</p><h2 id="b">B <code>c</code></h2><h3>no id</h3>';
+    const html = await buildStandaloneHtml(root, { title: 't', fetchImpl: fakeFetch(), toc: true, tocTitle: '目次' });
+    expect(html).toContain(
+      '<main class="content markdown-body"><details class="export-toc" open=""><summary>目次</summary><ol class="toc-list"><li class="toc-level-1"><a href="#a">A</a></li><li class="toc-level-2"><a href="#b">B c</a></li></ol></details><h1 id="a">',
+    );
+    expect(await buildStandaloneHtml(root, { title: 't', fetchImpl: fakeFetch() })).not.toContain('export-toc');
+    expect(exportToc(document.createElement('div'), 'x')).toBeNull();
+  });
+
+  it('embeds only the math fonts the document uses, dropping the ones it cannot fetch', async () => {
+    const root = document.createElement('main');
+    root.innerHTML =
+      '<span class="katex"><span style="font-family: KaTeX_Main; font-weight: 700">x</span><span style="font-family: KaTeX_Math; font-style: italic">y</span></span>';
+    document.body.append(root);
+    expect(usedFontFaces(root)).toEqual(new Set(['KaTeX_Main|700|normal', 'KaTeX_Math|400|italic']));
+    const extraCss =
+      '.katex{a:b}' +
+      '@font-face{font-family:KaTeX_Main;font-style:normal;font-weight:700;src:url(http://x/Main-Bold.woff2) format("woff2")}' +
+      '@font-face{font-family:KaTeX_Main;font-style:normal;font-weight:400;src:url(http://x/Main-Regular.woff2) format("woff2")}' +
+      '@font-face{font-family:KaTeX_Math;font-style:italic;font-weight:400;src:url(http://x/Math-Italic.woff2) format("woff2")}';
+    const fetchImpl = vi.fn(async (url: string) =>
+      url.includes('Math') ? new Response('', { status: 404 }) : new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
+    ) as unknown as typeof fetch;
+    const html = await buildStandaloneHtml(root, { title: 't', extraCss, fetchImpl, embedFonts: true });
+    expect(html).toContain('.katex{a:b}');
+    expect(html).toContain('@font-face{font-family:KaTeX_Main;font-style:normal;font-weight:700;src: url(data:font/woff2;base64,AQID) format("woff2")}');
+    expect(html).not.toContain('Main-Regular'); // not used
+    expect(html).not.toContain('font-family:KaTeX_Math'); // not fetchable (the inline style in the body stays)
+    expect(html).not.toContain('http://x/');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // Off: every face goes.
+    expect(await buildStandaloneHtml(root, { title: 't', extraCss, fetchImpl, embedFonts: false })).not.toContain('@font-face');
+    root.remove();
   });
 });

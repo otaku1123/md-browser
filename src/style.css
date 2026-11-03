@@ -1098,9 +1098,9 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
 .custom-css-status { margin: 0 0 8px; font-size: 12px; color: var(--fg-muted); }
 .custom-css-setting .font-settings-hint { margin-bottom: 0; }
 .print-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-.print-options { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
-.print-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-.print-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.print-options, .export-options { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.print-options label, .export-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.print-options input, .export-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .print-setting .font-settings-hint { margin-bottom: 0; }
 .feedback-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; }
 .feedback-links a { color: var(--accent); }
@@ -1166,11 +1166,16 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
 /* Part of every rendered document, shown only when printed with the option on. */
 .print-toc { display: none; }
 .print-toc-title { margin: 0 0 8px; font-size: 1.25em; font-weight: 600; }
-.print-toc ol { list-style: none; margin: 0; padding: 0; }
-.print-toc li { margin: 0 0 4px; }
-.print-toc a { color: inherit; text-decoration: none; }
-.print-toc-l2 { padding-left: 1.5em; }
-.print-toc-l3 { padding-left: 3em; }
-.print-toc-l4 { padding-left: 4.5em; }
-.print-toc-l5 { padding-left: 6em; }
-.print-toc-l6 { padding-left: 7.5em; }
+/* Heading links indented by level: the print TOC and the HTML export's (print-settings.ts). */
+.toc-list { list-style: none; margin: 0; padding: 0; }
+.toc-list li { margin: 0 0 4px; }
+.toc-list a { color: inherit; text-decoration: none; }
+.toc-level-2 { padding-left: 1.5em; }
+.toc-level-3 { padding-left: 3em; }
+.toc-level-4 { padding-left: 4.5em; }
+.toc-level-5 { padding-left: 6em; }
+.toc-level-6 { padding-left: 7.5em; }
+.export-toc { margin: 0 0 24px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; }
+.export-toc summary { cursor: pointer; font-weight: 600; }
+.export-toc .toc-list { margin-top: 8px; }
+.export-toc a { color: var(--accent); }

@@ -73,9 +73,25 @@ export function applyPrintSettings(s: PrintSettings, doc: Document = document): 
   else doc.documentElement.removeAttribute(TOC_ATTR);
 }
 
+/** A plain list of heading links, indented by level (style.css: .toc-list); the export uses it too. */
+export function tocList(items: readonly TocItem[], doc: Document = document): HTMLOListElement {
+  const list = doc.createElement('ol');
+  list.className = 'toc-list';
+  for (const item of items) {
+    const li = doc.createElement('li');
+    li.className = `toc-level-${item.level}`;
+    const a = doc.createElement('a');
+    a.href = `#${item.id}`;
+    a.textContent = item.text;
+    li.append(a);
+    list.append(li);
+  }
+  return list;
+}
+
 /**
  * The table of contents for the top of a printed document (shown by the print stylesheet when
- * the option is on; never on screen). Heading levels become indented list items.
+ * the option is on; never on screen).
  */
 export function printToc(items: readonly TocItem[], doc: Document = document): HTMLElement {
   const nav = doc.createElement('nav');
@@ -84,17 +100,7 @@ export function printToc(items: readonly TocItem[], doc: Document = document): H
   const title = doc.createElement('p');
   title.className = 'print-toc-title';
   title.textContent = t('toc');
-  const list = doc.createElement('ol');
-  for (const item of items) {
-    const li = doc.createElement('li');
-    li.className = `print-toc-l${item.level}`;
-    const a = doc.createElement('a');
-    a.href = `#${item.id}`;
-    a.textContent = item.text;
-    li.append(a);
-    list.append(li);
-  }
-  nav.append(title, list);
+  nav.append(title, tocList(items, doc));
   return nav;
 }
 

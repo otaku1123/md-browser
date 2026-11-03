@@ -61,8 +61,8 @@ describe('printToc', () => {
     expect(nav.className).toBe('print-toc');
     expect(nav.getAttribute('aria-hidden')).toBe('true');
     expect([...nav.querySelectorAll('li')].map((li) => [li.className, li.querySelector('a')?.getAttribute('href'), li.textContent])).toEqual([
-      ['print-toc-l1', '#title', 'Title'],
-      ['print-toc-l2', '#%E6%97%A5%E6%9C%AC%E8%AA%9E', '日本語'],
+      ['toc-level-1', '#title', 'Title'],
+      ['toc-level-2', '#%E6%97%A5%E6%9C%AC%E8%AA%9E', '日本語'],
     ]);
   });
 });

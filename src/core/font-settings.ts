@@ -9,7 +9,7 @@ import { setGlobalMediaScale } from './media-sizes';
 import { feedbackLinks } from './feedback';
 import { QUICK_OPEN_KEYS, quickOpenKeyLabel, quickOpenKeyStore, type QuickOpenKey } from './quick-open-key';
 import { CUSTOM_EXAMPLE, EDITOR_DEFAULT, editorStore, isValidTemplate, normalizeEditorSettings, type Editor, type EditorSettings } from './editor-link';
-import { buildStandaloneHtml, downloadHtml, exportFilename, mathCss } from './export-html';
+import { buildStandaloneHtml, DEFAULT_EXPORT, downloadHtml, exportFilename, type ExportSettings, type ExportTheme, exportSettingsStore, mathCss, normalizeExportSettings } from './export-html';
 import { applyCustomCss, CUSTOM_CSS_MAX, customCssStore, type CustomCss, EMPTY_CUSTOM_CSS, normalizeCustomCss, scopedCustomCss } from './custom-css';
 import { applyPrintSettings, DEFAULT_PRINT, type Margin, normalizePrintSettings, type Orientation, type Paper, type PrintSettings, printSettingsStore } from './print-settings';
 
@@ -337,13 +337,43 @@ function printRow(id: string): HTMLElement {
   return section;
 }
 
-/** "Export" section: the document as a standalone .html file, or the print dialog for a PDF. */
-function exportRow(target: () => ExportTarget | null, customCss: () => string): HTMLElement {
+/** "Export" section: the document as a standalone .html file (with its choices, saved at once), or the print dialog for a PDF. */
+function exportRow(id: string, target: () => ExportTarget | null, customCss: () => string): HTMLElement {
+  const store = exportSettingsStore();
+  let current: ExportSettings = { ...DEFAULT_EXPORT };
   const section = document.createElement('div');
   section.className = 'export-setting';
   const title = document.createElement('p');
   title.className = 'font-settings-title';
   title.textContent = t('exportTitle');
+  const theme = choiceRow<ExportTheme>(`${id}-export-theme`, t('exportTheme'), texts({ current: 'exportThemeCurrent', light: 'exportThemeLight' }), (v) =>
+    save({ ...current, theme: v }),
+  );
+  const options = document.createElement('div');
+  options.className = 'export-options';
+  const checkbox = (label: string, key: 'toc' | 'mathFonts') => {
+    const wrap = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.addEventListener('change', () => save({ ...current, [key]: input.checked }));
+    wrap.append(input, label);
+    options.append(wrap);
+    return input;
+  };
+  const toc = checkbox(t('exportToc'), 'toc');
+  const mathFonts = checkbox(t('exportMathFonts'), 'mathFonts');
+  const show = (s: ExportSettings) => {
+    current = s;
+    theme.set(s.theme);
+    toc.checked = s.toc;
+    mathFonts.checked = s.mathFonts;
+  };
+  const save = (next: ExportSettings) => {
+    show(normalizeExportSettings(next));
+    void store.save(current);
+  };
+  void store.load().then(show);
+  store.onChange(show);
   const buttons = document.createElement('div');
   buttons.className = 'export-buttons';
   const status = document.createElement('p');
@@ -370,7 +400,14 @@ function exportRow(target: () => ExportTarget | null, customCss: () => string): 
     const doc = target();
     if (!doc) return;
     const extraCss = [await mathCss(doc.root), customCss()].filter(Boolean).join('\n');
-    const text = await buildStandaloneHtml(doc.root, { title: doc.title, extraCss: extraCss || undefined });
+    const text = await buildStandaloneHtml(doc.root, {
+      title: doc.title,
+      extraCss: extraCss || undefined,
+      theme: current.theme,
+      toc: current.toc,
+      tocTitle: t('toc'),
+      embedFonts: current.mathFonts,
+    });
     downloadHtml(text, exportFilename(doc.name));
   });
   const pdf = button(t('exportPdf'), () => window.print());
@@ -378,7 +415,7 @@ function exportRow(target: () => ExportTarget | null, customCss: () => string): 
   const hint = document.createElement('p');
   hint.className = 'font-settings-hint';
   hint.textContent = t('exportHint');
-  section.append(title, buttons, status, hint);
+  section.append(title, theme.row, options, buttons, status, hint);
   return section;
 }
 
@@ -515,7 +552,7 @@ export function mountFontSettings(
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
   const customCss = customCssRow(id);
   panel.append(customCss.section, printRow(id));
-  if (opts.exportTarget) panel.append(exportRow(opts.exportTarget, customCss.exportCss));
+  if (opts.exportTarget) panel.append(exportRow(id, opts.exportTarget, customCss.exportCss));
   // Only file:// pages know the file's absolute path (editor-link.ts).
   if (opts.editor) panel.append(editorRow(id));
   panel.append(feedbackLinks());
