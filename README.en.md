@@ -14,7 +14,7 @@ Everything runs locally in your browser. Files are never uploaded, and diagrams 
 
 ## Features
 
-- GitHub Flavored Markdown (tables, task lists, syntax-highlighted code)
+- GitHub Flavored Markdown (tables, task lists, syntax-highlighted code). About 35 common languages are bundled; some 80 more (Dockerfile, PowerShell, CMake, ARM / x86 / AVR / MIPS assembly, Verilog, VHDL, Protobuf, nginx, Dart, Scala, Haskell, Elixir, MATLAB, Groovy, …) are loaded when a document has a code block in them (the table in `src/core/highlight.ts`)
 - GitHub alerts (`> [!NOTE]` etc.) and collapsible front matter (YAML / TOML)
 - Footnotes (`[^1]` and `[^1]: note`) with back links
 - Emoji shortcodes (`:smile:`, `:+1:`; like GitHub, not inside code and not emoticons such as `:)`)

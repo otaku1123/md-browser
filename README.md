@@ -24,7 +24,7 @@ Markdown ファイルをブラウザでプレビューする静的 Web アプリ
 
 ## 機能
 
-- GFM 相当の Markdown 表示（表・タスクリスト・コードハイライト）
+- GFM 相当の Markdown 表示（表・タスクリスト・コードハイライト）。ハイライトは主要な約 35 言語を同梱し、Dockerfile・PowerShell・CMake・アセンブリ（ARM / x86 / AVR / MIPS）・Verilog・VHDL・Protobuf・nginx・Dart・Scala・Haskell・Elixir・MATLAB・Groovy など約 80 言語は、その言語のコードブロックがある文書を開いたときに読み込む（`src/core/highlight.ts` の表）
 - GitHub のアラート記法（`> [!NOTE]` など）、Front matter（YAML / TOML）の折りたたみ表示
 - 脚注（`[^1]` と `[^1]: 注釈`）の表示、注釈から本文への戻りリンク
 - 絵文字ショートコード（`:smile:` `:+1:` など。GitHub 同様、コード内や `:)` のような顔文字は変換しない）
