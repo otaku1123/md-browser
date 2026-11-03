@@ -84,6 +84,15 @@ describe('findTextRanges', () => {
     expect(findTextRanges(dom('foo\n\nbar\n'), 'bar')).toHaveLength(1);
   });
 
+  it('skips the print-only table of contents (print-settings.ts)', () => {
+    const root = dom('# Reconnect\n');
+    const toc = document.createElement('nav');
+    toc.className = 'print-toc';
+    toc.textContent = 'Reconnect';
+    root.prepend(toc);
+    expect(findTextRanges(root, 'reconnect')).toHaveLength(1);
+  });
+
   it('finds Japanese text and keeps offsets after characters with a longer lower case', () => {
     const root = dom('İstanbul の再接続シーケンス\n');
     expect(findTextRanges(root, '再接続').map(String)).toEqual(['再接続']);

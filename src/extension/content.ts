@@ -2,6 +2,7 @@
 import css from '../style.css?inline';
 import { renderMarkdown } from '../core/render';
 import { loadHighlightLanguages } from '../core/highlight';
+import { printToc } from '../core/print-settings';
 import { renderDiagrams } from '../core/diagrams';
 import { renderMath } from '../core/math';
 import { onThemeChange } from '../core/theme';
@@ -273,6 +274,7 @@ async function main(): Promise<void> {
     // <template> content is inert: nothing loads until it is attached.
     const staging = document.createElement('template');
     staging.innerHTML = html;
+    staging.content.prepend(printToc(items));
     prepareMediaSizes(staging.content);
     // Per-item sizes are remembered by the file's URL (without the heading in the hash).
     const media = loadMediaDoc(location.href.split('#')[0]);

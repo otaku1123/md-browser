@@ -30,8 +30,8 @@ export function scrollToLine(root: ParentNode, line: number, behavior: ScrollBeh
 }
 
 // Text the reader doesn't see as text: diagram sources (replaced by the drawing), SVG labels,
-// KaTeX's MathML copy (the visible part is the HTML one).
-const SKIP = 'script, style, svg, .diagram-source, .katex-mathml';
+// KaTeX's MathML copy (the visible part is the HTML one), the print-only table of contents.
+const SKIP = 'script, style, svg, .diagram-source, .katex-mathml, .print-toc';
 
 /**
  * Ranges of every occurrence of `query` in `root`'s visible text, in document order, folded as

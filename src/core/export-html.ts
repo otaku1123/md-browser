@@ -8,7 +8,7 @@ import css from '../style.css?inline';
 import { currentTheme } from './theme';
 
 // Controls the viewer adds to the rendered Markdown; none of them work without the page's scripts.
-const CONTROL_SELECTORS = ['.copy-button', '.heading-link', '.media-size', '.diagram-actions'];
+const CONTROL_SELECTORS = ['.copy-button', '.heading-link', '.media-size', '.diagram-actions', '.print-toc'];
 // CSS variables font-settings.ts sets on <html>: carried over so the export looks like the page.
 const ROOT_VARIABLES = ['--font-body', '--font-code', '--doc-font-size', '--doc-max-width'];
 const EMBED_LIMIT = 20 * 1024 * 1024; // skip embedding an image bigger than this (the URL stays)
