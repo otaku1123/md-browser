@@ -1,6 +1,7 @@
 // Renders a file:// Markdown document in place. Loaded by content-loader.js.
 import css from '../style.css?inline';
 import { renderMarkdown } from '../core/render';
+import { loadHighlightLanguages } from '../core/highlight';
 import { renderDiagrams } from '../core/diagrams';
 import { renderMath } from '../core/math';
 import { onThemeChange } from '../core/theme';
@@ -267,6 +268,7 @@ async function main(): Promise<void> {
 
   async function render(src: string, keepScroll: boolean): Promise<void> {
     const mine = ++seq;
+    await loadHighlightLanguages(src);
     const { html, toc: items } = renderMarkdown(src);
     // <template> content is inert: nothing loads until it is attached.
     const staging = document.createElement('template');

@@ -2,6 +2,7 @@ import './style.css';
 import { applyI18n, lang, t } from './i18n';
 import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
+import { loadHighlightLanguages } from './core/highlight';
 import { createToc } from './core/toc';
 import { mountTocPanel } from './core/toc-panel';
 import { mountSourceView } from './core/source-view';
@@ -110,6 +111,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
     return;
   }
 
+  await loadHighlightLanguages(content.text);
   const { html, toc: tocItems } = renderMarkdown(content.text);
   // Build off-DOM first so images and diagrams swap in without flicker.
   // <template> content is inert, so images don't start loading unresolved relative URLs.
