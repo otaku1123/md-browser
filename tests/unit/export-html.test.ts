@@ -59,6 +59,22 @@ describe('cleanedCopy', () => {
     expect(fetchImpl).toHaveBeenCalledWith('blob:http://x/1');
   });
 
+  it('embeds file:// images through the local reader, when there is one and it can read them', async () => {
+    const fetchImpl = fakeFetch();
+    const readLocal = vi.fn(async (url: string) => (url === 'file:///tmp/local.png' ? 'data:image/png;base64,BBBB' : null));
+    const copy = await cleanedCopy(rendered(), fetchImpl, undefined, readLocal);
+    expect(copy.querySelector('img[alt="local"]')?.getAttribute('src')).toBe('data:image/png;base64,BBBB');
+    expect(readLocal).toHaveBeenCalledTimes(1); // file: only; fetch still handles the others
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const root = rendered();
+    root.insertAdjacentHTML('beforeend', '<img src="file:///elsewhere/out.png" alt="outside">');
+    const kept = await cleanedCopy(root, fetchImpl, undefined, readLocal);
+    expect(kept.querySelector('img[alt="outside"]')?.getAttribute('src')).toBe('file:///elsewhere/out.png');
+    const failing = await cleanedCopy(rendered(), fetchImpl, undefined, async () => Promise.reject(new Error('no background')));
+    expect(failing.querySelector('img[alt="local"]')?.getAttribute('src')).toBe('file:///tmp/local.png');
+  });
+
   it('keeps the URL, made absolute, when the image cannot be fetched', async () => {
     const copy = await cleanedCopy(rendered(), fakeFetch(false));
     expect(copy.querySelector('img[alt="pic"]')?.getAttribute('src')).toBe('blob:http://x/1');

@@ -19,3 +19,13 @@ export type SetHiddenDirResponse = { ok: true; hidden: string[] } | { ok: false;
 /** `known` as in ReadSelfMessage: the hash the page has, so an unchanged file sends no text. */
 export type ReadFileMessage = { type: typeof MSG_READ_FILE; path: string; known?: string };
 export type ReadFileResponse = ReadSelfResponse;
+/**
+ * Reads an asset below the tab's root by its root-relative path (read-asset.ts says which kinds):
+ * an image comes back as a data: URL, a text file as its text. `known` as in ReadSelfMessage.
+ */
+export const MSG_READ_ASSET = 'md-browser:read-asset';
+export type ReadAssetMessage = { type: typeof MSG_READ_ASSET; path: string; known?: string };
+export type ReadAssetResponse =
+  | { ok: true; unchanged: true }
+  | { ok: true; unchanged?: false; kind: 'image' | 'text'; data: string; hash: string }
+  | { ok: false; error: string };
