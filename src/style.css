@@ -1074,6 +1074,29 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
 .export-status { margin: 0 0 8px; font-size: 12px; color: var(--error); }
 .export-status:empty { display: none; }
 .export-setting .font-settings-hint { margin-bottom: 0; }
+.custom-css-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.custom-css-setting textarea {
+  display: block;
+  width: 100%;
+  min-height: 7em;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  font: 12px/1.5 var(--font-code);
+  tab-size: 2;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+.custom-css-setting textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.custom-css-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; }
+.custom-css-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.custom-css-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.custom-css-options button { margin-left: auto; }
+.custom-css-status { margin: 0 0 8px; font-size: 12px; color: var(--fg-muted); }
+.custom-css-setting .font-settings-hint { margin-bottom: 0; }
 .feedback-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; }
 .feedback-links a { color: var(--accent); }
 
