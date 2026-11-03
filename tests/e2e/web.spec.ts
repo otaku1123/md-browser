@@ -449,6 +449,33 @@ test('sets the text size and content width, and resets them', async ({ page }) =
   await expect(panel.getByRole('radiogroup', { name: 'Text size' }).getByRole('radio', { name: 'Default', exact: true })).toBeChecked();
 });
 
+test('applies custom CSS to the document only and remembers it', async ({ page }) => {
+  await openSampleFolder(page);
+  const color = (selector: string) => page.locator(selector).first().evaluate((el) => getComputedStyle(el).color);
+  const before = await color('#open-file');
+
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  const css = panel.getByRole('textbox', { name: 'Custom CSS' });
+  await css.fill('h1 { color: rgb(200, 0, 0); } button { color: rgb(0, 200, 0); }');
+  await expect.poll(() => color('#content h1')).toBe('rgb(200, 0, 0)');
+  // Scoped to the document: the toolbar's buttons keep their colour.
+  expect(await color('#open-file')).toBe(before);
+  await expect(panel.locator('.custom-css-status')).toHaveText(/characters · saved/);
+
+  await page.reload();
+  await expect.poll(() => color('#content h1')).toBe('rgb(200, 0, 0)');
+  await page.locator('.font-settings-toggle').click();
+  await expect(css).toHaveValue(/rgb\(200, 0, 0\)/);
+
+  // Off keeps the text; clear removes it.
+  await panel.getByRole('checkbox', { name: 'Apply' }).uncheck();
+  await expect.poll(() => color('#content h1')).not.toBe('rgb(200, 0, 0)');
+  await expect(css).toHaveValue(/rgb\(200, 0, 0\)/);
+  await panel.getByRole('button', { name: 'Clear' }).click();
+  await expect(css).toHaveValue('');
+});
+
 test('applies the folder scan limit from the settings', async ({ page }) => {
   await page.goto('/');
   await page.locator('.font-settings-toggle').click();
@@ -1280,6 +1307,7 @@ test('exports the document as one HTML file, and prints for PDF', async ({ page,
   await page.locator('.font-settings-toggle').click();
   const panel = page.locator('.font-settings-panel');
   await panel.getByRole('radiogroup', { name: 'Text size' }).getByRole('radio', { name: 'Large', exact: true }).check();
+  await panel.getByRole('textbox', { name: 'Custom CSS' }).fill('h1 { color: rgb(200, 0, 0); }');
   await expectAccessible(page);
 
   const [download] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Save as HTML' }).click()]);
@@ -1287,6 +1315,11 @@ test('exports the document as one HTML file, and prints for PDF', async ({ page,
   const html = await readFile((await download.path())!, 'utf8');
   expect(html).toMatch(/^<!doctype html>\n<html lang="en" data-theme="light">/);
   expect(html).toContain('<title>MD Browser サンプル</title>');
+  // The custom CSS comes along, scoped as on the page; unchecking the box leaves it out.
+  expect(html).toContain('@scope (.content) {\nh1 { color: rgb(200, 0, 0); }\n}');
+  await panel.getByRole('checkbox', { name: 'Include in HTML export' }).uncheck();
+  const [plain] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Save as HTML' }).click()]);
+  expect(await readFile((await plain.path())!, 'utf8')).not.toContain('@scope');
   expect(html).toContain('<main class="content markdown-body"><details class="front-matter">');
   expect(html).toMatch(/<h1 id="[^"]+">MD Browser サンプル<\/h1>/);
   expect(html).toContain('--doc-font-size: 18px');

@@ -10,6 +10,7 @@ import { feedbackLinks } from './feedback';
 import { QUICK_OPEN_KEYS, quickOpenKeyLabel, quickOpenKeyStore, type QuickOpenKey } from './quick-open-key';
 import { CUSTOM_EXAMPLE, EDITOR_DEFAULT, editorStore, isValidTemplate, normalizeEditorSettings, type Editor, type EditorSettings } from './editor-link';
 import { buildStandaloneHtml, downloadHtml, exportFilename, mathCss } from './export-html';
+import { applyCustomCss, CUSTOM_CSS_MAX, customCssStore, type CustomCss, EMPTY_CUSTOM_CSS, normalizeCustomCss, scopedCustomCss } from './custom-css';
 
 // Values for the document only: the toolbar and TOC keep their size.
 const SIZES = { small: '14px', normal: '16px', large: '18px', xlarge: '20px' } as const;
@@ -195,8 +196,94 @@ export interface ExportTarget {
   title: string;
 }
 
+/**
+ * "Custom CSS" section (custom-css.ts): a stylesheet for the document, applied as it is typed
+ * and saved shortly after; the checkboxes switch it off without losing it and keep it out of
+ * the HTML export. exportCss() is what the export should include right now.
+ */
+function customCssRow(id: string): { section: HTMLElement; exportCss(): string } {
+  const store = customCssStore();
+  let current: CustomCss = { ...EMPTY_CUSTOM_CSS };
+  let saved = true;
+  const section = document.createElement('div');
+  section.className = 'custom-css-setting';
+  const title = document.createElement('p');
+  title.className = 'font-settings-title';
+  title.textContent = t('customCssTitle');
+  const textarea = document.createElement('textarea');
+  textarea.id = `${id}-custom-css`;
+  textarea.rows = 6;
+  textarea.spellcheck = false;
+  textarea.autocomplete = 'off';
+  textarea.maxLength = CUSTOM_CSS_MAX;
+  textarea.placeholder = t('customCssPlaceholder');
+  textarea.setAttribute('aria-label', t('customCssLabel'));
+  textarea.addEventListener('input', () => update({ ...current, css: textarea.value }));
+  const options = document.createElement('div');
+  options.className = 'custom-css-options';
+  const checkbox = (label: string, onChange: (checked: boolean) => void) => {
+    const wrap = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.addEventListener('change', () => onChange(input.checked));
+    wrap.append(input, label);
+    options.append(wrap);
+    return input;
+  };
+  const enabled = checkbox(t('customCssEnabled'), (v) => update({ ...current, enabled: v }));
+  const exported = checkbox(t('customCssExport'), (v) => update({ ...current, exported: v }));
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.textContent = t('customCssClear');
+  clear.addEventListener('click', () => {
+    textarea.value = '';
+    update({ ...current, css: '' });
+  });
+  options.append(clear);
+  const status = document.createElement('p');
+  status.className = 'custom-css-status';
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('customCssHint');
+  section.append(title, textarea, options, status, hint);
+
+  const showStatus = () => {
+    const count = t('customCssStatus', { count: current.css.length.toLocaleString(), max: CUSTOM_CSS_MAX.toLocaleString() });
+    status.textContent = `${count} · ${t(saved ? 'customCssSaved' : 'customCssUnsaved')}`;
+  };
+  const show = (s: CustomCss) => {
+    current = s;
+    applyCustomCss(current);
+    if (document.activeElement !== textarea) textarea.value = s.css;
+    enabled.checked = s.enabled;
+    exported.checked = s.exported;
+    showStatus();
+  };
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  const update = (next: CustomCss) => {
+    saved = false;
+    show(normalizeCustomCss(next));
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = undefined;
+      void store.save(current).then(() => {
+        if (saveTimer !== undefined) return; // edited again meanwhile
+        saved = true;
+        showStatus();
+      });
+    }, SAVE_DELAY_MS);
+  };
+  void store.load().then(show);
+  store.onChange((s) => {
+    if (saveTimer !== undefined) return; // a newer local edit is about to be saved
+    saved = true;
+    show(s);
+  });
+  return { section, exportCss: () => (current.exported ? scopedCustomCss(current) : '') };
+}
+
 /** "Export" section: the document as a standalone .html file, or the print dialog for a PDF. */
-function exportRow(target: () => ExportTarget | null): HTMLElement {
+function exportRow(target: () => ExportTarget | null, customCss: () => string): HTMLElement {
   const section = document.createElement('div');
   section.className = 'export-setting';
   const title = document.createElement('p');
@@ -227,7 +314,8 @@ function exportRow(target: () => ExportTarget | null): HTMLElement {
   const html = button(t('exportHtml'), async () => {
     const doc = target();
     if (!doc) return;
-    const text = await buildStandaloneHtml(doc.root, { title: doc.title, extraCss: await mathCss(doc.root) });
+    const extraCss = [await mathCss(doc.root), customCss()].filter(Boolean).join('\n');
+    const text = await buildStandaloneHtml(doc.root, { title: doc.title, extraCss: extraCss || undefined });
     downloadHtml(text, exportFilename(doc.name));
   });
   const pdf = button(t('exportPdf'), () => window.print());
@@ -370,7 +458,9 @@ export function mountFontSettings(
   panel.append(hint, reset, quickOpenKeyRow(id));
   // Only the viewer opens folders; the file:// page shows a single document.
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
-  if (opts.exportTarget) panel.append(exportRow(opts.exportTarget));
+  const customCss = customCssRow(id);
+  panel.append(customCss.section);
+  if (opts.exportTarget) panel.append(exportRow(opts.exportTarget, customCss.exportCss));
   // Only file:// pages know the file's absolute path (editor-link.ts).
   if (opts.editor) panel.append(editorRow(id));
   panel.append(feedbackLinks());
