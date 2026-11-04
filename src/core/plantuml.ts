@@ -4,7 +4,10 @@
 // The engine loads themes, icons, emoji and the standard library through a hook we replace: the
 // files bundled here load from the package; a standard library bundle ("<lib>.min.js") is
 // fetched from the host the user named in the settings, as data (plantuml-stdlib.ts), and only
-// then; everything else fails with a message. The diagram source never leaves the page.
+// then; everything else fails with a message. A local "!include file.puml" goes through a second
+// hook, served by the file reader the host set (the extension's content script reads below the
+// tab's root through its service worker); without one it fails as the engine has no file system.
+// The diagram source never leaves the page.
 import DOMPurify from 'dompurify';
 import { t } from '../i18n';
 import { installStdlibBundle, normalizeStdlibUrl, parseStdlibBundle } from './plantuml-stdlib';
@@ -12,6 +15,41 @@ import { createSettingsStore, type SettingsStore } from './settings-store';
 
 type Engine = typeof import('@plantuml/core');
 type Loader = (name: string, ok: () => void, fail: (message: string) => void) => boolean;
+/**
+ * The engine's hook for local includes: `path` as written (after variables), `from` the id given
+ * to the file holding the include (null in the diagram itself); `ok(id, text)` delivers the whole
+ * file, `err` fails the include; returning false (strictly) declines the file.
+ */
+type FileLoader = (path: string, from: string | null, ok: (id: string, text: string) => void, err: (message: string) => void) => boolean;
+
+/** Reads the file at a URL for an include; rejects with the reason when it can't (shown in the diagram). */
+export type PlantUmlFileReader = (url: string) => Promise<string>;
+
+let fileReader: PlantUmlFileReader | null = null;
+
+/** The host sets this when it has a way to read local files (the extension's file:// pages). */
+export function setPlantUmlFileReader(read: PlantUmlFileReader | null): void {
+  fileReader = read;
+}
+
+/** The URL of an included file: relative to the file holding the include, or to the document. */
+export function includeUrl(path: string, from: string | null, base: string): string | null {
+  try {
+    return new URL(path, from ?? base).href;
+  } catch {
+    return null;
+  }
+}
+
+/** The engine's file hook: resolves the path and asks the reader; the file's id is its URL. */
+export const plantUmlFileLoader: FileLoader = (path, from, ok, err) => {
+  if (!fileReader) return false;
+  const fail = (error: unknown) => err(t('plantumlIncludeFailed', { path, error: error instanceof Error ? error.message : String(error) }));
+  const url = includeUrl(path, from, document.baseURI);
+  if (!url) fail(t('localReadKind'));
+  else fileReader(url).then((text) => ok(url, text), fail);
+  return true;
+};
 
 const BUNDLED: Record<string, () => Promise<unknown>> = {
   'themes.js': () => import('@plantuml/core/themes.js'),
@@ -61,7 +99,9 @@ function loadEngine(): Promise<Engine> {
       else fail(t(name.endsWith('.min.js') ? 'plantumlStdlibOff' : 'plantumlNotBundled', { name }));
       return true;
     };
-    (globalThis as { PLANTUML_STDLIB_LOADER?: Loader }).PLANTUML_STDLIB_LOADER = loader;
+    const g = globalThis as { PLANTUML_STDLIB_LOADER?: Loader; PLANTUML_FILE_LOADER?: FileLoader };
+    g.PLANTUML_STDLIB_LOADER = loader;
+    g.PLANTUML_FILE_LOADER = plantUmlFileLoader;
     return import('@plantuml/core');
   })();
   return enginePromise;
