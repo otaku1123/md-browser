@@ -30,4 +30,4 @@ CI の `test`（単体・E2E・スクリーンショット）と `release-check`
   ```sh
   git fetch && git tag -a vX.Y.Z origin/main -m "Release X.Y.Z" && git push origin vX.Y.Z
   ```
-- ストアの説明文を変えた場合は、デベロッパー ダッシュボードで `docs/store/listing.md` の内容に合わせる
+- ストアの説明文（`docs/store/listing.md`）を変えた場合は、ワークフローは zip をアップロードするだけで審査には提出しない（ジョブサマリーに出る）。デベロッパー ダッシュボードで説明文を `docs/store/listing.md` の内容に合わせてから、ダッシュボードで「審査に提出」する（または `gh workflow run release.yml -f tag=vX.Y.Z -f store=true -f submit=only`）
