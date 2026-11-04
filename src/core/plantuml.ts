@@ -73,10 +73,22 @@ export function plantUmlSettingsStore(): SettingsStore<PlantUmlSettings> {
 }
 
 let stdlibUrl = '';
+const settingsListeners = new Set<() => void>();
 
-/** The settings panel keeps this current (loaded once, then on every change). */
+/**
+ * The settings panel keeps this current (loaded once, then on every change). A changed host
+ * tells the listeners (the pages redraw their diagrams: the ones that failed for want of a
+ * library are drawn again, the others come back from the cache).
+ */
 export function setPlantUmlSettings(s: PlantUmlSettings): void {
+  if (s.stdlibUrl === stdlibUrl) return;
   stdlibUrl = s.stdlibUrl;
+  for (const cb of settingsListeners) cb();
+}
+
+/** Called after the settings changed in a way that can change how a diagram draws. */
+export function onPlantUmlSettingsChange(cb: () => void): void {
+  settingsListeners.add(cb);
 }
 
 /** Fetches and installs one standard library bundle; the message of the error says what failed. */

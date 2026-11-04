@@ -1282,6 +1282,17 @@ test('fetches a PlantUML standard library as data from the host named in the set
     void route.fulfill({ status: 200, contentType: 'application/javascript', headers: { 'access-control-allow-origin': '*' }, body: bundle });
   });
   await openSampleFolder(page);
+  // Without a host the include fails; naming one redraws the diagram in place (#183).
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile: (rel: string, text: string) => Promise<void> }).__appendToFile(
+      'README.md',
+      '\n```plantuml\n!include <C4/C4_Context>\nlib --> [App]\n```\n',
+    ),
+  );
+  const diagram = page.locator('.diagram-plantuml').nth(2);
+  await expect(diagram).toHaveClass(/diagram-error/);
+  expect(requested).toEqual([]);
+
   await page.locator('.font-settings-toggle').click();
   const panel = page.locator('.font-settings-panel');
   const host = panel.getByRole('textbox', { name: 'Library host' });
@@ -1294,13 +1305,6 @@ test('fetches a PlantUML standard library as data from the host named in the set
   await expect(panel.locator('.plantuml-setting [role="alert"]')).toBeEmpty();
   await page.keyboard.press('Escape');
 
-  await page.evaluate(() =>
-    (window as unknown as { __appendToFile: (rel: string, text: string) => Promise<void> }).__appendToFile(
-      'README.md',
-      '\n```plantuml\n!include <C4/C4_Context>\nlib --> [App]\n```\n',
-    ),
-  );
-  const diagram = page.locator('.diagram-plantuml').nth(2);
   await expect(diagram.locator('svg')).toHaveCount(1);
   await expect(diagram).toContainText('From the library');
   await expect(diagram).not.toHaveClass(/diagram-error/);

@@ -57,7 +57,7 @@ const en = {
   plantumlStdlibOfficial: 'Use the official host',
   plantumlStdlibInvalid: 'The address must start with https:// (nothing is fetched until it does).',
   plantumlStdlibHint:
-    'Where the standard library (!include <C4/…>, <awslib/…>, <kubernetes/…>, …) is fetched from, one bundle per library, only when a diagram includes it. Empty: nothing is fetched. The diagram source is never sent; the host only sees the library names. Diagrams already shown are redrawn when the document is next opened.',
+    'Where the standard library (!include <C4/…>, <awslib/…>, <kubernetes/…>, …) is fetched from, one bundle per library, only when a diagram includes it. Empty: nothing is fetched. The diagram source is never sent; the host only sees the library names. The diagrams on the page are redrawn when this changes.',
   frontMatter: 'Front matter',
   copyCode: 'Copy',
   copied: 'Copied',
@@ -246,7 +246,7 @@ const ja: Record<Key, string> = {
   plantumlStdlibOfficial: '公式ホストを使う',
   plantumlStdlibInvalid: 'https:// で始まるアドレスを指定してください（それまで何も取得しません）。',
   plantumlStdlibHint:
-    '標準ライブラリ（!include <C4/…>、<awslib/…>、<kubernetes/…> など）の取得先。図がライブラリを include したときだけ、そのライブラリ 1 つ分を取得します。空なら何も取得しません。図のソースは送らず、取得先にはライブラリ名だけが渡ります。表示済みの図は、文書を次に開いたときに描き直します。',
+    '標準ライブラリ（!include <C4/…>、<awslib/…>、<kubernetes/…> など）の取得先。図がライブラリを include したときだけ、そのライブラリ 1 つ分を取得します。空なら何も取得しません。図のソースは送らず、取得先にはライブラリ名だけが渡ります。変更すると、表示中の図を描き直します。',
   frontMatter: 'メタデータ（Front matter）',
   copyCode: 'コピー',
   copied: 'コピーしました',
