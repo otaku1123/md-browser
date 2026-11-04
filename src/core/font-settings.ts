@@ -22,6 +22,7 @@ import {
   normalizeExportSettings,
 } from './export-html';
 import { applyCustomCss, CUSTOM_CSS_MAX, customCssStore, type CustomCss, EMPTY_CUSTOM_CSS, normalizeCustomCss, scopedCustomCss } from './custom-css';
+import { folderCssStore, type FolderCssSettings } from './folder-css';
 import { applyPrintSettings, DEFAULT_PRINT, type Margin, normalizePrintSettings, type Orientation, type Paper, type PrintSettings, printSettingsStore } from './print-settings';
 import { normalizePlantUmlSettings, type PlantUmlSettings, plantUmlSettingsStore, setPlantUmlSettings } from './plantuml';
 import { normalizeStdlibUrl, OFFICIAL_STDLIB_URL } from './plantuml-stdlib';
@@ -215,9 +216,10 @@ export interface ExportTarget {
 /**
  * "Custom CSS" section (custom-css.ts): a stylesheet for the document, applied as it is typed
  * and saved shortly after; the checkboxes switch it off without losing it and keep it out of
- * the HTML export. exportCss() is what the export should include right now.
+ * the HTML export. exportCss() is what the export should include right now. With `folderCss`,
+ * the section ends with the switch for the folder's own stylesheet (folder-css.ts).
  */
-function customCssRow(id: string): { section: HTMLElement; exportCss(): string } {
+function customCssRow(id: string, folderCss: boolean): { section: HTMLElement; exportCss(): string } {
   const store = customCssStore();
   let current: CustomCss = { ...EMPTY_CUSTOM_CSS };
   let saved = true;
@@ -262,6 +264,7 @@ function customCssRow(id: string): { section: HTMLElement; exportCss(): string }
   hint.className = 'font-settings-hint';
   hint.textContent = t('customCssHint');
   section.append(title, textarea, options, status, hint);
+  if (folderCss) section.append(folderCssRow(id));
 
   const showStatus = () => {
     const count = t('customCssStatus', { count: current.css.length.toLocaleString(), max: CUSTOM_CSS_MAX.toLocaleString() });
@@ -296,6 +299,36 @@ function customCssRow(id: string): { section: HTMLElement; exportCss(): string }
     show(s);
   });
   return { section, exportCss: () => (current.exported ? scopedCustomCss(current) : '') };
+}
+
+/**
+ * The folder's .md-browser.css (folder-css.ts), off by default: a checkbox saved at once and
+ * shared by every file:// tab (content.ts applies the change). Only there: the viewer and the web
+ * app have no folder to read it from.
+ */
+function folderCssRow(id: string): HTMLElement {
+  const store = folderCssStore();
+  const wrap = document.createElement('div');
+  wrap.className = 'folder-css-setting';
+  const options = document.createElement('div');
+  options.className = 'custom-css-options';
+  const label = document.createElement('label');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.id = `${id}-folder-css`;
+  input.addEventListener('change', () => void store.save({ enabled: input.checked }));
+  label.append(input, t('folderCssEnabled'));
+  options.append(label);
+  const hint = document.createElement('p');
+  hint.className = 'font-settings-hint';
+  hint.textContent = t('folderCssHint');
+  wrap.append(options, hint);
+  const show = (s: FolderCssSettings) => {
+    input.checked = s.enabled;
+  };
+  void store.load().then(show);
+  store.onChange(show);
+  return wrap;
 }
 
 /** "PlantUML" section (plantuml.ts): the host of the standard library bundles; saved when committed (blur / Enter). */
@@ -539,7 +572,7 @@ function editorRow(id: string): HTMLElement {
 
 export function mountFontSettings(
   toolbar: HTMLElement,
-  opts: { onScanLimitChange?: (limit: number) => void; exportTarget?: () => ExportTarget | null; editor?: boolean } = {},
+  opts: { onScanLimitChange?: (limit: number) => void; exportTarget?: () => ExportTarget | null; editor?: boolean; folderCss?: boolean } = {},
 ): void {
   const store = createSettingsStore(STORAGE_KEY, normalizeFontSettings);
   const themeStore = createSettingsStore(THEME_KEY, normalizeTheme);
@@ -625,7 +658,8 @@ export function mountFontSettings(
   panel.append(hint, reset, quickOpenKeyRow(id));
   // Only the viewer opens folders; the file:// page shows a single document.
   if (opts.onScanLimitChange) panel.append(scanLimitRow(id, opts.onScanLimitChange));
-  const customCss = customCssRow(id);
+  // Only file:// pages have a folder whose .md-browser.css could apply (content.ts).
+  const customCss = customCssRow(id, opts.folderCss === true);
   panel.append(customCss.section, plantUmlRow(id), printRow(id));
   if (opts.exportTarget) panel.append(exportRow(id, opts.exportTarget, customCss.exportCss));
   // Only file:// pages know the file's absolute path (editor-link.ts).

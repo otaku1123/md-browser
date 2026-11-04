@@ -147,6 +147,9 @@ const en = {
   exportPdf: 'Save as PDF',
   exportHint: 'HTML: one file with the styles, diagrams and (where readable) images embedded, as shown now. PDF: the browser\'s print dialog.',
   exportFailed: 'Could not export: {error}',
+  folderCssEnabled: "Apply the folder's .md-browser.css",
+  folderCssHint:
+    "A .md-browser.css in the document's folder (or else in the root folder of the file list) styles the document the way its author meant: same scope as above, applied before your CSS. Off by default: that file is written by whoever made the folder, and a url(https://…) in it makes the browser fetch that address.",
   customCssTitle: 'Custom CSS',
   customCssLabel: 'Custom CSS',
   customCssEnabled: 'Apply',
@@ -333,6 +336,9 @@ const ja: Record<Key, string> = {
   exportPdf: 'PDF として保存',
   exportHint: 'HTML: いまの表示のまま、スタイル・図・（読める場合は）画像を埋め込んだ 1 ファイル。PDF: ブラウザの印刷ダイアログを開きます。',
   exportFailed: 'エクスポートできませんでした: {error}',
+  folderCssEnabled: 'フォルダの .md-browser.css を適用する',
+  folderCssHint:
+    '文書のフォルダ（無ければファイル一覧の起点フォルダ）にある .md-browser.css を文書に適用する。範囲は上と同じ本文のみで、自分の CSS が後から勝つ。既定はオフ: そのファイルを書くのはフォルダの作者で、url(https://…) があればブラウザがその URL にアクセスするため。',
   customCssTitle: 'カスタム CSS',
   customCssLabel: 'カスタム CSS',
   customCssEnabled: '適用する',
