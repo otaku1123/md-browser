@@ -32,7 +32,8 @@ import { loadFavorites, saveFavorites, toggleFavorite } from '../core/favorites-
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
 import { sha256Hex } from './read-self';
-import { isAssetPath } from './read-asset';
+import { type AssetKind, assetKind, isAssetPath } from './read-asset';
+import { setPlantUmlFileReader } from '../core/plantuml';
 import { folderOf, relativePath } from './dir-listing';
 import {
   MSG_LIST_SIBLINGS,
@@ -78,18 +79,24 @@ function fileName(): string {
 let rootHref = folderOf(location.href);
 
 /**
- * Reads an image this document refers to, through the service worker, as a data: URL (the HTML
- * export embeds it): only below the tab's root, by the root-relative path the background checks.
- * Null for anything else (another folder, another kind of file, unreadable): the URL stays.
+ * Reads a file this document refers to, through the service worker: only below the tab's root,
+ * by the root-relative path the background checks, and only of the kind asked for. An image
+ * comes back as a data: URL, a text file as text. Rejects with the reason otherwise.
  */
-async function readLocalAsset(url: string): Promise<string | null> {
-  if (!url.startsWith(rootHref)) return null;
+async function readBelowRoot(url: string, kind: AssetKind): Promise<string> {
+  if (!url.startsWith(rootHref)) throw new Error(t('localReadOutside'));
   const path = relativePath(rootHref, url);
-  if (!isAssetPath(path)) return null;
+  if (!isAssetPath(path) || assetKind(path) !== kind) throw new Error(t('localReadKind'));
   const msg: ReadAssetMessage = { type: MSG_READ_ASSET, path };
-  const res: ReadAssetResponse | undefined = await chrome.runtime.sendMessage(msg).catch(() => undefined);
-  return res?.ok && !res.unchanged && res.kind === 'image' ? res.data : null;
+  const res: ReadAssetResponse | undefined = await chrome.runtime.sendMessage(msg);
+  if (!res) throw new Error('no response from background');
+  if (!res.ok) throw new Error(res.error);
+  if (res.unchanged) throw new Error('unchanged'); // not asked for (no known hash)
+  return res.data;
 }
+
+/** The HTML export embeds the images it can get this way; for the others the URL stays. */
+const readLocalAsset = (url: string) => readBelowRoot(url, 'image').catch(() => null);
 
 /** Full-text search over the tab's root, once its files are listed (showSiblings). */
 let searchCorpus: SearchCorpus | null = null;
@@ -283,6 +290,8 @@ async function main(): Promise<void> {
 
   const { content, tocEl, filesEl, filesToggle, status, breadcrumb } = buildShell();
   initFavicon();
+  // PlantUML's "!include file.puml": the files below the tab's root, through the service worker.
+  setPlantUmlFileReader((url) => readBelowRoot(url, 'text'));
   const toc = createToc(tocEl);
   toc.setDoc(location.pathname); // one document per file:// page
   const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, content, tocEl, () => toc.update());

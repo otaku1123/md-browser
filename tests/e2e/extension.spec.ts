@@ -677,6 +677,48 @@ test('leaves images outside the tab root, and non-image files, as file:// URLs i
   }
 });
 
+test('includes local PlantUML files from below the tab root, and refuses the ones outside it', async ({ context }) => {
+  const dir = await makeFolder({
+    'outside.puml': 'Eve -> Mallory : secret\n',
+    'sub/doc.md': [
+      '# Doc',
+      '',
+      '```plantuml',
+      '!include ./inc/parts.iuml',
+      'Alice -> Bob : hello',
+      '```',
+      '',
+      '```plantuml',
+      '!include ../outside.puml',
+      '```',
+      '',
+      '```plantuml',
+      '!include notes.txt',
+      '```',
+      '',
+    ].join('\n'),
+    // Nested include: resolved next to the including file, not the document.
+    'sub/inc/parts.iuml': '!include common.iuml\n',
+    'sub/inc/common.iuml': 'skinparam sequenceMessageAlign center\nparticipant "Bob the builder" as Bob\n',
+    'sub/notes.txt': 'not a diagram file',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'sub/doc.md')); // the tab's root is "sub/"
+    const diagrams = page.locator('.diagram-plantuml');
+    await expect(diagrams).toHaveCount(3);
+    await expect(diagrams.nth(0).locator('svg')).toContainText('Bob the builder');
+    await expect(diagrams.nth(0).locator('svg')).toContainText('hello');
+    await expect(diagrams.nth(1)).toHaveClass(/diagram-error/);
+    await expect(diagrams.nth(1).locator('.diagram-error-message')).toContainText('1 行目: cannot include ../outside.puml');
+    await expect(diagrams.nth(2)).toHaveClass(/diagram-error/);
+    await expect(diagrams.nth(2).locator('.diagram-error-message')).toContainText('1 行目: cannot include notes.txt');
+    await expectAccessible(page);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('keeps TOC folds across auto-reload and when coming back to the document', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));
