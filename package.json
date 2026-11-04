@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "build:ext": "tsc --noEmit && vite build --config vite.extension.config.ts",
     "pack:ext": "npm run build:ext && node scripts/pack-extension.mjs",
+    "ext:try": "node scripts/try-extension.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && npm run build:ext && playwright test",
