@@ -25,7 +25,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.10.0.zip` |
+| アップロードするファイル | `release/md-browser-1.13.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -49,27 +49,29 @@ MD Browser renders local Markdown files right in Chrome — with a table of cont
 Open any .md file from your computer (drag it into Chrome or open file:///…/README.md) and it is displayed as a clean, readable document instead of plain text.
 
 FEATURES
-• GitHub-style rendering: tables, task lists, syntax-highlighted code blocks
-• Sidebar table of contents that follows your scroll position; hide it or drag to resize
+• GitHub-style rendering: tables, task lists, autolinks, strikethrough, and syntax-highlighted code blocks (less common languages such as Dockerfile or PowerShell load on demand)
+• Sidebar table of contents that follows your scroll position; fold its sections, hide it or drag to resize
 • Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable, and folders you don't need can be hidden
 • Full-text search across the folder (Ctrl/⌘+Shift+F): matches grouped by file with the line, the heading and an excerpt; click one to jump there with the matches highlighted. Ignores case and character width; "This file" searches only the open document. No index, nothing stored
 • Quick file switcher (Ctrl/⌘+P): open any file of the folder by typing part of its name
+• The document's path from the folder root as a breadcrumb in the toolbar; click a folder to show it in the file sidebar
 • Favorites: star the documents you open often to keep them at the top of the file sidebar and first in the quick switcher
-• Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
-• PlantUML diagrams, drawn inside the browser (the diagram source is never sent to a PlantUML server; the standard library can be fetched from a host you name in the settings, off by default)
+• Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, zoom and pan with the wheel or a drag, save as SVG or PNG
+• PlantUML diagrams, drawn inside the browser (the diagram source is never sent to a PlantUML server; the standard library can be fetched from a host you name in the settings, off by default); !include of local .puml / .iuml files from the document's folder and below
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
 • Live reload: save the file in your editor and the page re-renders within about a second, keeping your scroll position
 • GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
 • One-click copy button on code blocks, and a link button on headings
 • Switch to the raw Markdown source (button or Ctrl/⌘+Shift+M), with line numbers
 • Display settings: theme (system / light / dark), text size, content width, image and diagram size (50–200%), and fonts for body text and code
+• Custom CSS: style the document your own way from the settings panel; optionally, a folder's own .md-browser.css applies to the documents in it (off by default)
 • Resize a single image or diagram with the −/+ buttons that appear on hover; remembered for each document
-• Click an image to see it at full size
+• Click an image to see it at full size, zoom and pan
 • Works from the keyboard and with screen readers: a skip link to the document, and Enter opens diagrams and images
 • Relative images and links to other .md files just work
 • GitHub's theme-specific images (#gh-dark-mode-only / #gh-light-mode-only, and <picture> with prefers-color-scheme) follow the chosen theme; printing uses the light version
-• Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars
-• Export: save the document as one self-contained HTML file (styles, diagrams and images embedded, in the current theme and size), or save it as PDF
+• Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars; options for paper size, margins, link URLs, a table of contents and page breaks before headings
+• Export: save the document as one self-contained HTML file (styles, diagrams and images embedded, in the current theme and size), or save it as PDF; options for a fixed light theme, a table of contents and embedded math fonts
 • Open in editor: a toolbar button opens the file in VS Code, Cursor or a custom URL scheme at the line you are reading (off by default)
 • Tab icon shows which tabs are rendered by MD Browser, and marks files that changed (or can't be read) while the tab was in the background
 • Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree and the folder name in the toolbar; a list of recently opened files and folders, and an adjustable scan limit for very large folders
@@ -95,25 +97,29 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 .md ファイルを Chrome にドラッグする（または file:///…/README.md を開く）だけで、プレーンテキストではなく整形されたドキュメントとして表示されます。
 
 主な機能
-• GitHub 風の表示：表・タスクリスト・シンタックスハイライト付きコードブロック
-• スクロール位置に連動する目次サイドバー（表示の切り替え、ドラッグで幅を変更）
+• GitHub 風の表示：表・タスクリスト・自動リンク・打消し線・シンタックスハイライト付きコードブロック（Dockerfile や PowerShell などあまり使わない言語は必要なときに読み込み）
+• スクロール位置に連動する目次サイドバー（節の折りたたみ、表示の切り替え、ドラッグで幅を変更）
 • 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能。不要なフォルダは非表示にできる）
+• フォルダ内の全文検索（Ctrl/⌘+Shift+F）：一致をファイルごとに行番号・見出し・抜粋付きで表示し、クリックでその場所へ移動（一致をハイライト）。大文字小文字と全角半角の違いは無視。「このファイル」で開いている文書だけを検索。索引は作らず、何も保存しない
+• クイック切り替え（Ctrl/⌘+P）：名前の一部を入力してフォルダ内のファイルを開く
+• ツールバーに、フォルダの起点からの文書のパスをパンくずで表示。フォルダをクリックするとファイル一覧でそのフォルダを表示
 • お気に入り：よく開く文書に ☆ を付けると、ファイル一覧の上部とクイック切り替えの先頭に表示
-• Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
-• PlantUML 図（ブラウザ内で描画し、図のソースを PlantUML のサーバーに送信することはありません。標準ライブラリは設定で指定した取得先から取得できます。既定はオフ）
+• Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、ホイールやドラッグで拡大・移動、SVG・PNG で保存
+• PlantUML 図（ブラウザ内で描画し、図のソースを PlantUML のサーバーに送信することはありません。標準ライブラリは設定で指定した取得先から取得できます。既定はオフ）。文書のフォルダ以下にあるローカルの .puml / .iuml ファイルの !include に対応
 • KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
 • 自動更新：エディタで保存すると約 1 秒で再描画（スクロール位置を保持）
 • GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示
 • コードブロックのワンクリックコピーと、見出しへのリンクのコピー
 • 元の Markdown テキスト表示への切り替え（ボタンまたは Ctrl/⌘+Shift+M、行番号付き）
 • 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、画像・図のサイズ（50〜200%）、本文とコードのフォント
+• カスタム CSS：設定パネルから本文の見た目を自分で上書き。フォルダに置いた .md-browser.css をその中の文書に適用することもできる（既定はオフ）
 • 画像や図にマウスを乗せると出る −/+ ボタンで、1 つずつ大きさを変更（文書ごとに記憶）
-• 画像をクリックすると原寸で表示
+• 画像をクリックすると原寸で表示し、拡大・移動できる
 • キーボードやスクリーンリーダーでも操作しやすい（本文へのスキップリンク、Enter で図や画像を拡大）
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
 • GitHub のテーマ別画像（#gh-dark-mode-only / #gh-light-mode-only、prefers-color-scheme を使う <picture>）は選んだテーマに従って表示。印刷時はライト版
-• 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）
-• エクスポート: 文書をスタイル・図・画像を埋め込んだ 1 ファイルの HTML として保存（いまのテーマ・文字サイズのまま）、または PDF として保存
+• 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）。用紙サイズ・余白・リンク URL・目次・見出し前の改ページを設定できる
+• エクスポート: 文書をスタイル・図・画像を埋め込んだ 1 ファイルの HTML として保存（いまのテーマ・文字サイズのまま）、または PDF として保存。ライトテーマ固定・目次・数式フォントの埋め込みを選べる
 • エディタで開く: ツールバーのボタンで、読んでいる行から VS Code / Cursor / 任意の URL スキームのエディタでファイルを開く（既定はオフ）
 • タブのアイコンで MD Browser が表示しているタブがひと目でわかり、裏のタブでファイルが更新された（または読めなくなった）ことも表示
 • ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリーとフォルダ名の表示付き。最近開いたファイル・フォルダの一覧。大きなフォルダの走査上限は変更可能）
