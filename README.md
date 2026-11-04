@@ -141,6 +141,16 @@ npm run build:ext   # dist-extension/ に出力
 
 期待される結果: 目次付きで整形表示され、右上に「自動更新 ON」と表示される。
 
+手で読み込む代わりに、ビルドした拡張を使い捨てプロファイルの Chromium（Playwright のもの）で開いて目で確かめることもできる:
+
+```sh
+npm run ext:try                      # build:ext してから sample/README.md を開く
+npm run ext:try -- ~/notes/memo.md   # 別の文書を開く
+npm run ext:try -- --watch           # ソースを変えるたびに再ビルドし、Chromium を同じタブで起動し直す（型チェックはしない）
+```
+
+ファイル URL へのアクセスは自動で許可される。ウィンドウを閉じるか Ctrl+C で終了し、プロファイルは消える。Chrome 137 以降の製品版 Chrome は `--load-extension` を無視するので、Chromium で開く。
+
 ### Chrome ウェブストア用パッケージ
 
 ```sh
@@ -162,7 +172,7 @@ npm run pack:ext    # release/md-browser-<version>.zip を作成
 | 生のテキストのまま表示される | 拡張機能の詳細で「ファイルの URL へのアクセスを許可する」が ON か。ON にした後は対象タブを再読み込みする |
 | `.md` がダウンロードされてしまう | OS 側の MIME 設定の影響。ドラッグ&ドロップで開くか、ツールバーのビューアーを使う |
 | 「自動更新 OFF」と表示される | 拡張を再読み込み（`chrome://extensions` の更新ボタン）してからタブを再読み込みする |
-| コードを変更したのに反映されない | `npm run build:ext` の後、`chrome://extensions` で拡張の更新ボタンを押す |
+| コードを変更したのに反映されない | `npm run build:ext` の後、`chrome://extensions` で拡張の更新ボタンを押す（`npm run ext:try -- --watch` なら再ビルドのたびに起動し直す） |
 
 ### 仕組み
 

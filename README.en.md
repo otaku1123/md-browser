@@ -102,9 +102,10 @@ npx playwright install chromium   # first time only
 npm run test:e2e   # build the web app and extension, then run E2E tests (Playwright)
 npm run build:ext  # build the extension to dist-extension/
 npm run pack:ext   # create release/md-browser-<version>.zip
+npm run ext:try    # open the built extension in a throwaway Chromium (Playwright's) to look at it
 ```
 
-To load a development build, open `chrome://extensions`, turn on Developer mode, choose "Load unpacked" and select `dist-extension/`, then turn on "Allow access to file URLs" in the extension's details.
+To load a development build, open `chrome://extensions`, turn on Developer mode, choose "Load unpacked" and select `dist-extension/`, then turn on "Allow access to file URLs" in the extension's details. Or skip that: `npm run ext:try` builds the extension and opens `sample/README.md` (or the document you pass: `npm run ext:try -- ~/notes/memo.md`) in a Chromium with the extension loaded and file URL access granted; `--watch` rebuilds on source changes and restarts Chromium with the same tabs (without type-checking). Close the window or press Ctrl+C to quit; the profile is deleted. Chrome 137 and later ignore `--load-extension`, hence Chromium.
 
 Screenshot tests (`tests/e2e/visual-*.spec.ts`) compare pages with the baselines in `tests/e2e/__screenshots__/`. Fonts render differently on each OS, so baselines are made on CI (Linux) and the tests skip elsewhere. After an intended visual change, regenerate them on CI and commit them:
 
