@@ -17,6 +17,7 @@ import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
 import { mountSourceView } from '../core/source-view';
 import { mountFontSettings } from '../core/font-settings';
+import { applyFolderCss, folderCssStore, folderCssUrls } from '../core/folder-css';
 import { mountEditorLink } from '../core/editor-link';
 import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
 import { createBreadcrumb, type Breadcrumb } from '../core/breadcrumb';
@@ -81,22 +82,56 @@ let rootHref = folderOf(location.href);
 /**
  * Reads a file this document refers to, through the service worker: only below the tab's root,
  * by the root-relative path the background checks, and only of the kind asked for. An image
- * comes back as a data: URL, a text file as text. Rejects with the reason otherwise.
+ * comes back as a data: URL, a text file as text, each with the hash of the file; passing that
+ * hash as `known` next time lets an unchanged file skip the transfer. Rejects with the reason.
  */
-async function readBelowRoot(url: string, kind: AssetKind): Promise<string> {
+async function requestBelowRoot(url: string, kind: AssetKind, known?: string): Promise<{ data: string; hash: string } | 'unchanged'> {
   if (!url.startsWith(rootHref)) throw new Error(t('localReadOutside'));
   const path = relativePath(rootHref, url);
   if (!isAssetPath(path) || assetKind(path) !== kind) throw new Error(t('localReadKind'));
-  const msg: ReadAssetMessage = { type: MSG_READ_ASSET, path };
+  const msg: ReadAssetMessage = { type: MSG_READ_ASSET, path, known };
   const res: ReadAssetResponse | undefined = await chrome.runtime.sendMessage(msg);
   if (!res) throw new Error('no response from background');
   if (!res.ok) throw new Error(res.error);
-  if (res.unchanged) throw new Error('unchanged'); // not asked for (no known hash)
+  return res.unchanged ? 'unchanged' : { data: res.data, hash: res.hash };
+}
+
+/** The file's content, read once (no hash to compare against). */
+async function readBelowRoot(url: string, kind: AssetKind): Promise<string> {
+  const res = await requestBelowRoot(url, kind);
+  if (res === 'unchanged') throw new Error('unchanged'); // cannot happen without `known`
   return res.data;
 }
 
 /** The HTML export embeds the images it can get this way; for the others the URL stays. */
 const readLocalAsset = (url: string) => readBelowRoot(url, 'image').catch(() => null);
+
+/**
+ * The folder's .md-browser.css (folder-css.ts), when the reader switched it on: looked for in
+ * this file's folder, then at the tab's root; the nearest one is applied, none removes the
+ * stylesheet. The last one read is kept so that looking again (the setting toggled, the folder
+ * listed again) sends its hash and skips the transfer while the file is unchanged.
+ */
+let folderCss: { url: string; hash: string; css: string } | null = null;
+let folderCssSeq = 0;
+async function updateFolderCss(enabled: boolean): Promise<void> {
+  const mine = ++folderCssSeq;
+  let css: string | null = null;
+  if (enabled) {
+    for (const url of folderCssUrls(folderOf(location.href), rootHref)) {
+      try {
+        const res = await requestBelowRoot(url, 'text', folderCss?.url === url ? folderCss.hash : undefined);
+        if (res !== 'unchanged') folderCss = { url, hash: res.hash, css: res.data };
+        css = folderCss?.css ?? null;
+        break;
+      } catch {
+        // Not there (or unreadable): try the next place.
+      }
+    }
+  }
+  if (mine !== folderCssSeq) return; // a later evaluation decides
+  applyFolderCss(css);
+}
 
 /** Full-text search over the tab's root, once its files are listed (showSiblings). */
 let searchCorpus: SearchCorpus | null = null;
@@ -264,6 +299,7 @@ function buildShell(): {
     // `content` is created just below; the export runs on a click, long after.
     exportTarget: () => ({ root: content, name: fileName(), title: document.title, readLocal: readLocalAsset }),
     editor: true,
+    folderCss: true,
   });
 
   const layout = document.createElement('div');
@@ -351,7 +387,12 @@ async function main(): Promise<void> {
       clearSearchHighlight();
     },
   });
-  void showSiblings(filesEl, filesToggle, search, content, breadcrumb);
+  // The folder's CSS waits for the listing: it names the root, the second place to look.
+  const folderCssSettings = folderCssStore();
+  folderCssSettings.onChange((s) => void updateFolderCss(s.enabled));
+  void showSiblings(filesEl, filesToggle, search, content, breadcrumb)
+    .then(() => folderCssSettings.load())
+    .then((s) => updateFolderCss(s.enabled));
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
   // Its hash is what the polls compare against (kept here, as the service worker keeps no state).

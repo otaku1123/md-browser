@@ -802,6 +802,65 @@ test('opens the file in the chosen editor at the line shown, from a toolbar link
   }
 });
 
+test("applies a folder's .md-browser.css only when switched on, the nearest folder first", async ({ context }) => {
+  const dir = await makeFolder({
+    'README.md': '# Top',
+    '.md-browser.css': 'h1 { color: rgb(255, 0, 0); }',
+    'sub/doc.md': '# Deep',
+    'sub/.md-browser.css': 'h1 { color: rgb(0, 0, 255); }',
+    'other/doc.md': '# Other',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const h1 = page.locator('.markdown-body h1');
+    await expect(h1).toHaveText('Top');
+    await expect(page.locator('#md-files')).toBeVisible(); // listed: the folder CSS has been looked for
+    // Off by default: the folder's author wrote that file, not the reader.
+    await expect(page.locator('#md-folder-css')).toHaveCount(0);
+    await expect(h1).not.toHaveCSS('color', 'rgb(255, 0, 0)');
+
+    await page.locator('.font-settings-toggle').click();
+    const panel = page.locator('.font-settings-panel');
+    const toggle = panel.getByRole('checkbox', { name: 'フォルダの .md-browser.css を適用する' });
+    await expect(toggle).not.toBeChecked();
+    await toggle.check();
+    await expect(h1).toHaveCSS('color', 'rgb(255, 0, 0)');
+    // Before the reader's own CSS, so that one wins where they clash.
+    expect(
+      await page.evaluate(() => {
+        const folder = document.getElementById('md-folder-css')!;
+        const custom = document.getElementById('md-custom-css')!;
+        return folder.compareDocumentPosition(custom) & Node.DOCUMENT_POSITION_FOLLOWING;
+      }),
+    ).toBeTruthy();
+    await page.keyboard.press('Escape');
+
+    // Opened from the sidebar, the root stays: the subfolder's CSS beats the root's.
+    await page.locator('#md-files details[data-dir="sub"] > summary').click();
+    await page.locator('#md-files [data-path="sub/doc.md"]').click();
+    await expect(h1).toHaveText('Deep');
+    await expect(h1).toHaveCSS('color', 'rgb(0, 0, 255)');
+    // A folder without one falls back to the root's.
+    await page.locator('#md-files details[data-dir="other"] > summary').click();
+    await page.locator('#md-files [data-path="other/doc.md"]').click();
+    await expect(h1).toHaveText('Other');
+    await expect(h1).toHaveCSS('color', 'rgb(255, 0, 0)');
+
+    // Switched off again: the stylesheet goes, here and in another tab.
+    const other = await context.newPage();
+    await other.goto(fileUrl(dir, 'README.md'));
+    await expect(other.locator('.markdown-body h1')).toHaveCSS('color', 'rgb(255, 0, 0)');
+    await page.locator('.font-settings-toggle').click();
+    await toggle.uncheck();
+    await expect(page.locator('#md-folder-css')).toHaveCount(0);
+    await expect(h1).not.toHaveCSS('color', 'rgb(255, 0, 0)');
+    await expect(other.locator('#md-folder-css')).toHaveCount(0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('shows the path from the listed root as a breadcrumb on a file:// page', async ({ context }) => {
   const dir = await makeFolder({ 'README.md': '# Top', 'sub dir/deep #1.md': '# Deep' });
   try {
