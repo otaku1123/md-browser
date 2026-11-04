@@ -18,6 +18,7 @@
   gh release download v<version> -p '*.zip' -D release
   ```
   - ワークフローは、タグと `package.json`・manifest のバージョンが一致しない場合や、タグが `main` 上にない場合に失敗する（`develop` には未リリースの変更が入るため）
+  - 本書（`docs/store/listing.md`）が前回のリリースタグから変わっている場合（zip 名の行以外）、`store` ジョブは zip を**アップロードするだけで審査には提出しない**（`scripts/store-text-changed.mjs`）。ジョブサマリーにその旨が出るので、デベロッパー ダッシュボードで説明文などを本書に合わせてから、ダッシュボードの「審査に提出」を押す（または `gh workflow run release.yml -f tag=v<version> -f store=true -f submit=only`）。説明文に変更がないリリースは従来どおり自動で提出される
   - 手元で作る場合は、`main` ブランチで `npm run pack:ext` を実行する
 - GitHub Pages に `privacy.html` がデプロイ済み（`main` に push すれば自動でデプロイされる）
 

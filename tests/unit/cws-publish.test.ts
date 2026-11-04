@@ -59,3 +59,33 @@ describe('cws-publish', () => {
     );
   });
 });
+
+describe('cws-publish modes', () => {
+  function runWith(responses: Response[], opts: { upload?: boolean; submit?: boolean }) {
+    const fetchFn = vi.fn(async (_url: string, _init: RequestInit) => responses.shift()!);
+    const result = publish({
+      token: 'tok',
+      publisherId: 'pub',
+      itemId: 'item',
+      zip: new TextEncoder().encode('zip'),
+      version: '1.9.1',
+      fetchFn,
+      sleep: async () => {},
+      log: () => {},
+      ...opts,
+    });
+    return { fetchFn, result };
+  }
+
+  it('uploads without submitting when asked (the listing is to be updated by hand first)', async () => {
+    const { fetchFn, result } = runWith([json({ uploadState: 'SUCCEEDED', crxVersion: '1.9.1' })], { submit: false });
+    await expect(result).resolves.toEqual({ submitted: false });
+    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual([`https://chromewebstore.googleapis.com/upload/v2/${ITEM}:upload`]);
+  });
+
+  it('submits the draft already uploaded without uploading again', async () => {
+    const { fetchFn, result } = runWith([json({ state: 'PENDING_REVIEW' })], { upload: false });
+    await expect(result).resolves.toEqual({ state: 'PENDING_REVIEW' });
+    expect(fetchFn.mock.calls.map(([url, init]) => `${init.method} ${url}`)).toEqual([`POST https://chromewebstore.googleapis.com/v2/${ITEM}:publish`]);
+  });
+});
