@@ -129,19 +129,19 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand { margin-right: 8px; white-space: nowrap; }
-/* What is open (folder / file name), next to the brand. */
-.workspace-name {
-  max-width: 24ch;
-  margin-right: 8px;
-  font-size: 13px;
-  color: var(--fg-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.workspace-name[hidden] { display: none; }
+/* Where the document is (breadcrumb.ts): "folder/ / docs / guide.md", next to the brand. */
+.breadcrumb { min-width: 0; margin-right: 8px; font-size: 13px; }
+.breadcrumb[hidden] { display: none; }
+.breadcrumb ol { display: flex; align-items: center; margin: 0; padding: 0; list-style: none; white-space: nowrap; }
+.breadcrumb li { display: flex; align-items: center; min-width: 0; }
+.breadcrumb li + li::before { content: '/'; margin: 0 4px; color: var(--fg-muted); }
+.breadcrumb-dir { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; color: var(--fg-muted); }
+.toolbar button.breadcrumb-dir { padding: 2px 4px; margin: 0 -4px; background: none; border-color: transparent; }
+.toolbar button.breadcrumb-dir:hover { color: var(--fg); background: var(--bg); border-color: var(--border); }
+.breadcrumb-file { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .toolbar button,
-.toolbar select {
+.toolbar select,
+.toolbar a.icon-button {
   font: inherit;
   font-size: 13px;
   padding: 4px 10px;
@@ -171,7 +171,9 @@ body {
 .toolbar .icon-button:is([aria-expanded="true"], [aria-pressed="true"]) { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
 .toolbar .icon-button[hidden] { display: none; }
 /* TOC toggle sits at the right, next to the settings gear: no hamburger-style pull to the left. */
-.toolbar .icon-button:is(.toc-toggle, .source-toggle) { margin-left: 0; }
+.toolbar .icon-button:is(.toc-toggle, .source-toggle, .editor-link) { margin-left: 0; }
+/* "Open in editor" is a link (so it can be copied / middle-clicked) styled as a button. */
+.toolbar a.icon-button { text-decoration: none; box-sizing: border-box; }
 .status {
   margin-left: auto;
   font-size: 12px;
@@ -322,6 +324,42 @@ body {
 @media (hover: none) {
   .file-tree-hide { opacity: 1; }
 }
+/* Star button: beside a file row, laid over its right end like the hide button. A starred file's
+   star stays visible; the others appear on hover / focus (always on touch screens). */
+.file-tree-item { position: relative; }
+.file-tree-item > .file-tree-file { padding-right: 28px; }
+.file-tree-star {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.file-tree-item:has(> .file-tree-file:hover) > .file-tree-star,
+.file-tree-star[aria-pressed="true"],
+.file-tree-star:hover,
+.file-tree-star:focus-visible { opacity: 1; }
+.file-tree-star[aria-pressed="true"] { color: var(--alert-warning); }
+.file-tree-star:hover { color: var(--fg); background: var(--bg); }
+@media (hover: none) {
+  .file-tree-star { opacity: 1; }
+}
+/* "Favorites (n)" above the tree, open by default. */
+.files-favorites {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.files-favorites > summary { color: var(--fg-muted); }
 .files-hidden {
   margin-top: 12px;
   padding-top: 8px;
@@ -359,11 +397,41 @@ body {
 }
 .toc a:hover { color: var(--fg); background: var(--bg-soft); }
 .toc a.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
-.toc .toc-l2 a { padding-left: 20px; }
-.toc .toc-l3 a { padding-left: 32px; }
-.toc .toc-l4 a,
-.toc .toc-l5 a,
-.toc .toc-l6 a { padding-left: 44px; font-size: 12px; }
+/* Entries indent per level; a section with sub-headings gets a fold chevron in the gap on its left. */
+.toc li { position: relative; }
+.toc a { padding-left: 20px; }
+.toc .toc-l2 > a { padding-left: 32px; }
+.toc .toc-l3 > a { padding-left: 44px; }
+.toc .toc-l4 > a,
+.toc .toc-l5 > a,
+.toc .toc-l6 > a { padding-left: 56px; font-size: 12px; }
+/* 24px square (WCAG target size) ending where the entry's text starts; the row is ~25px tall. */
+.toc-fold {
+  position: absolute;
+  top: 1px;
+  left: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.toc-fold:hover { color: var(--fg); background: var(--bg-soft); }
+.toc-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.toc-fold svg { transition: transform 0.1s; }
+.toc li:not(.toc-folded) > .toc-fold svg { transform: rotate(90deg); }
+.toc .toc-l2 > .toc-fold { left: 8px; }
+.toc .toc-l3 > .toc-fold { left: 20px; }
+.toc .toc-l4 > .toc-fold,
+.toc .toc-l5 > .toc-fold,
+.toc .toc-l6 > .toc-fold { left: 32px; }
+.toc li.toc-folded > ul { display: none; }
 
 .content {
   max-width: var(--doc-max-width, 980px);
@@ -392,6 +460,10 @@ body {
   }
   .content { padding: 16px 16px 80px; }
   .brand { display: none; }
+  /* Only the file name, kept whole (the status line shrinks instead): the folders are in the sidebar. */
+  .breadcrumb { flex-shrink: 0; }
+  .breadcrumb li:not(.breadcrumb-file) { display: none; }
+  .breadcrumb li.breadcrumb-file::before { display: none; }
 }
 
 /* ---- drop overlay ---- */
@@ -431,12 +503,16 @@ body {
   z-index: 100;
   display: grid;
   place-items: center;
-  overflow: auto;
+  overflow: clip; /* the content pans and zooms with a transform; clip also blocks programmatic scrolling */
   padding: 24px;
   background: rgba(0, 0, 0, 0.8);
   cursor: zoom-out;
+  touch-action: none;
 }
 .image-zoom:focus { outline: none; }
+.image-zoom .zoom-target { cursor: grab; will-change: transform; }
+.image-zoom.dragging, .image-zoom.dragging .zoom-target { cursor: grabbing; }
+.zoom-level { font-size: 12px; color: var(--fg-muted); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
 
 /* ---- quick file switcher (quick-switcher.ts) ---- */
 .quick-switcher {
@@ -609,14 +685,14 @@ body {
 @media (max-width: 800px) {
   .search-panel { left: 16px; right: 16px; width: auto; }
 }
-.image-zoom img { max-width: none; max-height: none; background: #fff; }
+/* Natural size when it fits, else fitted to the window (zooming to 100% is a transform on top). */
+.image-zoom img { max-width: calc(100vw - 48px); max-height: calc(100vh - 48px); background: #fff; }
 /* Diagrams scale up to fit the window; the svg viewBox keeps them sharp. */
 .image-zoom svg.diagram-zoom-svg {
   width: calc(100vw - 48px);
   height: calc(100vh - 48px);
   max-width: none;
   background: var(--bg);
-  cursor: default;
 }
 .diagram-actions {
   position: fixed;
@@ -649,6 +725,9 @@ body {
   color: var(--error);
   font-size: 13px;
 }
+/* Images for the other theme (theme-images.ts): the rules above must not bring them back. */
+.markdown-body img[hidden],
+.markdown-body .media-frame[hidden] { display: none; }
 .markdown-body blockquote {
   margin: 0 0 1em;
   padding: 0 1em;
@@ -952,6 +1031,10 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
   width: 360px;
   max-width: calc(100vw - 32px);
   padding: 12px 14px;
+  /* Taller than a short window: scrolls inside, so the last sections stay reachable. */
+  max-height: calc(100vh - var(--toolbar-h) - 26px);
+  box-sizing: border-box;
+  overflow-y: auto;
   font-size: 13px;
   line-height: 1.5;
   color: var(--fg);
@@ -982,6 +1065,46 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
 .scan-limit-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .quick-open-setting .font-settings-hint { margin-bottom: 0; }
 .scan-limit-setting .font-settings-hint { margin-bottom: 0; }
+.export-setting,
+.editor-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.editor-setting .font-settings-hint { margin-bottom: 0; }
+.editor-status { margin: 0 0 8px; font-size: 12px; color: var(--error); }
+.editor-status:empty { display: none; }
+.export-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.export-status { margin: 0 0 8px; font-size: 12px; color: var(--error); }
+.export-status:empty { display: none; }
+.export-setting .font-settings-hint { margin-bottom: 0; }
+.custom-css-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.custom-css-setting textarea {
+  display: block;
+  width: 100%;
+  min-height: 7em;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  font: 12px/1.5 var(--font-code);
+  tab-size: 2;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+.custom-css-setting textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.custom-css-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; }
+.custom-css-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.custom-css-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.custom-css-options button { margin-left: auto; }
+.custom-css-status { margin: 0 0 8px; font-size: 12px; color: var(--fg-muted); }
+.custom-css-setting .font-settings-hint { margin-bottom: 0; }
+.print-setting,
+.plantuml-setting { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.plantuml-setting > button { margin: 0 0 8px; }
+.plantuml-setting .font-settings-hint { margin-bottom: 0; }
+.print-options, .export-options { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.print-options label, .export-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.print-options input, .export-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.print-setting .font-settings-hint { margin-bottom: 0; }
 .feedback-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; }
 .feedback-links a { color: var(--accent); }
 
@@ -1038,4 +1161,24 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
   /* In dark mode diagrams carry a light-theme copy for white paper (see diagrams.ts). */
   .diagram-screen { display: none; }
   .diagram-print { display: block; }
+
+  /* The table of contents at the top, when the print option is on (print-settings.ts). */
+  html[data-print-toc] .print-toc { display: block; break-after: page; }
 }
+
+/* Part of every rendered document, shown only when printed with the option on. */
+.print-toc { display: none; }
+.print-toc-title { margin: 0 0 8px; font-size: 1.25em; font-weight: 600; }
+/* Heading links indented by level: the print TOC and the HTML export's (print-settings.ts). */
+.toc-list { list-style: none; margin: 0; padding: 0; }
+.toc-list li { margin: 0 0 4px; }
+.toc-list a { color: inherit; text-decoration: none; }
+.toc-level-2 { padding-left: 1.5em; }
+.toc-level-3 { padding-left: 3em; }
+.toc-level-4 { padding-left: 4.5em; }
+.toc-level-5 { padding-left: 6em; }
+.toc-level-6 { padding-left: 7.5em; }
+.export-toc { margin: 0 0 24px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; }
+.export-toc summary { cursor: pointer; font-weight: 600; }
+.export-toc .toc-list { margin-top: 8px; }
+.export-toc a { color: var(--accent); }

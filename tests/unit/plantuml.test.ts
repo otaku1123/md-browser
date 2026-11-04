@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { plantUmlError, plantUmlLines } from '../../src/core/plantuml';
+import { onPlantUmlSettingsChange, plantUmlError, plantUmlLines, setPlantUmlSettings } from '../../src/core/plantuml';
 
 describe('plantUmlLines', () => {
   it('adds @startuml / @enduml when the block leaves them out', () => {
@@ -43,5 +43,19 @@ describe('plantUmlError', () => {
 
   it('falls back to a generic message when no line is red', () => {
     expect(plantUmlError(errorSvg(3), 'A -> B\nfoo')).toBe('line 2: Syntax Error?');
+  });
+});
+
+describe('setPlantUmlSettings', () => {
+  it('tells the listeners when the library host changes, not when the same one is set again', () => {
+    let calls = 0;
+    onPlantUmlSettingsChange(() => calls++);
+    setPlantUmlSettings({ stdlibUrl: '' }); // the initial value
+    expect(calls).toBe(0);
+    setPlantUmlSettings({ stdlibUrl: 'https://stdlib.test/' });
+    setPlantUmlSettings({ stdlibUrl: 'https://stdlib.test/' });
+    expect(calls).toBe(1);
+    setPlantUmlSettings({ stdlibUrl: '' });
+    expect(calls).toBe(2);
   });
 });

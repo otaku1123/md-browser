@@ -80,7 +80,7 @@ test('shows the welcome screen in the browser language', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Open file' })).toBeVisible();
   await expect(page.locator('.toc')).toHaveClass(/empty/);
-  await expect(page.locator('#workspace-name')).toBeHidden();
+  await expect(page.locator('.breadcrumb')).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
 
@@ -101,11 +101,32 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('.markdown-alert-note .markdown-alert-title')).toHaveText('Note');
   await expect(page.locator('img[alt="diagram"]')).toHaveAttribute('src', /^blob:/);
   await expect(page.locator('img.img-missing')).toHaveCount(1);
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
   await expect(page.locator('#files summary')).toHaveText(['docs']);
   await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', false); // folders start collapsed (#122)
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
-  await expect(page.locator('#workspace-name')).toHaveText('sample/');
+  await expect(page.locator('.breadcrumb li')).toHaveText(['sample', 'README.md']);
+});
+
+test('shows the document path as a breadcrumb whose folders reveal themselves in the sidebar', async ({ page }) => {
+  await openSampleFolder(page);
+  await openFromSidebar(page, 'docs/other.md');
+  const crumbs = page.locator('.breadcrumb li');
+  await expect(crumbs).toHaveText(['sample', 'docs', 'other.md']);
+  await expect(page.locator('.breadcrumb [aria-current="page"]')).toHaveText('other.md');
+  // Close the sidebar and collapse the folder, then the crumb brings both back and focuses the folder.
+  await page.locator('#files details[data-dir="docs"] > summary').click();
+  await page.locator('#toggle-files').click();
+  await expect(page.locator('#files')).toBeHidden();
+  const crumb = page.locator('.breadcrumb button[data-dir="docs"]');
+  await expect(crumb).toHaveAttribute('title', 'Show "docs" in the file list');
+  await crumb.click();
+  await expect(page.locator('#files')).toBeVisible();
+  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', true);
+  await expect(page.locator('#files details[data-dir="docs"] > summary')).toBeFocused();
+  // Narrow window: only the file name.
+  await page.setViewportSize({ width: 600, height: 700 });
+  await expect(crumbs.filter({ visible: true })).toHaveText(['other.md']);
 });
 
 test('jumps between a footnote reference and its note', async ({ page }) => {
@@ -132,7 +153,7 @@ test('opens another folder in the same tab', async ({ page }) => {
   await page.getByRole('button', { name: 'Open folder' }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Notes');
   await expect(page.locator('#status')).toHaveText(/^notes\.md · /);
-  await expect(page.locator('#workspace-name')).toHaveText('other/');
+  await expect(page.locator('.breadcrumb-root')).toHaveText('other');
   await page.waitForTimeout(1500); // a poll of the previous folder's document would report an error
   await expect(page.locator('#status')).not.toHaveClass(/error/);
 });
@@ -144,7 +165,7 @@ test('reopens the last folder and document after a reload', async ({ page }) => 
   await page.waitForTimeout(300); // the remembered document is saved asynchronously
   await page.reload();
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
   // The open document's folder is expanded, so the marked file is in view.
   await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', true);
   await expect(page.locator('#files [data-path="docs/other.md"]')).toBeVisible();
@@ -173,7 +194,7 @@ test('hides a folder from the sidebar, remembers it, and shows it again', async 
   await section.locator('summary').click();
   await expectAccessible(page);
   await section.getByRole('button', { name: 'Show "docs" in the list' }).click();
-  await expect(files.locator('.file-tree-file')).toHaveCount(3);
+  await expect(files.locator('.file-tree-file')).toHaveCount(4); // README, xss, docs/other, docs/plantuml
   await expect(files.locator('.file-tree summary')).toHaveText(['docs']);
   await expect(section).toHaveCount(0);
   // The open document stays.
@@ -213,7 +234,7 @@ test('lists recent folders, most recent first, and removes them', async ({ page 
     };
   });
   await page.getByRole('button', { name: 'Open folder' }).click();
-  await expect(page.locator('#workspace-name')).toHaveText('other/');
+  await expect(page.locator('.breadcrumb-root')).toHaveText('other');
   await page.waitForTimeout(300);
   // Permission has lapsed after the reload: the list is shown instead of reopening.
   await page.addInitScript(() => {
@@ -261,6 +282,46 @@ test('opens a document with the quick switcher, recent ones first, with the shor
   await expect(switcher).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(switcher).toHaveCount(0);
+});
+
+// #159: starred documents sit above the tree and first in the quick switcher; remembered per folder name.
+test('stars documents as favorites, lists them first, and remembers them', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  await expect(files.locator('.files-favorites')).toHaveCount(0);
+  await openFromSidebar(page, 'docs/other.md');
+  const star = files.locator('.file-tree').getByRole('button', { name: 'Add "docs/other.md" to favorites' });
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await star.click();
+  const section = files.locator('.files-favorites');
+  await expect(section.locator('summary')).toHaveText('Favorites (1)');
+  await expect(section.locator('.file-tree-file')).toHaveText(['other.md']);
+  // Both rows of the open document are marked.
+  await expect(files.locator('[aria-current="page"]')).toHaveCount(2);
+  await expect(files.locator('.file-tree').getByRole('button', { name: 'Remove "docs/other.md" from favorites' })).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:favorites'))).toBe('{"sample":["docs/other.md"]}');
+  await expectAccessible(page);
+
+  // The quick switcher offers the favorites first, then the recent documents.
+  await files.locator('.file-tree').getByRole('button', { name: 'Add "xss.md" to favorites' }).click();
+  await expect(section.locator('.file-tree-file')).toHaveText(['other.md', 'xss.md']);
+  await openFromSidebar(page, 'README.md');
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル'); // shown: it is the current document now
+  await page.keyboard.press('ControlOrMeta+P');
+  const switcher = page.getByRole('dialog', { name: 'Go to file' });
+  await expect(switcher.getByRole('option')).toHaveText(['other.mddocs', 'xss.md', 'plantuml.mddocs', 'README.md']); // then the rest, the current one included
+  await page.keyboard.press('Escape');
+
+  // Opening a favorite from its section; the stars survive a reload.
+  await section.locator('button[data-path="docs/other.md"]').click(); // by name: the star's label has the path too
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  await page.waitForTimeout(300); // the remembered document is saved asynchronously
+  await page.reload();
+  await expect(section.locator('.file-tree-file')).toHaveText(['other.md', 'xss.md']);
+  await section.getByRole('button', { name: 'Remove "xss.md" from favorites' }).click();
+  await section.getByRole('button', { name: 'Remove "docs/other.md" from favorites' }).click();
+  await expect(section).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:favorites'))).toBe('{}');
 });
 
 test('follows relative links between documents', async ({ page }) => {
@@ -320,16 +381,16 @@ test('moves through the file sidebar with the keyboard', async ({ page }) => {
 // #109: files added outside show up when the user comes back to the tab, on the same document.
 test('lists the folder again when the user comes back to the tab', async ({ page }) => {
   await openSampleFolder(page);
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(3);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
   await page.locator('#files details[data-dir="docs"] summary').click(); // expanded by the user: stays so after the re-render
   await page.evaluate(async () => {
     await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/added.md', '# Added');
     window.dispatchEvent(new Event('focus'));
   });
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
+  await expect(page.locator('#files .file-tree-file')).toHaveCount(5);
   await expect(page.locator('#files [data-path="docs/added.md"]')).toBeVisible();
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
-  await page.locator('#files').getByRole('button', { name: 'added.md' }).click();
+  await page.locator('#files').getByRole('button', { name: 'added.md', exact: true }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Added');
 });
 
@@ -341,7 +402,7 @@ test('re-renders when the file changes', async ({ page }) => {
 
 test('does not execute scripts embedded in Markdown', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files').getByRole('button', { name: 'xss.md' }).click();
+  await page.locator('#files').getByRole('button', { name: 'xss.md', exact: true }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('XSS');
   await expect(page.locator('a[href^="javascript:" i]')).toHaveCount(0);
   await page.waitForTimeout(500);
@@ -386,6 +447,137 @@ test('sets the text size and content width, and resets them', async ({ page }) =
   await panel.getByRole('button', { name: 'Reset to default' }).click();
   expect(await doc()).toEqual({ font: '16px', max: '980px' });
   await expect(panel.getByRole('radiogroup', { name: 'Text size' }).getByRole('radio', { name: 'Default', exact: true })).toBeChecked();
+});
+
+test('applies custom CSS to the document only and remembers it', async ({ page }) => {
+  await openSampleFolder(page);
+  const color = (selector: string) => page.locator(selector).first().evaluate((el) => getComputedStyle(el).color);
+  const before = await color('#open-file');
+
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  const css = panel.getByRole('textbox', { name: 'Custom CSS' });
+  await css.fill('h1 { color: rgb(200, 0, 0); } button { color: rgb(0, 200, 0); }');
+  await expect.poll(() => color('#content h1')).toBe('rgb(200, 0, 0)');
+  // Scoped to the document: the toolbar's buttons keep their colour.
+  expect(await color('#open-file')).toBe(before);
+  await expect(panel.locator('.custom-css-status')).toHaveText(/characters · saved/);
+
+  await page.reload();
+  await expect.poll(() => color('#content h1')).toBe('rgb(200, 0, 0)');
+  await page.locator('.font-settings-toggle').click();
+  await expect(css).toHaveValue(/rgb\(200, 0, 0\)/);
+
+  // Off keeps the text; clear removes it.
+  await panel.getByRole('checkbox', { name: 'Apply' }).uncheck();
+  await expect.poll(() => color('#content h1')).not.toBe('rgb(200, 0, 0)');
+  await expect(css).toHaveValue(/rgb\(200, 0, 0\)/);
+  await panel.getByRole('button', { name: 'Clear' }).click();
+  await expect(css).toHaveValue('');
+});
+
+test('prints with the paper, link URLs, table of contents and page breaks from the settings', async ({ page }) => {
+  await openSampleFolder(page);
+  // Two more top-level sections (auto-reload picks the change up), for the page breaks.
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile(r: string, t: string): Promise<void> }).__appendToFile('README.md', '\n\n# Second part\n\nMore text.\n\n# Third part\n\nThe end.\n'),
+  );
+  await expect(page.locator('.markdown-body h1')).toHaveCount(3);
+  const pages = async () => ((await page.pdf({ preferCSSPageSize: true })).toString('latin1').match(/\/Type \/Page\b/g) ?? []).length;
+  const linkAfter = () => page.locator('.markdown-body a[href^="http"]').first().evaluate((a) => getComputedStyle(a, '::after').content);
+
+  // Defaults: A4 portrait, nothing added.
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('.print-toc')).toBeHidden();
+  expect(await linkAfter()).toBe('none');
+  const plainPdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  expect(plainPdf).toMatch(/MediaBox \[0 0 59[45](\.\d+)? 84[12](\.\d+)?\]/); // 210 × 297 mm in points
+  const plainPages = await pages();
+  await page.emulateMedia({ media: 'screen' });
+
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  await panel.getByRole('radiogroup', { name: 'Paper' }).getByRole('radio', { name: 'Letter' }).check();
+  await panel.getByRole('radiogroup', { name: 'Orientation' }).getByRole('radio', { name: 'Landscape' }).check();
+  await panel.getByRole('radiogroup', { name: 'Margins' }).getByRole('radio', { name: 'Narrow' }).check();
+  await panel.getByRole('checkbox', { name: 'Write the URL after each link' }).check();
+  await panel.getByRole('checkbox', { name: 'Table of contents on the first page' }).check();
+  await panel.getByRole('checkbox', { name: 'New page before each h1' }).check();
+  await expectAccessible(page);
+  // The screen is untouched.
+  await expect(page.locator('.print-toc')).toBeHidden();
+  expect(await linkAfter()).toBe('none');
+
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('.print-toc')).toBeVisible();
+  await expect(page.locator('.print-toc li').first()).toHaveText('MD Browser サンプル');
+  expect(await page.locator('.print-toc li').count()).toBeGreaterThan(3);
+  expect(await linkAfter()).toBe('" (https://example.com)"');
+  const pdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  expect(pdf).toMatch(/MediaBox \[0 0 79[12](\.\d+)? 61[12](\.\d+)?\]/); // 11 × 8.5 in
+  // The TOC page, then a new page for the second and third h1.
+  expect(await pages()).toBeGreaterThanOrEqual(plainPages + 3);
+
+  // Remembered.
+  await page.emulateMedia({ media: 'screen' });
+  await page.reload();
+  await expect(page.locator('.markdown-body h1')).toHaveCount(3);
+  await page.locator('.font-settings-toggle').click();
+  await expect(panel.getByRole('radio', { name: 'Landscape' })).toBeChecked();
+  await expect(panel.getByRole('checkbox', { name: 'New page before each h1' })).toBeChecked();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('md-browser:print')!))).toEqual({
+    paper: 'letter',
+    orientation: 'landscape',
+    margin: 'narrow',
+    linkUrls: true,
+    toc: true,
+    breakBeforeH1: true,
+  });
+});
+
+test('exports with the light theme, a table of contents and the math fonts it uses', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  await panel.getByRole('radiogroup', { name: 'Theme' }).first().getByRole('radio', { name: 'Dark' }).check();
+  await expect(page.locator('.diagram-print').first()).toBeAttached();
+  const save = async () => {
+    const [download] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Save as HTML' }).click()]);
+    return readFile((await download.path())!, 'utf8');
+  };
+
+  // Defaults: as shown (dark, both diagram copies), no TOC, the used math fonts embedded.
+  const shown = await save();
+  expect(shown).toContain('data-theme="dark"');
+  expect(shown).toContain('class="diagram-screen"');
+  expect(shown).not.toContain('<details class="export-toc"');
+  const faces = shown.match(/@font-face\{[^}]*\}/g) ?? [];
+  expect(faces.length).toBeGreaterThan(0);
+  expect(faces.length).toBeLessThan(19); // KaTeX ships 19; the sample's math uses a few
+  for (const face of faces) expect(face).toContain('src: url(data:font/woff2;base64,');
+  expect(shown).not.toMatch(/url\(https?:[^)]*\.woff2\)/);
+
+  const exportGroup = panel.locator('.export-setting');
+  await exportGroup.getByRole('radio', { name: 'Light' }).check();
+  await exportGroup.getByRole('checkbox', { name: 'Table of contents at the top' }).check();
+  await exportGroup.getByRole('checkbox', { name: 'Embed the math fonts (when there is math)' }).uncheck();
+  await expectAccessible(page);
+  const light = await save();
+  expect(light).toContain('data-theme="light"');
+  expect(light).not.toContain('class="diagram-screen"');
+  expect(light).not.toContain('class="diagram-print"');
+  expect(light).toContain('<details class="export-toc" open=""><summary>Table of contents</summary><ol class="toc-list">');
+  expect(light).not.toContain('@font-face');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('md-browser:export')!))).toEqual({ theme: 'light', toc: true, mathFonts: false });
+
+  // The saved file shows the TOC and the light diagrams.
+  const saved = await page.context().newPage();
+  await saved.setContent(light);
+  await expect(saved.locator('.export-toc li').first()).toHaveText('MD Browser サンプル');
+  expect(await saved.locator('.diagram svg').count()).toBeGreaterThanOrEqual(2);
+  await saved.close();
 });
 
 test('applies the folder scan limit from the settings', async ({ page }) => {
@@ -572,7 +764,8 @@ test('switches the theme from the display settings and redraws diagrams', async 
   await expect(page.locator('.diagram-print').first()).toBeVisible();
   await page.emulateMedia({ media: 'screen' });
 
-  await page.getByRole('radio', { name: 'Light' }).check();
+  // The export section has a "Light" too (its own theme choice).
+  await page.getByRole('radiogroup', { name: 'Theme' }).first().getByRole('radio', { name: 'Light' }).check();
   expect(await bodyBg(page)).toBe('rgb(255, 255, 255)');
   await expect.poll(() => nodeFill(page)).toBe(LIGHT_NODE);
 });
@@ -584,6 +777,62 @@ test('redraws diagrams when the OS theme changes after loading', async ({ page }
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect.poll(() => nodeFill(page)).toBe(DARK_NODE);
   await expect(page.locator('.diagram-mermaid svg')).toHaveCount(4); // screen + print copies
+});
+
+// #156: GitHub's theme-specific images follow the shown theme, and printing uses the light ones.
+const THEMED_MD = [
+  '# Themed',
+  '![light](../img/diagram.svg#gh-light-mode-only)',
+  '![dark](../img/loading.gif#gh-dark-mode-only)',
+  '<picture>',
+  '<source media="(prefers-color-scheme: dark)" srcset="../img/loading.gif">',
+  '<img src="../img/diagram.svg" alt="pic">',
+  '</picture>',
+].join('\n\n');
+const pictureShows = (page: Page) =>
+  page.locator('picture').evaluate((p) => {
+    const img = p.querySelector('img')!;
+    return img.currentSrc === p.querySelector('source')!.srcset ? 'dark' : img.currentSrc === img.src ? 'light' : img.currentSrc;
+  });
+
+test('shows the images for the current theme (GitHub #gh-…-mode-only and <picture>)', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openSampleFolder(page);
+  await page.evaluate(async (md) => {
+    await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/themed.md', md);
+    window.dispatchEvent(new Event('focus'));
+  }, THEMED_MD);
+  await openFromSidebar(page, 'docs/themed.md');
+  const light = page.locator('img[alt="light"]');
+  const dark = page.locator('img[alt="dark"]');
+  await expect(light).toBeVisible();
+  await expect(dark).toBeHidden();
+  await expect(light).toHaveAttribute('src', /^blob:/); // the marker was read before the ref was resolved
+  await expect(page.locator('picture source')).toHaveAttribute('srcset', /^blob:/);
+  await expect.poll(() => pictureShows(page)).toBe('light');
+
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: 'Dark' }).check();
+  await expect(dark).toBeVisible();
+  await expect(light).toBeHidden();
+  await expect.poll(() => pictureShows(page)).toBe('dark');
+  await expectAccessible(page);
+
+  // Printing (beforeprint / afterprint) switches to the light images and back.
+  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+  await expect(light).toBeVisible();
+  await expect(dark).toBeHidden();
+  await expect.poll(() => pictureShows(page)).toBe('light');
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  await expect(dark).toBeVisible();
+  await expect.poll(() => pictureShows(page)).toBe('dark');
+
+  // Back to the OS setting, then the OS flips: the images follow without a re-render.
+  await page.getByRole('radio', { name: 'System' }).check();
+  await expect(light).toBeVisible();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(dark).toBeVisible();
+  await expect.poll(() => pictureShows(page)).toBe('dark');
 });
 
 test('keeps sequence diagram box colours readable in the dark theme', async ({ page }) => {
@@ -1020,6 +1269,64 @@ test('renders PlantUML diagrams offline, in both themes', async ({ page }) => {
   expect(offsite).toEqual([]);
 });
 
+test('fetches a PlantUML standard library as data from the host named in the settings', async ({ page }) => {
+  // A bundle in the official host's shape, served by the test: a script that is read, never run.
+  // The engine only knows the real library names (c4, awslib, …) and looks paths up in lower case.
+  const bundle =
+    '(function(){window.PLANTUML_STDLIB_INFO=window.PLANTUML_STDLIB_INFO||{};window.PLANTUML_STDLIB_INFO.c4={name:"C4",display_name:"C4 (test)"};' +
+    'window.PLANTUML_STDLIB=window.PLANTUML_STDLIB||{};window.PLANTUML_STDLIB.c4=window.PLANTUML_STDLIB.c4||{};\n' +
+    'window.PLANTUML_STDLIB.c4["c4_context"]=\'rectangle "From the library" as lib;\\\' a PlantUML comment, not code\'.split(";")})();';
+  const requested: string[] = [];
+  await page.route('https://stdlib.test/**', (route) => {
+    requested.push(route.request().url());
+    void route.fulfill({ status: 200, contentType: 'application/javascript', headers: { 'access-control-allow-origin': '*' }, body: bundle });
+  });
+  await openSampleFolder(page);
+  // Without a host the include fails; naming one redraws the diagram in place (#183).
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile: (rel: string, text: string) => Promise<void> }).__appendToFile(
+      'README.md',
+      '\n```plantuml\n!include <C4/C4_Context>\nlib --> [App]\n```\n',
+    ),
+  );
+  const diagram = page.locator('.diagram-plantuml').nth(2);
+  await expect(diagram).toHaveClass(/diagram-error/);
+  expect(requested).toEqual([]);
+
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  const host = panel.getByRole('textbox', { name: 'Library host' });
+  await host.fill('ftp://stdlib.test/');
+  await host.press('Enter');
+  await expect(panel.locator('.plantuml-setting [role="alert"]')).toHaveText(/must start with https:\/\//);
+  await host.fill('https://stdlib.test/libs');
+  await host.press('Enter');
+  await expect(host).toHaveValue('https://stdlib.test/libs/');
+  await expect(panel.locator('.plantuml-setting [role="alert"]')).toBeEmpty();
+  await page.keyboard.press('Escape');
+
+  await expect(diagram.locator('svg')).toHaveCount(1);
+  await expect(diagram).toContainText('From the library');
+  await expect(diagram).not.toHaveClass(/diagram-error/);
+  // One bundle, named after the library; the diagram source stays in the page.
+  expect(requested).toEqual(['https://stdlib.test/libs/c4.min.js']);
+  expect(await page.evaluate(() => localStorage.getItem('md-browser:plantuml'))).toBe('{"stdlibUrl":"https://stdlib.test/libs/"}');
+});
+
+test('draws JSON, YAML, mind map, WBS and Gantt diagrams with PlantUML', async ({ page }) => {
+  await openSampleFolder(page);
+  await openFromSidebar(page, 'docs/plantuml.md');
+  const diagrams = page.locator('.diagram-plantuml');
+  await expect(diagrams).toHaveCount(6);
+  await expect(diagrams.locator('svg')).toHaveCount(5); // the standard library example has no host to fetch from
+  await expect(diagrams.filter({ hasText: 'md-browser' })).toHaveCount(2); // JSON and YAML
+  await expect(diagrams.nth(2)).toContainText('見出し');
+  await expect(diagrams.nth(3)).toContainText('単体テスト');
+  await expect(diagrams.nth(4)).toContainText('設計');
+  await expect(diagrams.nth(5)).toHaveClass(/diagram-error/);
+  await expect(diagrams.nth(5).locator('.diagram-error-message')).toContainText('cannot include <C4/C4_Context>');
+});
+
 test('opens a PlantUML diagram large and saves it as SVG and PNG', async ({ page }) => {
   await openSampleFolder(page);
   const diagram = page.locator('.diagram-plantuml').first();
@@ -1154,4 +1461,151 @@ test('searches a folder of 500 files, reporting how long the first search takes'
   console.log(`[perf] web app: the next search took ${Date.now() - again} ms`);
   await expect(panel.locator('.search-file')).toHaveAttribute('aria-label', 'd9/s4/doc-499.md');
   await expectAccessible(page);
+});
+
+test('exports the document as one HTML file, and prints for PDF', async ({ page, context }) => {
+  await openSampleFolder(page);
+  await expect(page.locator('img[alt="diagram"]')).toHaveAttribute('src', /^blob:/);
+  await expect(page.locator('.diagram-mermaid svg')).toHaveCount(2);
+  await page.locator('.font-settings-toggle').click();
+  const panel = page.locator('.font-settings-panel');
+  await panel.getByRole('radiogroup', { name: 'Text size' }).getByRole('radio', { name: 'Large', exact: true }).check();
+  await panel.getByRole('textbox', { name: 'Custom CSS' }).fill('h1 { color: rgb(200, 0, 0); }');
+  await expectAccessible(page);
+
+  const [download] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Save as HTML' }).click()]);
+  expect(download.suggestedFilename()).toBe('README.html');
+  const html = await readFile((await download.path())!, 'utf8');
+  expect(html).toMatch(/^<!doctype html>\n<html lang="en" data-theme="light">/);
+  expect(html).toContain('<title>MD Browser サンプル</title>');
+  // The custom CSS comes along, scoped as on the page; unchecking the box leaves it out.
+  expect(html).toContain('@scope (.content) {\nh1 { color: rgb(200, 0, 0); }\n}');
+  await panel.getByRole('checkbox', { name: 'Include in HTML export' }).uncheck();
+  const [plain] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Save as HTML' }).click()]);
+  expect(await readFile((await plain.path())!, 'utf8')).not.toContain('@scope');
+  expect(html).toContain('<main class="content markdown-body"><details class="front-matter">');
+  expect(html).toMatch(/<h1 id="[^"]+">MD Browser サンプル<\/h1>/);
+  expect(html).toContain('--doc-font-size: 18px');
+  // The viewer's controls and source-line attributes are left out; the diagrams and the images come along.
+  for (const marker of ['class="copy-button"', 'class="heading-link"', 'class="media-size', 'class="diagram-actions"', 'data-line=', '<script', 'blob:']) {
+    expect(html, marker).not.toContain(marker);
+  }
+  expect(html).toMatch(/<img src="data:image\/svg\+xml;base64,[^"]+"[^>]*alt="diagram"/);
+  expect(html).toMatch(/<img src="data:image\/gif;base64,[^"]+"[^>]*alt="animation"/);
+  expect(html.match(/<svg/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+
+  // The file stands on its own: no scripts, styles inline, images embedded.
+  const saved = await context.newPage();
+  await saved.setContent(html);
+  await expect(saved.locator('h1')).toHaveText('MD Browser サンプル');
+  await expect(saved.locator('img[alt="diagram"]')).toHaveJSProperty('naturalWidth', 240);
+  expect(await saved.locator('main').evaluate((el) => getComputedStyle(el).fontSize)).toBe('18px');
+  await expect(saved.locator('button')).toHaveCount(0);
+  await saved.close();
+
+  await page.evaluate(() => {
+    (window as unknown as { __printed: number }).__printed = 0;
+    window.print = () => void ((window as unknown as { __printed: number }).__printed += 1);
+  });
+  await panel.getByRole('button', { name: 'Save as PDF' }).click();
+  expect(await page.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(1);
+});
+
+test('zooms and pans a diagram in the overlay with the wheel, a drag, a double-click and the keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 500 }); // the flowchart (686 wide) is fitted below 100%
+  await openSampleFolder(page);
+  await page.locator('.diagram-mermaid').first().click();
+  const zoom = page.getByRole('dialog', { name: /Diagram at full size/ });
+  const svg = zoom.locator('svg');
+  const level = zoom.getByRole('status');
+  await expect(svg).toBeVisible();
+  const levelNow = async () => Number((await level.textContent())!.replace('%', ''));
+  const fitLevel = await levelNow();
+  expect(fitLevel).toBeGreaterThan(0);
+  expect(fitLevel).toBeLessThan(100);
+  const transform = () => svg.evaluate((el) => (el as SVGElement).style.transform);
+  const box = (await svg.boundingBox())!;
+  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+
+  // Ctrl + wheel zooms around the pointer: a point left of the center moves the content right.
+  await svg.dispatchEvent('wheel', { deltaY: -100, ctrlKey: true, clientX: center.x - 200, clientY: center.y, bubbles: true, cancelable: true });
+  expect(await levelNow()).toBeGreaterThan(fitLevel);
+  expect(await transform()).toMatch(/translate\((\d|[1-9]\d*)(\.\d+)?px, 0px\) scale\(1\.2/);
+  await expect(zoom).toBeVisible();
+
+  // A plain wheel pans; a drag pans too and does not close the overlay.
+  await svg.dispatchEvent('wheel', { deltaX: 30, deltaY: 50, bubbles: true, cancelable: true });
+  const afterWheel = await transform();
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 60, center.y + 20, { steps: 4 });
+  await page.mouse.up();
+  await expect(zoom).toBeVisible();
+  expect(await transform()).not.toBe(afterWheel);
+
+  // Double-click: 100% (one viewBox unit per screen pixel), then back to fit. Screen coordinates:
+  // the zoomed svg is taller than the window, which Playwright's element actions cannot scroll into view.
+  await page.mouse.dblclick(center.x, center.y);
+  await expect(level).toHaveText('100%');
+  await page.mouse.dblclick(center.x, center.y);
+  await expect(level).toHaveText(`${fitLevel}%`);
+  expect(await transform()).toBe('translate(0px, 0px) scale(1)');
+
+  // Keyboard: + and − zoom, arrows pan, 0 resets.
+  await page.keyboard.press('+');
+  expect(Math.abs((await levelNow()) - fitLevel * 1.25)).toBeLessThanOrEqual(1);
+  await page.keyboard.press('ArrowRight');
+  expect(await transform()).toBe('translate(-40px, 0px) scale(1.25)');
+  await page.keyboard.press('-');
+  await page.keyboard.press('0');
+  await expect(level).toHaveText(`${fitLevel}%`);
+  await expectAccessible(page);
+
+  // A click without movement still closes it (after the double-click delay).
+  await page.mouse.click(5, 5);
+  await expect(zoom).toHaveCount(0);
+});
+
+test('zooms a document image in the overlay', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.getByRole('button', { name: 'diagram (Enter to open at full size)' }).click();
+  const zoom = page.getByRole('dialog', { name: 'diagram' });
+  const level = zoom.getByRole('status');
+  await expect(level).toHaveText('100%'); // 240px wide: natural size fits the window
+  await page.keyboard.press('+');
+  await expect(level).toHaveText('125%');
+  await expect(zoom.locator('img')).toHaveJSProperty('naturalWidth', 240);
+  await zoom.locator('img').dblclick(); // fit and 100% coincide here: back to fit
+  await expect(level).toHaveText('100%');
+  await page.keyboard.press('Escape');
+  await expect(zoom).toHaveCount(0);
+});
+
+test('folds TOC sections and remembers them per document', async ({ page }) => {
+  await openSampleFolder(page);
+  const toc = page.locator('.toc');
+  await expect(toc.locator('a')).toHaveCount(11);
+  await expect(toc.locator('.toc-fold')).toHaveCount(3); // the h1, 画像 (h2 with an h3) and 深い見出し (h3 with an h4)
+  const images = toc.locator('a[data-target]', { hasText: /^画像$/ }).locator('..');
+  await images.locator(':scope > .toc-fold').click();
+  await expect(images.locator(':scope > .toc-fold')).toHaveAttribute('aria-expanded', 'false');
+  await expect(toc.locator('a:visible')).toHaveCount(9);
+  await expect(toc.locator('a', { hasText: '深い見出し' }).first()).toBeHidden();
+  // Inside the folded section, the section itself is the current entry; it is not unfolded.
+  await page.locator('#content h4').evaluate((el) => el.scrollIntoView());
+  await expect(toc.locator('a.active')).toHaveText('画像');
+  await expect(toc.locator('a:visible')).toHaveCount(9);
+  await expectAccessible(page);
+
+  await openFromSidebar(page, 'docs/other.md');
+  await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
+  await openFromSidebar(page, 'README.md');
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect(toc.locator('a:visible')).toHaveCount(9);
+
+  await images.locator(':scope > a').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(toc.locator('a:visible')).toHaveCount(11);
+  await page.keyboard.press('ArrowRight');
+  await expect(toc.locator('a', { hasText: '深い見出し' }).first()).toBeFocused();
 });

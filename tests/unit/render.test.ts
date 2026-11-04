@@ -72,6 +72,13 @@ describe('sanitizing', () => {
     for (const { id } of toc) expect(root.querySelector(`h2[id="${id}"]`)).not.toBeNull();
   });
 
+  it('keeps GitHub-style <picture> markup with its theme sources', () => {
+    const root = dom(renderMarkdown('<picture>\n<source media="(prefers-color-scheme: dark)" srcset="dark.png">\n<img src="light.png" alt="a">\n</picture>').html);
+    expect(root.querySelector('picture > source')?.getAttribute('srcset')).toBe('dark.png');
+    expect(root.querySelector('picture > source')?.getAttribute('media')).toBe('(prefers-color-scheme: dark)');
+    expect(root.querySelector('picture > img')?.getAttribute('src')).toBe('light.png');
+  });
+
   it('still drops clobbering ids and names on other elements', () => {
     const root = dom(renderMarkdown('<img src="x.png" id="cookie" name="title">\n\n<p id="location">x</p>').html);
     expect(root.querySelector('img')!.hasAttribute('id')).toBe(false);
@@ -274,5 +281,42 @@ describe('footnotes', () => {
   it('does not carry footnotes over to the next render', () => {
     renderMarkdown(src);
     expect(renderMarkdown('No notes here.\n').html).not.toContain('footnote');
+  });
+});
+
+describe('GFM autolinks and strikethrough (as on GitHub)', () => {
+  const links = (src: string) => [...dom(renderMarkdown(src).html).querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]);
+
+  it('links www. hosts with an http:// prefix, keeping the path and leaving trailing punctuation', () => {
+    expect(links('See www.example.com/a?x=1. Or (WWW.Example.com:8080).\n')).toEqual([
+      ['www.example.com/a?x=1', 'http://www.example.com/a?x=1'],
+      ['WWW.Example.com:8080', 'http://WWW.Example.com:8080'],
+    ]);
+  });
+
+  it('does not link bare domains, ftp:// or protocol-relative URLs', () => {
+    expect(links('example.com ftp://example.com/f //example.com/x\n')).toEqual([]);
+  });
+
+  it('still links http(s)://, mailto: and bare emails', () => {
+    expect(links('https://a.example mailto:x@example.com x@example.com\n').map(([, href]) => href)).toEqual([
+      'https://a.example',
+      'mailto:x@example.com',
+      'mailto:x@example.com',
+    ]);
+  });
+
+  it('strikes through text in one or two tildes, but not three', () => {
+    const html = renderMarkdown('~one~ ~~two~~ ~~~three~~~\n').html;
+    expect(html).toContain('<s>one</s> <s>two</s> ~~~three~~~');
+  });
+
+  it('pairs only runs of the same length and nests them', () => {
+    expect(renderMarkdown('~~a ~b~ c~~ and ~~a~ b~~\n').html).toContain('<s>a <s>b</s> c</s> and ~~a~ b~~');
+  });
+
+  it('follows the emphasis flanking rules for a single tilde', () => {
+    const html = renderMarkdown('~/home or a~b, but ~ spaced ~ and ~/path\n').html;
+    expect(html).toContain('<s>/home or a</s>b, but ~ spaced ~ and ~/path');
   });
 });

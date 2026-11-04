@@ -76,9 +76,11 @@ async function draw(node: HTMLElement, source: string, theme: Theme, id: string)
  * Markup from earlier calls is reused for the same source and theme, so re-rendering a saved file
  * only draws the diagrams that were edited.
  */
-export async function renderDiagrams(root: ParentNode): Promise<void> {
+export async function renderDiagrams(root: ParentNode, opts: { retryFailed?: boolean } = {}): Promise<void> {
+  // Drawn for this theme already: left alone, unless it failed and the caller knows something
+  // changed (a library host was named) that may let it draw now.
   const nodes = Array.from(root.querySelectorAll<HTMLElement>('.diagram-mermaid, .diagram-plantuml')).filter(
-    (node) => drawn.get(node)?.theme !== currentTheme(),
+    (node) => drawn.get(node)?.theme !== currentTheme() || (opts.retryFailed === true && node.classList.contains('diagram-error')),
   );
   // Mermaid SVGs carry their id in their own <style> (`#mermaid-12 …`) and marker refs, so two
   // copies of one cached entry in a document would clash: a repeat of a key in this call draws fresh.

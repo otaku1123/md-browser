@@ -48,4 +48,18 @@ describe('mountFilesSidebar (localStorage)', () => {
     expect(toggle.hidden).toBe(true);
     expect(files.hidden).toBe(true);
   });
+
+  it('open() shows a closed list, only when it is available', async () => {
+    localStorage.setItem(KEY, JSON.stringify({ open: false, width: FILES_WIDTH_DEFAULT }));
+    const { files, sidebar } = setup();
+    await Promise.resolve();
+    sidebar.setAvailable(true);
+    expect(files.hidden).toBe(true);
+    sidebar.open();
+    expect(files.hidden).toBe(false);
+    expect(JSON.parse(localStorage.getItem(KEY)!).open).toBe(true);
+    sidebar.setAvailable(false);
+    sidebar.open();
+    expect(files.hidden).toBe(true);
+  });
 });

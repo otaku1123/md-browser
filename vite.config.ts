@@ -6,12 +6,16 @@ import { thirdPartyNotices } from './scripts/vite-third-party-notices';
 // Defence in depth behind DOMPurify: Markdown may contain raw HTML, but no script can run.
 // style-src needs 'unsafe-inline' for Mermaid's <style> and KaTeX's style attributes.
 // img-src: blob: for folder images, data: for the favicon, https: for remote images such as badges.
+// connect-src: blob: so the HTML export can read the folder images back and embed them; https:
+// for the PlantUML standard library bundles the user opted into (plantuml-stdlib.ts) and for
+// embedding remote images in the export. Still no script from anywhere but 'self'.
 // Build only: the dev server injects inline styles and uses a WebSocket for HMR.
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https:",
+  "connect-src 'self' blob: https:",
   "font-src 'self' data:",
   "object-src 'none'",
   "base-uri 'none'",

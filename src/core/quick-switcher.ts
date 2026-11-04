@@ -63,13 +63,19 @@ export function fuzzyMatch(query: string, path: string): FuzzyMatch | null {
 }
 
 /**
- * The switcher's list. Empty query: documents opened recently (except the current one, so Enter
- * goes back to the previous document), then the rest by path. Otherwise the best matches first,
- * ties broken by recency, then path.
+ * The switcher's list. Empty query: the favorites, then the documents opened recently (both
+ * without the current one, so Enter goes back to the previous document), then the rest by path.
+ * Otherwise the best matches first, ties broken by favorites, then recency, then path.
  */
-export function rankPaths(query: string, paths: readonly string[], recent: readonly string[] = [], current: string | null = null): FuzzyMatch[] {
+export function rankPaths(
+  query: string,
+  paths: readonly string[],
+  recent: readonly string[] = [],
+  current: string | null = null,
+  favorites: readonly string[] = [],
+): FuzzyMatch[] {
   const rank = new Map<string, number>();
-  for (const p of recent) if (p !== current && !rank.has(p)) rank.set(p, rank.size);
+  for (const p of [...favorites, ...recent]) if (p !== current && !rank.has(p)) rank.set(p, rank.size);
   const recency = (p: string) => rank.get(p) ?? Infinity;
 
   if (!query.trim()) {
@@ -92,6 +98,8 @@ export interface QuickSwitcherOptions {
   paths(): readonly string[];
   current(): string | null;
   recent(): readonly string[];
+  /** Starred paths (favorites-store.ts), offered before the recent ones. */
+  favorites?(): readonly string[];
   onOpen(path: string): void;
 }
 
@@ -201,7 +209,7 @@ export function mountQuickSwitcher(opts: QuickSwitcherOptions): QuickSwitcher {
     }
 
     function update(): void {
-      results = rankPaths(input.value, opts.paths(), opts.recent(), opts.current());
+      results = rankPaths(input.value, opts.paths(), opts.recent(), opts.current(), opts.favorites?.() ?? []);
       const current = opts.current();
       list.replaceChildren(
         ...results.map((m, i) => {

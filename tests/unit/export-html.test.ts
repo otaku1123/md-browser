@@ -1,0 +1,215 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildStandaloneHtml, cleanedCopy, exportFilename, exportToc, normalizeExportSettings, stripFontFaces, usedFontFaces } from '../../src/core/export-html';
+
+vi.mock('../../src/style.css?inline', () => ({ default: 'body { color: red; } @font-face { font-family: X; src: url(x.woff2); }' }));
+
+function rendered(): HTMLElement {
+  const root = document.createElement('main');
+  root.id = 'content';
+  root.tabIndex = -1;
+  root.innerHTML = [
+    '<h1 data-line="1">Title<a class="heading-link" href="#title">🔗</a></h1>',
+    '<p data-line="3" tabindex="0">Text with <code>code</code>.</p>',
+    '<div class="code-block"><pre data-line="5"><code>x</code></pre><button class="copy-button">Copy</button></div>',
+    '<div class="media-frame media-ready"><img src="blob:http://x/1" alt="pic" style="--media-w: 200px"><span class="media-size"><button>−</button></span></div>',
+    '<div class="mermaid"><div class="diagram-screen"><svg></svg></div><div class="diagram-actions"><button>Save SVG</button></div></div>',
+    '<img src="file:///tmp/local.png" alt="local">',
+    '<img src="data:image/png;base64,AAAA" alt="inline">',
+    '<img src="img/rel.png" alt="relative">',
+  ].join('');
+  return root;
+}
+
+function fakeFetch(ok = true): typeof fetch {
+  return vi.fn(async () =>
+    ok
+      ? new Response(new Uint8Array([137, 80, 78, 71]), { status: 200, headers: { 'Content-Type': 'image/png' } })
+      : new Response('', { status: 404 }),
+  ) as unknown as typeof fetch;
+}
+
+// jsdom has no matchMedia (theme.ts asks it for the OS theme when none is pinned).
+beforeEach(() => vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} })));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  document.documentElement.style.cssText = '';
+  delete document.documentElement.dataset.theme;
+});
+
+describe('cleanedCopy', () => {
+  it('drops the viewer controls and source-line attributes, keeping the content', async () => {
+    const copy = await cleanedCopy(rendered(), fakeFetch());
+    expect(copy.querySelector('.copy-button, .heading-link, .media-size, .diagram-actions')).toBeNull();
+    expect(copy.querySelector('[data-line], [tabindex]')).toBeNull();
+    expect(copy.id).toBe('');
+    expect(copy.querySelector('h1')?.textContent).toBe('Title');
+    expect(copy.querySelector('pre code')?.textContent).toBe('x');
+    expect(copy.querySelector('.diagram-screen svg')).not.toBeNull();
+    expect(copy.querySelector<HTMLElement>('img[alt="pic"]')?.style.getPropertyValue('--media-w')).toBe('200px');
+  });
+
+  it('embeds fetchable images as data URLs and leaves file:// and data: sources alone', async () => {
+    const fetchImpl = fakeFetch();
+    const copy = await cleanedCopy(rendered(), fetchImpl);
+    expect(copy.querySelector('img[alt="pic"]')?.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+    expect(copy.querySelector('img[alt="local"]')?.getAttribute('src')).toBe('file:///tmp/local.png');
+    expect(copy.querySelector('img[alt="inline"]')?.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+    expect(fetchImpl).toHaveBeenCalledTimes(2); // the blob: and the relative one; never file: or data:
+    expect(fetchImpl).toHaveBeenCalledWith('blob:http://x/1');
+  });
+
+  it('embeds file:// images through the local reader, when there is one and it can read them', async () => {
+    const fetchImpl = fakeFetch();
+    const readLocal = vi.fn(async (url: string) => (url === 'file:///tmp/local.png' ? 'data:image/png;base64,BBBB' : null));
+    const copy = await cleanedCopy(rendered(), fetchImpl, undefined, readLocal);
+    expect(copy.querySelector('img[alt="local"]')?.getAttribute('src')).toBe('data:image/png;base64,BBBB');
+    expect(readLocal).toHaveBeenCalledTimes(1); // file: only; fetch still handles the others
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const root = rendered();
+    root.insertAdjacentHTML('beforeend', '<img src="file:///elsewhere/out.png" alt="outside">');
+    const kept = await cleanedCopy(root, fetchImpl, undefined, readLocal);
+    expect(kept.querySelector('img[alt="outside"]')?.getAttribute('src')).toBe('file:///elsewhere/out.png');
+    const failing = await cleanedCopy(rendered(), fetchImpl, undefined, async () => Promise.reject(new Error('no background')));
+    expect(failing.querySelector('img[alt="local"]')?.getAttribute('src')).toBe('file:///tmp/local.png');
+  });
+
+  it('keeps the URL, made absolute, when the image cannot be fetched', async () => {
+    const copy = await cleanedCopy(rendered(), fakeFetch(false));
+    expect(copy.querySelector('img[alt="pic"]')?.getAttribute('src')).toBe('blob:http://x/1');
+    // jsdom's document lives at http://localhost:3000/
+    expect(copy.querySelector('img[alt="relative"]')?.getAttribute('src')).toBe('http://localhost:3000/img/rel.png');
+  });
+
+  it('flattens a <picture> to the image the page shows', async () => {
+    const root = rendered();
+    root.insertAdjacentHTML(
+      'beforeend',
+      '<picture><source media="all" data-media="(prefers-color-scheme: dark)" srcset="blob:http://x/dark"><img src="blob:http://x/light" alt="themed"></picture>',
+    );
+    const live = root.querySelector<HTMLImageElement>('img[alt="themed"]')!;
+    Object.defineProperty(live, 'currentSrc', { value: 'blob:http://x/dark' }); // jsdom never picks a source
+    const copy = await cleanedCopy(root, fakeFetch());
+    expect(copy.querySelector('picture source')).toBeNull();
+    expect(copy.querySelector('img[alt="themed"]')?.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+    expect(root.querySelector('picture source')).not.toBeNull();
+  });
+
+  it('does not touch the live document', async () => {
+    const root = rendered();
+    await cleanedCopy(root, fakeFetch());
+    expect(root.querySelector('.copy-button')).not.toBeNull();
+    expect(root.querySelector('img[alt="pic"]')?.getAttribute('src')).toBe('blob:http://x/1');
+  });
+});
+
+describe('buildStandaloneHtml', () => {
+  it('writes a complete page with the stylesheet, the theme and the font settings', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    document.documentElement.style.setProperty('--doc-font-size', '18px');
+    document.documentElement.style.setProperty('--font-body', '"Meiryo", var(--font-body-default)');
+    const html = await buildStandaloneHtml(rendered(), { title: 'A <b>title</b>', fetchImpl: fakeFetch() });
+    expect(html.startsWith('<!doctype html>\n<html lang="en" data-theme="dark">')).toBe(true);
+    expect(html).toContain('<meta charset="UTF-8" />');
+    expect(html).toContain('<title>A &lt;b&gt;title&lt;/b&gt;</title>');
+    expect(html).toContain('<style>body { color: red; } </style>');
+    expect(html).not.toContain('@font-face');
+    expect(html).toContain(':root { --font-body: "Meiryo", var(--font-body-default); --doc-font-size: 18px; }');
+    expect(html).toContain('<main class="content markdown-body"><h1>Title</h1>');
+    expect(html).not.toContain('<script');
+  });
+
+  it('follows the light theme and skips the variables block when nothing is set', async () => {
+    const html = await buildStandaloneHtml(rendered(), { title: 't', fetchImpl: fakeFetch() });
+    expect(html).toContain('data-theme="light"');
+    expect(html).not.toContain(':root {');
+  });
+
+  it('appends extra CSS (math) without its font faces', async () => {
+    const extraCss = '.katex { x: y } @font-face { font-family: KaTeX_Main; src: url(fonts/a.woff2); }';
+    const html = await buildStandaloneHtml(rendered(), { title: 't', extraCss, fetchImpl: fakeFetch() });
+    expect(html).toContain('.katex { x: y }');
+    expect(html).not.toContain('KaTeX_Main');
+  });
+});
+
+describe('helpers', () => {
+  it('names the file after the document', () => {
+    expect(exportFilename('README.md')).toBe('README.html');
+    expect(exportFilename('notes.markdown')).toBe('notes.html');
+    expect(exportFilename('仕様.MD')).toBe('仕様.html');
+    expect(exportFilename('.md')).toBe('document.html');
+  });
+
+  it('strips every @font-face block', () => {
+    expect(stripFontFaces('a{} @font-face{font-family:X;src:url(a)} b{} @font-face { c: d }')).toBe('a{}  b{} ');
+  });
+});
+
+describe('export options', () => {
+  it('normalizes the saved choices', () => {
+    expect(normalizeExportSettings(undefined)).toEqual({ theme: 'current', toc: false, mathFonts: true });
+    expect(normalizeExportSettings({ theme: 'light', toc: true, mathFonts: false })).toEqual({ theme: 'light', toc: true, mathFonts: false });
+    expect(normalizeExportSettings({ theme: 'dark', toc: 'yes', mathFonts: 0 })).toEqual({ theme: 'current', toc: false, mathFonts: true });
+  });
+
+  it('fixes the light theme: the light diagram copy and the light theme images', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<div class="diagram"><div class="diagram-screen"><svg data-k="dark"></svg></div><div class="diagram-print"><svg data-k="light"></svg></div></div>',
+      '<img src="data:image/png;base64,AA" alt="d" data-theme-only="dark"><img src="data:image/png;base64,AA" alt="l" data-theme-only="light" hidden="">',
+      '<picture><source media="not all" data-media="(prefers-color-scheme: light)" srcset="data:image/png;base64,LL"><source media="all" data-media="(prefers-color-scheme: dark)" srcset="data:image/png;base64,DD"><img src="data:image/png;base64,FF" alt="p"></picture>',
+    ].join('');
+    const html = await buildStandaloneHtml(root, { title: 't', fetchImpl: fakeFetch(), theme: 'light' });
+    expect(html).toContain('data-theme="light"');
+    expect(html).toContain('<div class="diagram"><svg data-k="light"></svg></div>');
+    expect(html).not.toContain('diagram-screen');
+    expect(html).toMatch(/<img[^>]*alt="d"[^>]*hidden/);
+    expect(html).toMatch(/<img[^>]*alt="l"[^>]*>/);
+    expect(html).not.toMatch(/<img[^>]*alt="l"[^>]*hidden/);
+    expect(html).toContain('<picture><img src="data:image/png;base64,LL" alt="p"></picture>');
+    // As shown: the dark page's copies stay.
+    const asShown = await buildStandaloneHtml(root, { title: 't', fetchImpl: fakeFetch() });
+    expect(asShown).toContain('data-theme="dark"');
+    expect(asShown).toContain('diagram-screen');
+  });
+
+  it('puts a collapsible table of contents first when asked', async () => {
+    const root = document.createElement('main');
+    root.innerHTML = '<h1 id="a">A</h1><p>x</p><h2 id="b">B <code>c</code></h2><h3>no id</h3>';
+    const html = await buildStandaloneHtml(root, { title: 't', fetchImpl: fakeFetch(), toc: true, tocTitle: '目次' });
+    expect(html).toContain(
+      '<main class="content markdown-body"><details class="export-toc" open=""><summary>目次</summary><ol class="toc-list"><li class="toc-level-1"><a href="#a">A</a></li><li class="toc-level-2"><a href="#b">B c</a></li></ol></details><h1 id="a">',
+    );
+    expect(await buildStandaloneHtml(root, { title: 't', fetchImpl: fakeFetch() })).not.toContain('export-toc');
+    expect(exportToc(document.createElement('div'), 'x')).toBeNull();
+  });
+
+  it('embeds only the math fonts the document uses, dropping the ones it cannot fetch', async () => {
+    const root = document.createElement('main');
+    root.innerHTML =
+      '<span class="katex"><span style="font-family: KaTeX_Main; font-weight: 700">x</span><span style="font-family: KaTeX_Math; font-style: italic">y</span></span>';
+    document.body.append(root);
+    expect(usedFontFaces(root)).toEqual(new Set(['KaTeX_Main|700|normal', 'KaTeX_Math|400|italic']));
+    const extraCss =
+      '.katex{a:b}' +
+      '@font-face{font-family:KaTeX_Main;font-style:normal;font-weight:700;src:url(http://x/Main-Bold.woff2) format("woff2")}' +
+      '@font-face{font-family:KaTeX_Main;font-style:normal;font-weight:400;src:url(http://x/Main-Regular.woff2) format("woff2")}' +
+      '@font-face{font-family:KaTeX_Math;font-style:italic;font-weight:400;src:url(http://x/Math-Italic.woff2) format("woff2")}';
+    const fetchImpl = vi.fn(async (url: string) =>
+      url.includes('Math') ? new Response('', { status: 404 }) : new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
+    ) as unknown as typeof fetch;
+    const html = await buildStandaloneHtml(root, { title: 't', extraCss, fetchImpl, embedFonts: true });
+    expect(html).toContain('.katex{a:b}');
+    expect(html).toContain('@font-face{font-family:KaTeX_Main;font-style:normal;font-weight:700;src: url(data:font/woff2;base64,AQID) format("woff2")}');
+    expect(html).not.toContain('Main-Regular'); // not used
+    expect(html).not.toContain('font-family:KaTeX_Math'); // not fetchable (the inline style in the body stays)
+    expect(html).not.toContain('http://x/');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // Off: every face goes.
+    expect(await buildStandaloneHtml(root, { title: 't', extraCss, fetchImpl, embedFonts: false })).not.toContain('@font-face');
+    root.remove();
+  });
+});

@@ -7,10 +7,14 @@ export interface FileTreeController {
    * Renders workspace-relative paths (e.g. "docs/guide.md") as a collapsible folder tree, then the
    * folders the user hid (same coordinates, e.g. "docs/old") so they can be shown again.
    * `hidden` null: this list can't hide folders, so no hide buttons are offered.
+   * `favorites`: starred paths, listed first in their own section (those not in `paths` are left
+   * out); null: this list can't star files, so no star buttons are offered.
    */
-  render(paths: string[], hidden?: string[] | null): void;
+  render(paths: string[], hidden?: string[] | null, favorites?: string[] | null): void;
   /** Highlights the open document and expands the folders containing it. */
   setActive(path: string): void;
+  /** Expands the folder ('' for the root) and its parents, scrolls to it and focuses its row. */
+  reveal(dir: string): void;
 }
 
 interface DirNode {
@@ -40,7 +44,15 @@ export interface FileTreeOptions {
   onHide?(dir: string): void;
   /** Called from the hidden-folders section with a path given to render(). */
   onUnhide?(dir: string): void;
+  /** Offers a star button on every file row; `favorite` is the new state asked for. */
+  onToggleFavorite?(path: string, favorite: boolean): void;
 }
+
+// Octicons star / star-fill.
+const STAR_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z"/></svg>';
+const STAR_FILL_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>';
 
 // Eye with a slash (Octicons eye-closed).
 const HIDE_ICON =
@@ -48,10 +60,38 @@ const HIDE_ICON =
 
 /** Sidebar file list: folders first, then files, each sorted by name. */
 export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, opts: FileTreeOptions = {}): FileTreeController {
-  let buttons = new Map<string, HTMLButtonElement>();
-  let active: HTMLButtonElement | null = null;
+  /** A starred document has two rows: one in the favorites section and one in the tree. */
+  let buttons = new Map<string, HTMLButtonElement[]>();
+  let active: HTMLButtonElement[] = [];
   let activePath: string | null = null;
   let hideable = false;
+  let starred: ReadonlySet<string> | null = null;
+
+  /** A row that opens the document, as in the tree and in the favorites section. */
+  function fileButton(file: { name: string; path: string }): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'file-tree-file';
+    btn.textContent = file.name;
+    btn.title = file.path;
+    btn.dataset.path = file.path;
+    buttons.set(file.path, [...(buttons.get(file.path) ?? []), btn]);
+    return btn;
+  }
+
+  /** The star beside a file row: pressed when the document is a favorite. */
+  function starButton(path: string): HTMLButtonElement {
+    const favorite = starred!.has(path);
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'file-tree-star';
+    star.innerHTML = favorite ? STAR_FILL_ICON : STAR_ICON;
+    star.dataset.starPath = path;
+    star.setAttribute('aria-pressed', String(favorite));
+    star.title = t(favorite ? 'favoriteRemove' : 'favoriteAdd', { name: path });
+    star.setAttribute('aria-label', star.title);
+    return star;
+  }
 
   function renderDir(node: DirNode, prefix: string): HTMLUListElement {
     const ul = document.createElement('ul');
@@ -82,17 +122,32 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
     }
     for (const file of [...node.files].sort((a, b) => byName(a.name, b.name))) {
       const li = document.createElement('li');
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'file-tree-file';
-      btn.textContent = file.name;
-      btn.title = file.path;
-      btn.dataset.path = file.path;
-      buttons.set(file.path, btn);
-      li.append(btn);
+      li.append(fileButton(file));
+      if (starred) {
+        li.className = 'file-tree-item';
+        li.append(starButton(file.path));
+      }
       ul.append(li);
     }
     return ul;
+  }
+
+  /** "Favorites (n)", open: the starred documents in the order they were starred, with their stars. */
+  function renderFavorites(favorites: string[]): HTMLDetailsElement {
+    const details = document.createElement('details');
+    details.className = 'files-favorites';
+    details.open = true;
+    const summary = document.createElement('summary');
+    summary.textContent = t('favorites', { count: favorites.length });
+    const ul = document.createElement('ul');
+    for (const path of favorites) {
+      const li = document.createElement('li');
+      li.className = 'file-tree-item';
+      li.append(fileButton({ name: path.split('/').pop()!, path }), starButton(path));
+      ul.append(li);
+    }
+    details.append(summary, ul);
+    return details;
   }
 
   /** "Hidden folders (n)", collapsed: each folder with a button that lists it again. */
@@ -126,11 +181,13 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
     if (hide) return opts.onHide?.(hide.dataset.hideDir!);
     const show = target.closest<HTMLButtonElement>('button[data-unhide-dir]');
     if (show) return opts.onUnhide?.(show.dataset.unhideDir!);
+    const star = target.closest<HTMLButtonElement>('button[data-star-path]');
+    if (star) return opts.onToggleFavorite?.(star.dataset.starPath!, star.getAttribute('aria-pressed') !== 'true');
     const btn = target.closest<HTMLButtonElement>('button[data-path]');
     if (btn) onOpen(btn.dataset.path!);
   });
 
-  const ROW = '.file-tree summary, .file-tree .file-tree-file';
+  const ROW = '.files-favorites summary, .files-favorites .file-tree-file, .file-tree summary, .file-tree .file-tree-file';
   /** The folder holding a row or a folder's <details>, or null at the top level. */
   const parentFolder = (node: HTMLElement): HTMLDetailsElement | null => {
     const from = node.tagName === 'SUMMARY' ? node.parentElement! : node;
@@ -185,33 +242,55 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
 
   function setActive(path: string): void {
     activePath = path;
-    const btn = buttons.get(path);
-    if (!btn || btn === active) return;
-    active?.classList.remove('active');
-    active?.removeAttribute('aria-current');
-    btn.classList.add('active');
-    btn.setAttribute('aria-current', 'page');
-    active = btn;
-    for (let d = btn.closest('details'); d; d = d.parentElement?.closest('details') ?? null) d.open = true;
-    scrollIntoPanel(btn, el);
+    const btns = buttons.get(path);
+    if (!btns || btns[0] === active[0]) return;
+    for (const old of active) {
+      old.classList.remove('active');
+      old.removeAttribute('aria-current');
+    }
+    for (const btn of btns) {
+      btn.classList.add('active');
+      btn.setAttribute('aria-current', 'page');
+    }
+    active = btns;
+    // The tree's row (the last one) is where the document lives: expand down to it and show it.
+    const inTree = btns[btns.length - 1];
+    for (let d = inTree.closest('details'); d; d = d.parentElement?.closest('details') ?? null) d.open = true;
+    scrollIntoPanel(inTree, el);
+  }
+
+  function reveal(dir: string): void {
+    const details = dir ? el.querySelector<HTMLDetailsElement>(`details[data-dir="${CSS.escape(dir)}"]`) : null;
+    if (dir && !details) return; // not listed (hidden, or below the depth limit)
+    for (let d = details; d; d = d.parentElement?.closest('details') ?? null) d.open = true;
+    const row = details?.querySelector<HTMLElement>(':scope > summary') ?? el.querySelector<HTMLElement>('.file-tree summary, .file-tree button');
+    if (!row) return;
+    scrollIntoPanel(row, el);
+    row.focus();
   }
 
   return {
-    render(paths, hidden = []) {
+    render(paths, hidden = [], favorites = null) {
       buttons = new Map();
-      active = null;
+      active = [];
       hideable = !!opts.onHide && hidden !== null;
+      starred = opts.onToggleFavorite && favorites !== null ? new Set(favorites) : null;
       // The folders the user expanded stay expanded across a re-render (e.g. after hiding one).
       const expanded = new Set(Array.from(el.querySelectorAll<HTMLDetailsElement>('.file-tree details[open]'), (d) => d.dataset.dir));
+      const known = new Set(paths);
+      const listed = starred ? favorites!.filter((p) => known.has(p)) : [];
+      // Rendered first, so a starred document's first button is the favorites row, the last the tree's.
+      const first = listed.length ? [renderFavorites(listed)] : [];
       const list = renderDir(buildTree(paths), '');
       list.className = 'file-tree';
       for (const d of list.querySelectorAll<HTMLDetailsElement>('details')) if (expanded.has(d.dataset.dir)) d.open = true;
       const extra = hidden?.length && opts.onUnhide ? [renderHidden(hidden)] : [];
       // Keep the resize handle (files-sidebar.ts), which lives in the sidebar too.
-      el.replaceChildren(list, ...extra, ...el.querySelectorAll(`:scope > .${PANEL_RESIZER_CLASS}`));
+      el.replaceChildren(...first, list, ...extra, ...el.querySelectorAll(`:scope > .${PANEL_RESIZER_CLASS}`));
       // A re-render (e.g. after hiding a folder) keeps the open document marked.
       if (activePath !== null) setActive(activePath);
     },
     setActive,
+    reveal,
   };
 }

@@ -31,8 +31,34 @@ export function resolvePath(docPath: string, ref: string): string | null {
   return parts.join('/');
 }
 
-/** Rewrites relative <img src> to resolved URLs. Unresolvable images get a visible marker. */
+/** srcset candidates: "url", or "url descriptor" (1x, 2x, 100w …), comma-separated. */
+const SRCSET_CANDIDATE = /\s*([^\s,]+)(\s+[^,]+)?\s*(?:,|$)/g;
+
+/** Rewrites the relative URLs of a srcset; null when one of them cannot be resolved. */
+export async function resolveSrcset(srcset: string, resolver: AssetResolver | null): Promise<string | null> {
+  const out: string[] = [];
+  for (const [, ref, descriptor = ''] of srcset.matchAll(SRCSET_CANDIDATE)) {
+    const url = isRelativeRef(ref) ? resolver && (await resolver(ref)) : ref;
+    if (!url) return null;
+    out.push(url + descriptor.trimEnd());
+  }
+  return out.join(', ');
+}
+
+/**
+ * Rewrites relative <img src> to resolved URLs. Unresolvable images get a visible marker.
+ * A <picture>'s <source srcset> is rewritten too; one that cannot be resolved is dropped, so the
+ * <img> (the light version, in GitHub's usage) shows in its place.
+ */
 export async function resolveImages(root: ParentNode, resolver: AssetResolver | null): Promise<void> {
+  const sources = Array.from(root.querySelectorAll<HTMLSourceElement>('picture > source[srcset]'));
+  await Promise.all(
+    sources.map(async (source) => {
+      const srcset = await resolveSrcset(source.getAttribute('srcset') ?? '', resolver);
+      if (srcset) source.setAttribute('srcset', srcset);
+      else source.remove();
+    }),
+  );
   const imgs = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
   await Promise.all(
     imgs.map(async (img) => {

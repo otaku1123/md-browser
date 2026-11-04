@@ -55,6 +55,21 @@ describe('rankPaths', () => {
     ]);
   });
 
+  it('lists the favorites before the recent documents, and prefers them on a tie', () => {
+    const recent = ['docs/android.md', 'README.md'];
+    const favorites = ['old/architecture-v1.md', 'gone.md', 'README.md'];
+    expect(rankPaths('', PATHS, recent, 'old/architecture-v1.md', favorites).map((m) => m.path)).toEqual([
+      'README.md',
+      'docs/android.md',
+      'docs/architecture.md',
+      'docs/system-architecture.md',
+      'old/architecture-v1.md',
+    ]);
+    expect(rankPaths('architecture', ['b/architecture.md', 'a/architecture.md'], ['b/architecture.md'], null, ['a/architecture.md'])[0].path).toBe(
+      'a/architecture.md',
+    );
+  });
+
   it('shows at most 50 results', () => {
     const many = Array.from({ length: 80 }, (_, i) => `doc-${i}.md`);
     expect(rankPaths('doc', many)).toHaveLength(50);

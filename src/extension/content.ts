@@ -1,9 +1,12 @@
 // Renders a file:// Markdown document in place. Loaded by content-loader.js.
 import css from '../style.css?inline';
 import { renderMarkdown } from '../core/render';
+import { loadHighlightLanguages } from '../core/highlight';
+import { printToc } from '../core/print-settings';
 import { renderDiagrams } from '../core/diagrams';
 import { renderMath } from '../core/math';
 import { onThemeChange } from '../core/theme';
+import { applyThemeImages, watchThemeImages } from '../core/theme-images';
 import { addCopyButtons } from '../core/code-copy';
 import { addHeadingLinks } from '../core/heading-link';
 import { enableImageZoom, prepareImageZoom } from '../core/image-zoom';
@@ -14,7 +17,10 @@ import { createToc } from '../core/toc';
 import { mountTocPanel } from '../core/toc-panel';
 import { mountSourceView } from '../core/source-view';
 import { mountFontSettings } from '../core/font-settings';
+import { applyFolderCss, folderCssStore, folderCssUrls } from '../core/folder-css';
+import { mountEditorLink } from '../core/editor-link';
 import { createFilesToggle, mountFilesSidebar } from '../core/files-sidebar';
+import { createBreadcrumb, type Breadcrumb } from '../core/breadcrumb';
 import { createFileTree } from '../file-tree';
 import { mountQuickSwitcher } from '../core/quick-switcher';
 import { mountSearchPanel, type SearchPanel } from '../core/search-panel';
@@ -23,14 +29,21 @@ import { parseQuery, type SearchHit } from '../core/search';
 import { clearSearchHighlight, highlightSearch, jumpHash, jumpToLine, parseJumpHash } from '../core/search-jump';
 import { fileCorpusSource } from './file-corpus';
 import { noteRecentDoc, recentDocs } from '../core/recent-docs';
+import { loadFavorites, saveFavorites, toggleFavorite } from '../core/favorites-store';
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
 import { sha256Hex } from './read-self';
+import { type AssetKind, assetKind, isAssetPath } from './read-asset';
+import { onPlantUmlSettingsChange, setPlantUmlFileReader } from '../core/plantuml';
+import { folderOf, relativePath } from './dir-listing';
 import {
   MSG_LIST_SIBLINGS,
+  MSG_READ_ASSET,
   MSG_READ_SELF,
   MSG_SET_HIDDEN_DIR,
   type ListSiblingsResponse,
+  type ReadAssetMessage,
+  type ReadAssetResponse,
   type ReadSelfMessage,
   type ReadSelfResponse,
   type SetHiddenDirMessage,
@@ -63,12 +76,71 @@ function fileName(): string {
   return decodeURIComponent(location.pathname.split('/').pop() ?? 'document.md');
 }
 
+/** The tab's root folder URL: this file's folder until the listing says otherwise (showSiblings). */
+let rootHref = folderOf(location.href);
+
+/**
+ * Reads a file this document refers to, through the service worker: only below the tab's root,
+ * by the root-relative path the background checks, and only of the kind asked for. An image
+ * comes back as a data: URL, a text file as text, each with the hash of the file; passing that
+ * hash as `known` next time lets an unchanged file skip the transfer. Rejects with the reason.
+ */
+async function requestBelowRoot(url: string, kind: AssetKind, known?: string): Promise<{ data: string; hash: string } | 'unchanged'> {
+  if (!url.startsWith(rootHref)) throw new Error(t('localReadOutside'));
+  const path = relativePath(rootHref, url);
+  if (!isAssetPath(path) || assetKind(path) !== kind) throw new Error(t('localReadKind'));
+  const msg: ReadAssetMessage = { type: MSG_READ_ASSET, path, known };
+  const res: ReadAssetResponse | undefined = await chrome.runtime.sendMessage(msg);
+  if (!res) throw new Error('no response from background');
+  if (!res.ok) throw new Error(res.error);
+  return res.unchanged ? 'unchanged' : { data: res.data, hash: res.hash };
+}
+
+/** The file's content, read once (no hash to compare against). */
+async function readBelowRoot(url: string, kind: AssetKind): Promise<string> {
+  const res = await requestBelowRoot(url, kind);
+  if (res === 'unchanged') throw new Error('unchanged'); // cannot happen without `known`
+  return res.data;
+}
+
+/** The HTML export embeds the images it can get this way; for the others the URL stays. */
+const readLocalAsset = (url: string) => readBelowRoot(url, 'image').catch(() => null);
+
+/**
+ * The folder's .md-browser.css (folder-css.ts), when the reader switched it on: looked for in
+ * this file's folder, then at the tab's root; the nearest one is applied, none removes the
+ * stylesheet. The last one read is kept so that looking again (the setting toggled, the folder
+ * listed again) sends its hash and skips the transfer while the file is unchanged.
+ */
+let folderCss: { url: string; hash: string; css: string } | null = null;
+let folderCssSeq = 0;
+async function updateFolderCss(enabled: boolean): Promise<void> {
+  const mine = ++folderCssSeq;
+  let css: string | null = null;
+  if (enabled) {
+    for (const url of folderCssUrls(folderOf(location.href), rootHref)) {
+      try {
+        const res = await requestBelowRoot(url, 'text', folderCss?.url === url ? folderCss.hash : undefined);
+        if (res !== 'unchanged') folderCss = { url, hash: res.hash, css: res.data };
+        css = folderCss?.css ?? null;
+        break;
+      } catch {
+        // Not there (or unreadable): try the next place.
+      }
+    }
+  }
+  if (mine !== folderCssSeq) return; // a later evaluation decides
+  applyFolderCss(css);
+}
+
 /** Full-text search over the tab's root, once its files are listed (showSiblings). */
 let searchCorpus: SearchCorpus | null = null;
 let searchTruncated = false;
 /** This document's root-relative path, as the listing names it. */
 let currentPath: string | null = null;
 let openHit: (path: string, hit: SearchHit, query: string) => void = () => {};
+/** A breadcrumb folder was clicked: show it in the sidebar (set once the files are listed). */
+let revealDir: (dir: string) => void = () => {};
 /** A search hit this page was opened for (search-jump.ts); read before the hash is removed. */
 const pendingJump = parseJumpHash(location.hash);
 /** The search terms highlighted on the page, and the line jumped to (kept across re-renders). */
@@ -87,11 +159,22 @@ async function listSiblings(): Promise<ListSiblingsResponse | undefined> {
  * Lists the Markdown files in this file's folder and below, then offers them in the sidebar.
  * Lists again when the user comes back to the tab, so added or removed files show up (#109).
  */
-async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement, search: SearchPanel, contentEl: HTMLElement): Promise<void> {
+async function showSiblings(
+  filesEl: HTMLElement,
+  filesToggle: HTMLButtonElement,
+  search: SearchPanel,
+  contentEl: HTMLElement,
+  breadcrumb: Breadcrumb,
+): Promise<void> {
   const res = await listSiblings();
   if (!res?.ok) return;
   // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
   const rootUrl = new URL('../'.repeat(res.current.split('/').length - 1) || './', location.href);
+  rootHref = rootUrl.href;
+  const rootName = decodeURIComponent(rootUrl.pathname.split('/').filter(Boolean).pop() ?? '') || null;
+  // Starred documents, remembered for the tab's root like the hidden folders (but read here: the
+  // listing doesn't depend on them, so the background is not involved).
+  let favorites = await loadFavorites(rootUrl.href);
 
   let busy = Promise.resolve();
   /** The background saves the change for the tab's root, then the folder is listed again. */
@@ -112,6 +195,11 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
   const tree = createFileTree(filesEl, openPath, {
     onHide: (dir) => setHidden(dir, true),
     onUnhide: (dir) => setHidden(dir, false),
+    onToggleFavorite: (path) => {
+      favorites = toggleFavorite(favorites, path);
+      show(listed);
+      void saveFavorites(rootUrl.href, favorites);
+    },
   });
   const sidebar = mountFilesSidebar(filesToggle, filesEl);
 
@@ -126,7 +214,7 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
     shown = key(list);
     searchTruncated = list.truncated;
     currentPath = list.current;
-    tree.render(list.paths, list.hidden);
+    tree.render(list.paths, list.hidden, favorites);
     if (list.truncated) {
       const note = document.createElement('p');
       note.className = 'files-note';
@@ -135,8 +223,14 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
     }
     tree.setActive(list.current); // not listed (e.g. below the depth limit or hidden): nothing is marked
     // Hidden folders keep the sidebar, so they can always be shown again.
-    sidebar.setAvailable(list.paths.length >= 2 || list.hidden.length > 0);
+    const available = list.paths.length >= 2 || list.hidden.length > 0;
+    sidebar.setAvailable(available);
+    breadcrumb.set(rootName, list.current, available);
   }
+  revealDir = (dir) => {
+    sidebar.open();
+    tree.reveal(dir);
+  };
 
   show(res);
   noteRecentDoc(rootUrl.href, res.current);
@@ -158,6 +252,7 @@ async function showSiblings(filesEl: HTMLElement, filesToggle: HTMLButtonElement
     paths: () => listed.paths,
     current: () => listed.current,
     recent: () => recentDocs(rootUrl.href),
+    favorites: () => favorites,
     onOpen: openPath,
   });
   onReturn(() => {
@@ -174,6 +269,7 @@ function buildShell(): {
   filesEl: HTMLElement;
   filesToggle: HTMLButtonElement;
   status: HTMLElement;
+  breadcrumb: Breadcrumb;
 } {
   const style = document.createElement('style');
   style.textContent = css;
@@ -192,14 +288,19 @@ function buildShell(): {
   filesEl.setAttribute('aria-label', t('files'));
   filesEl.hidden = true;
   const filesToggle = createFilesToggle(filesEl);
-  const brand = document.createElement('strong');
-  brand.className = 'brand';
-  brand.textContent = fileName();
+  // The file name alone until the folder is listed; then its path from the root (showSiblings).
+  const breadcrumb = createBreadcrumb((dir) => revealDir(dir));
+  breadcrumb.set(null, fileName(), false);
   const status = document.createElement('span');
   status.className = 'status';
   status.setAttribute('role', 'status');
-  header.append(filesToggle, brand, status);
-  mountFontSettings(header);
+  header.append(filesToggle, breadcrumb.el, status);
+  mountFontSettings(header, {
+    // `content` is created just below; the export runs on a click, long after.
+    exportTarget: () => ({ root: content, name: fileName(), title: document.title, readLocal: readLocalAsset }),
+    editor: true,
+    folderCss: true,
+  });
 
   const layout = document.createElement('div');
   layout.className = 'layout';
@@ -214,7 +315,7 @@ function buildShell(): {
   mountTocPanel(header, tocEl);
   mountSkipLink(header);
   document.body.removeAttribute('style');
-  return { content, tocEl, filesEl, filesToggle, status };
+  return { content, tocEl, filesEl, filesToggle, status, breadcrumb };
 }
 
 async function main(): Promise<void> {
@@ -223,23 +324,30 @@ async function main(): Promise<void> {
   // The jump is ours, not an anchor: taken out of the URL so a reload or a copied link stays plain.
   if (pendingJump) history.replaceState(null, '', location.pathname + location.search);
 
-  const { content, tocEl, filesEl, filesToggle, status } = buildShell();
+  const { content, tocEl, filesEl, filesToggle, status, breadcrumb } = buildShell();
   initFavicon();
+  // PlantUML's "!include file.puml": the files below the tab's root, through the service worker.
+  setPlantUmlFileReader((url) => readBelowRoot(url, 'text'));
   const toc = createToc(tocEl);
+  toc.setDoc(location.pathname); // one document per file:// page
   const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, content, tocEl, () => toc.update());
+  mountEditorLink(document.querySelector<HTMLElement>('.toolbar')!, content);
   let current = initial;
   let seq = 0;
 
   async function render(src: string, keepScroll: boolean): Promise<void> {
     const mine = ++seq;
+    await loadHighlightLanguages(src);
     const { html, toc: items } = renderMarkdown(src);
     // <template> content is inert: nothing loads until it is attached.
     const staging = document.createElement('template');
     staging.innerHTML = html;
+    staging.content.prepend(printToc(items));
     prepareMediaSizes(staging.content);
     // Per-item sizes are remembered by the file's URL (without the heading in the hash).
     const media = loadMediaDoc(location.href.split('#')[0]);
     // Relative images/links resolve natively against the file:// URL.
+    applyThemeImages(staging.content);
     await renderDiagrams(staging.content);
     await renderMath(staging.content);
     addCopyButtons(staging.content);
@@ -266,6 +374,9 @@ async function main(): Promise<void> {
   await render(current, false);
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
   onThemeChange(() => void renderDiagrams(content).then(() => applyMediaSizes(content)));
+  // A changed library host: the PlantUML diagrams that failed for want of a library can draw now.
+  onPlantUmlSettingsChange(() => void renderDiagrams(content, { retryFailed: true }).then(() => applyMediaSizes(content)));
+  watchThemeImages(content);
   enableImageZoom(content);
   const search = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
     corpus: () => searchCorpus,
@@ -278,7 +389,12 @@ async function main(): Promise<void> {
       clearSearchHighlight();
     },
   });
-  void showSiblings(filesEl, filesToggle, search, content);
+  // The folder's CSS waits for the listing: it names the root, the second place to look.
+  const folderCssSettings = folderCssStore();
+  folderCssSettings.onChange((s) => void updateFolderCss(s.enabled));
+  void showSiblings(filesEl, filesToggle, search, content, breadcrumb)
+    .then(() => folderCssSettings.load())
+    .then((s) => updateFolderCss(s.enabled));
 
   // Probe once; if the browser refuses, show why instead of silently not reloading.
   // Its hash is what the polls compare against (kept here, as the service worker keeps no state).

@@ -44,6 +44,20 @@ describe('createFileTree', () => {
     expect(el.querySelectorAll('.active')).toHaveLength(1);
   });
 
+  it('reveals a folder: expands it with its parents, and focuses its row', () => {
+    const { el, tree } = setup();
+    document.body.append(el);
+    tree.reveal('docs/api');
+    const dirs = [...el.querySelectorAll<HTMLDetailsElement>('details')];
+    expect(dirs.map((d) => d.open)).toEqual([true, true]);
+    expect(document.activeElement).toBe(el.querySelector('details[data-dir="docs/api"] > summary'));
+    tree.reveal('');
+    expect(document.activeElement).toBe(el.querySelector('.file-tree summary'));
+    tree.reveal('nope'); // not listed: nothing changes
+    expect(dirs.map((d) => d.open)).toEqual([true, true]);
+    el.remove();
+  });
+
   it('offers no hide buttons without onHide, or when render() gets null', () => {
     const { el } = setup();
     expect(el.querySelector('.file-tree-hide')).toBeNull();
@@ -81,6 +95,59 @@ describe('createFileTree', () => {
     expect(onUnhide).toHaveBeenCalledWith('src/gen');
     tree.render(['README.md', 'b.md'], []);
     expect(el.querySelector('.files-hidden')).toBeNull();
+  });
+
+  it('offers no star buttons without onToggleFavorite, or when render() gets null favorites', () => {
+    const { el } = setup();
+    expect(el.querySelector('.file-tree-star')).toBeNull();
+    const other = document.createElement('nav');
+    const tree = createFileTree(other, vi.fn(), { onToggleFavorite: vi.fn() });
+    tree.render(['docs/a.md', 'b.md'], [], null);
+    expect(other.querySelector('.file-tree-star, .files-favorites')).toBeNull();
+  });
+
+  it('puts a star beside each file and reports the state asked for', () => {
+    const el = document.createElement('nav');
+    const onOpen = vi.fn();
+    const onToggleFavorite = vi.fn();
+    const tree = createFileTree(el, onOpen, { onToggleFavorite });
+    tree.render(['README.md', 'docs/guide.md'], [], ['docs/guide.md']);
+    const stars = [...el.querySelectorAll<HTMLButtonElement>('.file-tree .file-tree-star')];
+    expect(stars.map((s) => [s.getAttribute('aria-label'), s.getAttribute('aria-pressed')])).toEqual([
+      ['Remove "docs/guide.md" from favorites', 'true'],
+      ['Add "README.md" to favorites', 'false'],
+    ]);
+    stars[1].click();
+    expect(onToggleFavorite).toHaveBeenCalledWith('README.md', true);
+    stars[0].click();
+    expect(onToggleFavorite).toHaveBeenLastCalledWith('docs/guide.md', false);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('lists the favorites first, in their order, leaving out those no longer in the folder', () => {
+    const el = document.createElement('nav');
+    const onOpen = vi.fn();
+    const tree = createFileTree(el, onOpen, { onToggleFavorite: vi.fn() });
+    tree.render(['README.md', 'docs/guide.md', 'docs/api/ref.md'], [], ['docs/api/ref.md', 'gone.md', 'README.md']);
+    const section = el.querySelector<HTMLDetailsElement>('details.files-favorites')!;
+    expect(el.firstElementChild).toBe(section);
+    expect(section.open).toBe(true);
+    expect(section.querySelector('summary')!.textContent).toBe('Favorites (2)');
+    expect([...section.querySelectorAll('.file-tree-file')].map((b) => [b.textContent, b.getAttribute('data-path')])).toEqual([
+      ['ref.md', 'docs/api/ref.md'],
+      ['README.md', 'README.md'],
+    ]);
+    section.querySelector<HTMLButtonElement>('button[data-path="docs/api/ref.md"]')!.click();
+    expect(onOpen).toHaveBeenCalledWith('docs/api/ref.md');
+    // Both rows of the open document are marked; the tree's is expanded to.
+    tree.setActive('docs/api/ref.md');
+    expect([...el.querySelectorAll('[aria-current="page"]')].map((b) => b.closest('.files-favorites, .file-tree')!.className)).toEqual([
+      'files-favorites',
+      'file-tree',
+    ]);
+    expect(el.querySelector<HTMLDetailsElement>('details[data-dir="docs/api"]')!.open).toBe(true);
+    tree.render(['README.md', 'docs/guide.md'], [], []);
+    expect(el.querySelector('.files-favorites')).toBeNull();
   });
 
   it('keeps the active document marked across a re-render, and the resize handle', () => {

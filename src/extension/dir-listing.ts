@@ -73,14 +73,21 @@ export function relativePath(rootUrl: string, fileUrl: string): string {
   return fileUrl.split(/[?#]/)[0].slice(rootUrl.length).split('/').map(decodeURIComponent).join('/');
 }
 
+/** Deeper than any listing (4 levels) or document tree gets; a bound on what a page can ask for. */
+const MAX_SEGMENTS = 32;
+
 /**
- * A root-relative document path a page may ask to read: '/'-separated segments as the listing
- * gives them, none empty, "." or ".." (so it stays below the root) and none with a backslash
- * (a separator to Windows), naming a Markdown file.
+ * A root-relative path a page may name: '/'-separated segments as the listing gives them, none
+ * empty, "." or ".." (so it stays below the root) and none with a backslash (a separator to Windows).
  */
-export function isDocPath(path: string): boolean {
+export function isBelowRoot(path: string): boolean {
   const segs = path.split('/');
-  return segs.every((s) => s !== '' && s !== '.' && s !== '..' && !s.includes('\\')) && isMarkdownFile(segs[segs.length - 1]);
+  return segs.length <= MAX_SEGMENTS && segs.every((s) => s !== '' && s !== '.' && s !== '..' && !s.includes('\\'));
+}
+
+/** A root-relative path a page may ask to read as a document: below the root, naming a Markdown file. */
+export function isDocPath(path: string): boolean {
+  return isBelowRoot(path) && isMarkdownFile(path.slice(path.lastIndexOf('/') + 1));
 }
 
 /** The file:// URL of a root-relative path, each segment percent-encoded (as the sidebar links). */

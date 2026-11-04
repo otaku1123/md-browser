@@ -134,6 +134,44 @@ test('shares the theme between file tabs', async ({ context, workdir }) => {
   await expect(b.locator('html')).not.toHaveAttribute('data-theme', /.*/);
 });
 
+// #156: GitHub's theme-specific images on a file:// page, where the refs stay relative.
+test('shows the images for the current theme on a file:// page', async ({ context, workdir }) => {
+  await fs.writeFile(
+    path.join(workdir, 'docs/themed.md'),
+    [
+      '# Themed',
+      '![light](../img/diagram.svg#gh-light-mode-only)',
+      '![dark](../img/loading.gif#gh-dark-mode-only)',
+      '<picture>',
+      '<source media="(prefers-color-scheme: dark)" srcset="../img/loading.gif">',
+      '<img src="../img/diagram.svg" alt="pic">',
+      '</picture>',
+    ].join('\n\n'),
+  );
+  const page = await context.newPage();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(fileUrl(workdir, 'docs/themed.md'));
+  const light = page.locator('img[alt="light"]');
+  const dark = page.locator('img[alt="dark"]');
+  const pictureSrc = () => page.locator('picture img').evaluate((img) => img.currentSrc.split('/').pop());
+  await expect(light).toBeVisible();
+  await expect(dark).toBeHidden();
+  await expect.poll(pictureSrc).toBe('diagram.svg');
+
+  await page.locator('.font-settings-toggle').click();
+  await page.getByRole('radio', { name: 'ダーク' }).check();
+  await expect(dark).toBeVisible();
+  await expect(light).toBeHidden();
+  await expect.poll(pictureSrc).toBe('loading.gif');
+
+  // Still right after a re-render (the file changed).
+  await fs.appendFile(path.join(workdir, 'docs/themed.md'), '\n\nMore text.\n');
+  await expect(page.locator('.markdown-body p', { hasText: 'More text.' })).toBeVisible();
+  await expect(dark).toBeVisible();
+  await expect(light).toBeHidden();
+  await expect.poll(pictureSrc).toBe('loading.gif');
+});
+
 test('remembers the size of one image and one diagram per file across reloads', async ({ context, extensionId, workdir }) => {
   expect(extensionId).toBeTruthy(); // the service worker is up
   const page = await context.newPage();
@@ -237,7 +275,7 @@ test('saves a Mermaid diagram as SVG and PNG from the file page (no downloads pe
 });
 
 /** Writes { relativePath: text } into a fresh temp folder. */
-async function makeFolder(files: Record<string, string>): Promise<string> {
+async function makeFolder(files: Record<string, string | Uint8Array>): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mdb-tree-'));
   for (const [rel, text] of Object.entries(files)) {
     await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
@@ -268,7 +306,7 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
     const subDir = sidebar.locator('details[data-dir="sub dir"]');
     await expect(subDir).toHaveJSProperty('open', false);
     await subDir.locator('summary').click();
-    await sidebar.getByRole('button', { name: 'deep #1.md' }).click();
+    await sidebar.getByRole('button', { name: 'deep #1.md', exact: true }).click();
     await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
     await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
     // The tab keeps its root: same list, with the subfolder file active.
@@ -276,7 +314,7 @@ test('lists Markdown files of the folder and its subfolders in a sidebar', async
     await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'sub dir/deep #1.md');
     await expect(subDir).toHaveJSProperty('open', true);
     // Links resolve against the root, not the subfolder.
-    await sidebar.getByRole('button', { name: 'notes.md' }).click();
+    await sidebar.getByRole('button', { name: 'notes.md', exact: true }).click();
     await expect(page).toHaveURL(/\/notes\.md$/);
     await expect(sidebar.locator('[aria-current="page"]')).toHaveAttribute('data-path', 'notes.md');
 
@@ -325,6 +363,40 @@ test('switches files with the quick switcher and keeps the recent ones across fi
     await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'README.md');
     await page.keyboard.press('Escape');
     await expect(switcher).toHaveCount(0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// #159: favorites on file:// pages are remembered for the tab's root folder, across file pages.
+test('stars documents as favorites per root folder, across file pages', async ({ context }) => {
+  const dir = await makeFolder({ 'README.md': '# Top', 'notes.md': '# Notes', 'sub dir/deep #1.md': '# Deep' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const sidebar = page.locator('.files');
+    await expect(sidebar.locator('.file-tree-file')).toHaveText(['deep #1.md', 'notes.md', 'README.md']);
+    await sidebar.locator('details[data-dir="sub dir"] > summary').click();
+    await sidebar.locator('.file-tree').getByRole('button', { name: '「sub dir/deep #1.md」をお気に入りに追加' }).click();
+    const section = sidebar.locator('.files-favorites');
+    await expect(section.locator('summary')).toHaveText('お気に入り（1）');
+    await expect(section.locator('.file-tree-file')).toHaveText(['deep #1.md']);
+    await expectAccessible(page);
+
+    // Another file of the same root lists the same favorites; the switcher offers them first.
+    await page.goto(fileUrl(dir, 'notes.md'));
+    await expect(section.locator('.file-tree-file')).toHaveText(['deep #1.md']);
+    await page.keyboard.press('ControlOrMeta+P');
+    const switcher = page.getByRole('dialog', { name: 'ファイルへ移動' });
+    await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'sub dir/deep #1.md');
+    await page.keyboard.press('Escape');
+
+    // Opened from its section: the favorite's row and the tree's row are both marked.
+    await section.locator('button[data-path="sub dir/deep #1.md"]').click(); // by name: the star's label has the path too
+    await expect(page).toHaveURL(/\/sub%20dir\/deep%20%231\.md$/);
+    await expect(sidebar.locator('[aria-current="page"]')).toHaveCount(2);
+    await section.getByRole('button', { name: '「sub dir/deep #1.md」をお気に入りから外す' }).click();
+    await expect(section).toHaveCount(0);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
@@ -555,6 +627,261 @@ test('searches a folder of 500 files below the root, reporting how long the firs
     expect(ms).toBeLessThan(15_000);
     await expect(panel.locator('.search-panel-note')).toHaveText('一覧が上限に達しているため、一部のファイルは検索対象外です。');
     await expectAccessible(page);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('exports a file:// document as one HTML file, embedding the images below the root', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  await expect(page.locator('img[alt="diagram"]')).toHaveJSProperty('naturalWidth', 240);
+  await expect(page.locator('.diagram-plantuml svg')).toHaveCount(2);
+  await page.locator('.font-settings-toggle').click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'HTML として保存' }).click()]);
+  expect(download.suggestedFilename()).toBe('README.html');
+  const html = await fs.readFile((await download.path())!, 'utf8');
+  expect(html).toMatch(/^<!doctype html>\n<html lang="ja" data-theme="light">/);
+  expect(html).toContain('<main class="content markdown-body"><details class="front-matter">');
+  expect(html).toMatch(/<h1 id="[^"]+">MD Browser サンプル<\/h1>/);
+  // The page can't read file:// images itself: the service worker reads the ones below the tab's root.
+  const svg = await fs.readFile(path.join(workdir, 'img/diagram.svg'));
+  expect(html).toContain(`<img src="data:image/svg+xml;base64,${svg.toString('base64')}"`);
+  expect(html).not.toContain(fileUrl(workdir, 'img/diagram.svg'));
+  expect(html).not.toContain('class="copy-button"');
+  expect(html).not.toContain('data-line=');
+  expect(html.match(/<svg/g)?.length ?? 0).toBeGreaterThanOrEqual(4); // 2 Mermaid + 2 PlantUML
+});
+
+test('leaves images outside the tab root, and non-image files, as file:// URLs in the export', async ({ context }) => {
+  // A 1×1 PNG; the service worker types it by its extension, not by sniffing.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  const dir = await makeFolder({
+    'out.png': png,
+    'sub/doc.md': '# Doc\n\n![in](in.png) ![out](../out.png) ![text](notes.txt)\n',
+    'sub/in.png': png,
+    'sub/notes.txt': 'not an image',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'sub/doc.md')); // the tab's root is "sub/": "../out.png" is outside it
+    await expect(page.locator('img[alt="in"]')).toHaveJSProperty('naturalWidth', 1);
+    await page.locator('.font-settings-toggle').click();
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'HTML として保存' }).click()]);
+    const html = await fs.readFile((await download.path())!, 'utf8');
+    expect(html).toContain(`<img src="data:image/png;base64,${png.toString('base64')}" alt="in"`);
+    expect(html).toContain(`<img src="${fileUrl(dir, 'out.png')}" alt="out"`);
+    expect(html).toContain(`<img src="${fileUrl(dir, 'sub/notes.txt')}" alt="text"`);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('includes local PlantUML files from below the tab root, and refuses the ones outside it', async ({ context }) => {
+  const dir = await makeFolder({
+    'outside.puml': 'Eve -> Mallory : secret\n',
+    'sub/doc.md': [
+      '# Doc',
+      '',
+      '```plantuml',
+      '!include ./inc/parts.iuml',
+      'Alice -> Bob : hello',
+      '```',
+      '',
+      '```plantuml',
+      '!include ../outside.puml',
+      '```',
+      '',
+      '```plantuml',
+      '!include notes.txt',
+      '```',
+      '',
+    ].join('\n'),
+    // Nested include: resolved next to the including file, not the document.
+    'sub/inc/parts.iuml': '!include common.iuml\n',
+    'sub/inc/common.iuml': 'skinparam sequenceMessageAlign center\nparticipant "Bob the builder" as Bob\n',
+    'sub/notes.txt': 'not a diagram file',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'sub/doc.md')); // the tab's root is "sub/"
+    const diagrams = page.locator('.diagram-plantuml');
+    await expect(diagrams).toHaveCount(3);
+    await expect(diagrams.nth(0).locator('svg')).toContainText('Bob the builder');
+    await expect(diagrams.nth(0).locator('svg')).toContainText('hello');
+    await expect(diagrams.nth(1)).toHaveClass(/diagram-error/);
+    await expect(diagrams.nth(1).locator('.diagram-error-message')).toContainText('1 行目: cannot include ../outside.puml');
+    await expect(diagrams.nth(2)).toHaveClass(/diagram-error/);
+    await expect(diagrams.nth(2).locator('.diagram-error-message')).toContainText('1 行目: cannot include notes.txt');
+    await expectAccessible(page);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('keeps TOC folds across auto-reload and when coming back to the document', async ({ context, workdir }) => {
+  const page = await context.newPage();
+  await page.goto(fileUrl(workdir, 'README.md'));
+  const toc = page.locator('.toc');
+  await expect(toc.locator('a')).toHaveCount(11);
+  const images = toc.locator('a[data-target]', { hasText: /^画像$/ }).locator('..');
+  await expect(images.locator(':scope > .toc-fold')).toHaveAccessibleName('節を折りたたむ');
+  await images.locator(':scope > .toc-fold').click();
+  await expect(images.locator(':scope > .toc-fold')).toHaveAccessibleName('節を展開');
+  await expect(toc.locator('a:visible')).toHaveCount(9);
+
+  await fs.appendFile(path.join(workdir, 'README.md'), '\n## 追加した見出し\n');
+  await expect(toc.locator('a', { hasText: '追加した見出し' })).toBeVisible();
+  await expect(toc.locator('a:visible')).toHaveCount(10);
+  await expect(toc.locator('a', { hasText: '深い見出し' }).first()).toBeHidden();
+
+  await page.getByRole('link', { name: '別のMDファイル' }).click();
+  await expect(page).toHaveURL(/docs\/other\.md$/);
+  await page.goBack();
+  await expect(page.locator('.markdown-body h1')).toHaveText('MD Browser サンプル');
+  await expect(toc.locator('a:visible')).toHaveCount(10);
+  await expectAccessible(page);
+});
+
+test('opens the file in the chosen editor at the line shown, from a toolbar link', async ({ context }) => {
+  const paragraphs = Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1}.\n`);
+  const text = ['# Top', '', ...paragraphs, '## Deep', '', ...paragraphs, ''].join('\n'); // long after it too, so it can reach the top
+  const deepLine = text.split('\n').indexOf('## Deep') + 1;
+  const dir = await makeFolder({ 'my notes.md': text });
+  try {
+    const page = await context.newPage();
+    const url = fileUrl(dir, 'my notes.md');
+    await page.goto(url);
+    const link = page.locator('.editor-link');
+    await expect(link).toBeHidden(); // off by default: it launches another application
+    // Leave and re-enter: that is when the href is renewed. By coordinates: hover() would scroll the
+    // page to the sticky toolbar's static position.
+    const hoverLink = async () => {
+      const box = (await link.boundingBox())!;
+      await page.mouse.move(0, 0);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    };
+
+    await page.locator('.font-settings-toggle').click();
+    const panel = page.locator('.font-settings-panel');
+    await panel.getByRole('radio', { name: 'VS Code' }).check();
+    await expect(link).toBeVisible();
+    await hoverLink();
+    await expect(link).toHaveAttribute('href', `vscode://file${new URL(url).pathname}:1`);
+
+    // The line is the block at the top of the view, below the toolbar.
+    await page.keyboard.press('Escape'); // close the panel (it is taller than the window and would be scrolled)
+    await page.evaluate(() => document.querySelector('h2')!.scrollIntoView({ behavior: 'instant' }));
+    await hoverLink();
+    await expect(link).toHaveAttribute('href', `vscode://file${new URL(url).pathname}:${deepLine}`);
+
+    // A custom template gets the decoded path; an unusable one hides the link and says why.
+    await page.locator('.font-settings-toggle').click();
+    await panel.getByRole('radio', { name: 'カスタム' }).check();
+    const template = panel.getByRole('textbox', { name: 'URL' });
+    await template.fill('zed://file{path}:{line}');
+    await template.press('Enter');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => document.querySelector('h2')!.scrollIntoView({ behavior: 'instant' })); // the panel actions scrolled the page
+    await hoverLink();
+    await expect(link).toHaveAttribute('href', `zed://file${path.join(dir, 'my notes.md')}:${deepLine}`);
+    await page.locator('.font-settings-toggle').click();
+    await template.fill('javascript:alert(1)');
+    await template.press('Enter');
+    await expect(panel.getByRole('alert')).toHaveText(/スキームが必要/);
+    await expect(link).toBeHidden();
+
+    // Another tab shares the choice.
+    const other = await context.newPage();
+    await other.goto(url);
+    await other.locator('.font-settings-toggle').click();
+    await expect(other.locator('.font-settings-panel').getByRole('radio', { name: 'カスタム' })).toBeChecked();
+    await expect(other.locator('.editor-link')).toBeHidden();
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("applies a folder's .md-browser.css only when switched on, the nearest folder first", async ({ context }) => {
+  const dir = await makeFolder({
+    'README.md': '# Top',
+    '.md-browser.css': 'h1 { color: rgb(255, 0, 0); }',
+    'sub/doc.md': '# Deep',
+    'sub/.md-browser.css': 'h1 { color: rgb(0, 0, 255); }',
+    'other/doc.md': '# Other',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const h1 = page.locator('.markdown-body h1');
+    await expect(h1).toHaveText('Top');
+    await expect(page.locator('#md-files')).toBeVisible(); // listed: the folder CSS has been looked for
+    // Off by default: the folder's author wrote that file, not the reader.
+    await expect(page.locator('#md-folder-css')).toHaveCount(0);
+    await expect(h1).not.toHaveCSS('color', 'rgb(255, 0, 0)');
+
+    await page.locator('.font-settings-toggle').click();
+    const panel = page.locator('.font-settings-panel');
+    const toggle = panel.getByRole('checkbox', { name: 'フォルダの .md-browser.css を適用する' });
+    await expect(toggle).not.toBeChecked();
+    await toggle.check();
+    await expect(h1).toHaveCSS('color', 'rgb(255, 0, 0)');
+    // Before the reader's own CSS, so that one wins where they clash.
+    expect(
+      await page.evaluate(() => {
+        const folder = document.getElementById('md-folder-css')!;
+        const custom = document.getElementById('md-custom-css')!;
+        return folder.compareDocumentPosition(custom) & Node.DOCUMENT_POSITION_FOLLOWING;
+      }),
+    ).toBeTruthy();
+    await page.keyboard.press('Escape');
+
+    // Opened from the sidebar, the root stays: the subfolder's CSS beats the root's.
+    await page.locator('#md-files details[data-dir="sub"] > summary').click();
+    await page.locator('#md-files [data-path="sub/doc.md"]').click();
+    await expect(h1).toHaveText('Deep');
+    await expect(h1).toHaveCSS('color', 'rgb(0, 0, 255)');
+    // A folder without one falls back to the root's.
+    await page.locator('#md-files details[data-dir="other"] > summary').click();
+    await page.locator('#md-files [data-path="other/doc.md"]').click();
+    await expect(h1).toHaveText('Other');
+    await expect(h1).toHaveCSS('color', 'rgb(255, 0, 0)');
+
+    // Switched off again: the stylesheet goes, here and in another tab.
+    const other = await context.newPage();
+    await other.goto(fileUrl(dir, 'README.md'));
+    await expect(other.locator('.markdown-body h1')).toHaveCSS('color', 'rgb(255, 0, 0)');
+    await page.locator('.font-settings-toggle').click();
+    await toggle.uncheck();
+    await expect(page.locator('#md-folder-css')).toHaveCount(0);
+    await expect(h1).not.toHaveCSS('color', 'rgb(255, 0, 0)');
+    await expect(other.locator('#md-folder-css')).toHaveCount(0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('shows the path from the listed root as a breadcrumb on a file:// page', async ({ context }) => {
+  const dir = await makeFolder({ 'README.md': '# Top', 'sub dir/deep #1.md': '# Deep' });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'README.md'));
+    const crumbs = page.locator('.breadcrumb li');
+    await expect(crumbs).toHaveText([path.basename(dir), 'README.md']); // the tab's root is this file's folder
+    // Opened from the sidebar, the root stays: the path is shown from it.
+    await page.locator('#md-files details[data-dir="sub dir"] > summary').click();
+    await page.locator('#md-files [data-path="sub dir/deep #1.md"]').click();
+    await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
+    await expect(crumbs).toHaveText([path.basename(dir), 'sub dir', 'deep #1.md']);
+    await page.locator('#md-files details[data-dir="sub dir"] > summary').click(); // collapse it
+    await page.locator('.toolbar button[aria-controls="md-files"]').click(); // the skip link targets it too
+    await expect(page.locator('#md-files')).toBeHidden();
+    const crumb = page.locator('.breadcrumb button[data-dir="sub dir"]');
+    await expect(crumb).toHaveAttribute('title', 'ファイル一覧で「sub dir」を表示');
+    await crumb.click();
+    await expect(page.locator('#md-files')).toBeVisible();
+    await expect(page.locator('#md-files details[data-dir="sub dir"]')).toHaveJSProperty('open', true);
+    await expect(page.locator('#md-files details[data-dir="sub dir"] > summary')).toBeFocused();
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

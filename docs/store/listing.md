@@ -25,7 +25,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.10.0.zip` |
+| アップロードするファイル | `release/md-browser-1.13.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -49,30 +49,36 @@ MD Browser renders local Markdown files right in Chrome — with a table of cont
 Open any .md file from your computer (drag it into Chrome or open file:///…/README.md) and it is displayed as a clean, readable document instead of plain text.
 
 FEATURES
-• GitHub-style rendering: tables, task lists, syntax-highlighted code blocks
-• Sidebar table of contents that follows your scroll position; hide it or drag to resize
+• GitHub-style rendering: tables, task lists, autolinks, strikethrough, and syntax-highlighted code blocks (less common languages such as Dockerfile or PowerShell load on demand)
+• Sidebar table of contents that follows your scroll position; fold its sections, hide it or drag to resize
 • Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable, and folders you don't need can be hidden
 • Full-text search across the folder (Ctrl/⌘+Shift+F): matches grouped by file with the line, the heading and an excerpt; click one to jump there with the matches highlighted. Ignores case and character width; "This file" searches only the open document. No index, nothing stored
 • Quick file switcher (Ctrl/⌘+P): open any file of the folder by typing part of its name
-• Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, save as SVG or PNG
-• PlantUML diagrams, drawn inside the browser (nothing is sent to a PlantUML server)
+• The document's path from the folder root as a breadcrumb in the toolbar; click a folder to show it in the file sidebar
+• Favorites: star the documents you open often to keep them at the top of the file sidebar and first in the quick switcher
+• Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, zoom and pan with the wheel or a drag, save as SVG or PNG
+• PlantUML diagrams, drawn inside the browser (the diagram source is never sent to a PlantUML server; the standard library can be fetched from a host you name in the settings, off by default); !include of local .puml / .iuml files from the document's folder and below
 • Math with KaTeX ($…$, $$…$$ and ```math blocks, as on GitHub), footnotes, and emoji shortcodes (:smile:)
 • Live reload: save the file in your editor and the page re-renders within about a second, keeping your scroll position
 • GitHub alerts (> [!NOTE], > [!WARNING] …) and collapsible front matter (YAML / TOML)
 • One-click copy button on code blocks, and a link button on headings
 • Switch to the raw Markdown source (button or Ctrl/⌘+Shift+M), with line numbers
 • Display settings: theme (system / light / dark), text size, content width, image and diagram size (50–200%), and fonts for body text and code
+• Custom CSS: style the document your own way from the settings panel; optionally, a folder's own .md-browser.css applies to the documents in it (off by default)
 • Resize a single image or diagram with the −/+ buttons that appear on hover; remembered for each document
-• Click an image to see it at full size
+• Click an image to see it at full size, zoom and pan
 • Works from the keyboard and with screen readers: a skip link to the document, and Enter opens diagrams and images
 • Relative images and links to other .md files just work
-• Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars
+• GitHub's theme-specific images (#gh-dark-mode-only / #gh-light-mode-only, and <picture> with prefers-color-scheme) follow the chosen theme; printing uses the light version
+• Print-friendly output: prints (or saves as PDF) on white, without the toolbar and sidebars; options for paper size, margins, link URLs, a table of contents and page breaks before headings
+• Export: save the document as one self-contained HTML file (styles, diagrams and images embedded, in the current theme and size), or save it as PDF; options for a fixed light theme, a table of contents and embedded math fonts
+• Open in editor: a toolbar button opens the file in VS Code, Cursor or a custom URL scheme at the line you are reading (off by default)
 • Tab icon shows which tabs are rendered by MD Browser, and marks files that changed (or can't be read) while the tab was in the background
 • Built-in viewer (click the toolbar icon) to open files or whole folders, with a collapsible file tree and the folder name in the toolbar; a list of recently opened files and folders, and an adjustable scan limit for very large folders
 • Report a bug or suggest an idea from the settings panel: it opens a GitHub issue form, and nothing is sent unless you submit it
 
 PRIVACY
-Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only reads the Markdown file you are viewing and, for the file sidebar, the names of the files in that file's folder and below; their contents are read only when you search the folder, in the page and in memory only — nothing is indexed or saved.
+Everything runs locally in your browser. No data is collected or sent anywhere, and there are no analytics. The extension only reads the Markdown file you are viewing and, for the file sidebar, the names of the files in that file's folder and below; their contents are read only when you search the folder, in the page and in memory only — nothing is indexed or saved. Saving a document as HTML reads the images it shows from that folder and its subfolders once, to embed them in the saved file; a PlantUML diagram's !include reads .puml files from there the same way, and, only if you switch it on in the display settings, a .md-browser.css in the document's folder or the root folder styles the document.
 
 SETUP (important)
 Chrome requires one extra step for extensions that read local files:
@@ -91,28 +97,36 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 .md ファイルを Chrome にドラッグする（または file:///…/README.md を開く）だけで、プレーンテキストではなく整形されたドキュメントとして表示されます。
 
 主な機能
-• GitHub 風の表示：表・タスクリスト・シンタックスハイライト付きコードブロック
-• スクロール位置に連動する目次サイドバー（表示の切り替え、ドラッグで幅を変更）
+• GitHub 風の表示：表・タスクリスト・自動リンク・打消し線・シンタックスハイライト付きコードブロック（Dockerfile や PowerShell などあまり使わない言語は必要なときに読み込み）
+• スクロール位置に連動する目次サイドバー（節の折りたたみ、表示の切り替え、ドラッグで幅を変更）
 • 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能。不要なフォルダは非表示にできる）
-• Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、SVG・PNG で保存
-• PlantUML 図（ブラウザ内で描画し、PlantUML のサーバーには送信しません）
+• フォルダ内の全文検索（Ctrl/⌘+Shift+F）：一致をファイルごとに行番号・見出し・抜粋付きで表示し、クリックでその場所へ移動（一致をハイライト）。大文字小文字と全角半角の違いは無視。「このファイル」で開いている文書だけを検索。索引は作らず、何も保存しない
+• クイック切り替え（Ctrl/⌘+P）：名前の一部を入力してフォルダ内のファイルを開く
+• ツールバーに、フォルダの起点からの文書のパスをパンくずで表示。フォルダをクリックするとファイル一覧でそのフォルダを表示
+• お気に入り：よく開く文書に ☆ を付けると、ファイル一覧の上部とクイック切り替えの先頭に表示
+• Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、ホイールやドラッグで拡大・移動、SVG・PNG で保存
+• PlantUML 図（ブラウザ内で描画し、図のソースを PlantUML のサーバーに送信することはありません。標準ライブラリは設定で指定した取得先から取得できます。既定はオフ）。文書のフォルダ以下にあるローカルの .puml / .iuml ファイルの !include に対応
 • KaTeX による数式（GitHub と同じ $…$、$$…$$、```math）、脚注、絵文字（:smile:）
 • 自動更新：エディタで保存すると約 1 秒で再描画（スクロール位置を保持）
 • GitHub のアラート記法（> [!NOTE]、> [!WARNING] など）と、Front matter（YAML / TOML）の折りたたみ表示
 • コードブロックのワンクリックコピーと、見出しへのリンクのコピー
 • 元の Markdown テキスト表示への切り替え（ボタンまたは Ctrl/⌘+Shift+M、行番号付き）
 • 表示設定：テーマ（OS 設定 / ライト / ダーク）、文字サイズ、本文幅、画像・図のサイズ（50〜200%）、本文とコードのフォント
+• カスタム CSS：設定パネルから本文の見た目を自分で上書き。フォルダに置いた .md-browser.css をその中の文書に適用することもできる（既定はオフ）
 • 画像や図にマウスを乗せると出る −/+ ボタンで、1 つずつ大きさを変更（文書ごとに記憶）
-• 画像をクリックすると原寸で表示
+• 画像をクリックすると原寸で表示し、拡大・移動できる
 • キーボードやスクリーンリーダーでも操作しやすい（本文へのスキップリンク、Enter で図や画像を拡大）
 • 相対パスの画像や、他の .md ファイルへのリンクもそのまま動作
-• 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）
+• GitHub のテーマ別画像（#gh-dark-mode-only / #gh-light-mode-only、prefers-color-scheme を使う <picture>）は選んだテーマに従って表示。印刷時はライト版
+• 印刷・PDF 保存に対応（ツールバーやサイドバーを除き、白背景で出力）。用紙サイズ・余白・リンク URL・目次・見出し前の改ページを設定できる
+• エクスポート: 文書をスタイル・図・画像を埋め込んだ 1 ファイルの HTML として保存（いまのテーマ・文字サイズのまま）、または PDF として保存。ライトテーマ固定・目次・数式フォントの埋め込みを選べる
+• エディタで開く: ツールバーのボタンで、読んでいる行から VS Code / Cursor / 任意の URL スキームのエディタでファイルを開く（既定はオフ）
 • タブのアイコンで MD Browser が表示しているタブがひと目でわかり、裏のタブでファイルが更新された（または読めなくなった）ことも表示
 • ツールバーのアイコンから開けるビューアー（ファイル・フォルダ単位で表示、折りたためるファイルツリーとフォルダ名の表示付き。最近開いたファイル・フォルダの一覧。大きなフォルダの走査上限は変更可能）
 • 設定パネルから不具合の報告や要望の投稿ができる（GitHub の Issue フォームが開きます。送信するまで何も送られません）
 
 プライバシー
-すべての処理はブラウザ内で完結します。データの収集・送信やアクセス解析は一切行いません。拡張機能が読み込むのは、表示中の Markdown ファイルと、ファイル一覧のサイドバー用に、そのファイルがあるフォルダとその下にあるファイルの名前だけです。
+すべての処理はブラウザ内で完結します。データの収集・送信やアクセス解析は一切行いません。拡張機能が読み込むのは、表示中の Markdown ファイルと、ファイル一覧のサイドバー用に、そのファイルがあるフォルダとその下にあるファイルの名前だけです（フォルダ内の全文検索ではそれらの Markdown ファイルの本文を、HTML として保存するときは文書が表示している同じフォルダ以下の画像を、PlantUML 図の !include では同じフォルダ以下の .puml ファイルを、表示設定で有効にした場合に限り文書のフォルダまたは起点フォルダの .md-browser.css を、ページに表示するためだけに読みます）。
 
 初期設定（重要）
 ローカルファイルを読む拡張機能には、Chrome の仕様で次の設定が必要です。
@@ -148,13 +162,13 @@ manifest の `permissions` は `storage` だけで、`host_permissions` はな�
 審査で理由を聞かれたときは、次の文面で返信する。
 
 ```text
-The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders, common dependency and build output folders such as node_modules and dist, and folders the user chose to hide are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. The contents of those listed files are read only when the user searches the folder's text (⌘/Ctrl+Shift+F), each by a checked root-relative path below the same root, and only to show the matches on the page. No other files are read, no other pages are accessed, and no network requests are made by the extension.
+The content script runs only on local Markdown files (file:///*.md, *.markdown, *.mdown, *.mkd) to replace Chrome's plain-text view with a rendered document. The service worker re-reads only the Markdown file shown in the requesting tab (verified against the sender's URL) to detect changes for live reload. To show a sidebar of the other Markdown files next to it, the service worker also reads Chrome's file:// directory listings of that file's folder and its subfolders (never parent folders; hidden folders, common dependency and build output folders such as node_modules and dist, and folders the user chose to hide are skipped; at most 4 levels, 200 folders and 500 files) and returns only the Markdown file names. The contents of those listed files are read only when the user searches the folder's text (⌘/Ctrl+Shift+F), each by a checked root-relative path below the same root, and only to show the matches on the page. When the user saves the document as a standalone HTML file, the images the document shows from below the same root (image file extensions only, checked the same way) are read once to embed them in that file, and a PlantUML diagram's "!include" of a local file reads that .puml / .iuml file from below the same root, checked the same way. When the user switches on the folder stylesheet in the display settings (off by default), a file named .md-browser.css in the document's folder or at that root is read the same way to style the document. No other files are read, no other pages are accessed, and no network requests are made by the extension.
 ```
 
 ### storage 権限が必要な理由（Permission justification: storage）
 
 ```text
-Stores the user's display preferences (theme, text size, content width, image and diagram size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths, and the shortcut for the quick file switcher) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. chrome.storage.local keeps, on this computer only and never synced, the subfolders the user chose to hide from the file sidebar (per starting folder) and the sizes the user set for individual images and diagrams (per document URL). Only these preferences, folder locations and document URLs are stored; no file contents or personal data are saved.
+Stores the user's display preferences (theme, text size, content width, image and diagram size, font names for the document body and code blocks, whether the table of contents and the file sidebar are shown, and their widths, and the shortcut for the quick file switcher) and the viewer's folder scan limit, so they apply to every rendered Markdown file and the viewer. chrome.storage.session keeps, per tab and only until the browser closes, the folder the file sidebar was opened from, so the list stays the same while moving into subfolders. chrome.storage.local keeps, on this computer only and never synced, the subfolders the user chose to hide from the file sidebar and the documents the user starred as favorites (both per starting folder), and the sizes the user set for individual images and diagrams (per document URL). Only these preferences, folder locations and document URLs are stored; no file contents or personal data are saved.
 ```
 
 ### リモートコード（Remote code）

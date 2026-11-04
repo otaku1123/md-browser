@@ -2,12 +2,16 @@ import './style.css';
 import { applyI18n, lang, t } from './i18n';
 import { mountFontSettings } from './core/font-settings';
 import { renderMarkdown } from './core/render';
+import { loadHighlightLanguages } from './core/highlight';
+import { printToc } from './core/print-settings';
 import { createToc } from './core/toc';
 import { mountTocPanel } from './core/toc-panel';
 import { mountSourceView } from './core/source-view';
 import { createFileTree } from './file-tree';
 import { mountFilesSidebar } from './core/files-sidebar';
+import { createBreadcrumb } from './core/breadcrumb';
 import { renderDiagrams } from './core/diagrams';
+import { onPlantUmlSettingsChange } from './core/plantuml';
 import { renderMath } from './core/math';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
@@ -26,7 +30,9 @@ import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
 import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
 import { loadHiddenDirs, saveHiddenDirs } from './core/hidden-dirs-store';
+import { loadFavorites, saveFavorites, toggleFavorite } from './core/favorites-store';
 import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
+import { applyThemeImages, watchThemeImages } from './core/theme-images';
 import {
   corpusSource,
   fromDirectoryHandle,
@@ -61,11 +67,17 @@ function openPath(path: string): void {
 /** Key for the documents opened recently in this tab: the folder name, like the hidden folders. */
 const recentRoot = (w: Workspace) => w.folder ?? '';
 
-const fileTree = createFileTree(
-  filesEl,
-  openPath,
-  { onHide: (dir) => queueSetHidden(dir, true), onUnhide: (dir) => queueSetHidden(dir, false) },
-);
+const fileTree = createFileTree(filesEl, openPath, {
+  onHide: (dir) => queueSetHidden(dir, true),
+  onUnhide: (dir) => queueSetHidden(dir, false),
+  onToggleFavorite: (path) => void setFavorite(path),
+});
+// "folder/ › docs › guide.md" after the brand; a folder crumb shows that folder in the sidebar.
+const breadcrumb = createBreadcrumb((dir) => {
+  filesSidebar.open();
+  fileTree.reveal(dir);
+});
+document.querySelector('.brand')!.after(breadcrumb.el);
 
 let ws: Workspace | null = null;
 /** The open folder's texts for full-text search; new per opened folder, follows `ws` on a rescan. */
@@ -101,16 +113,19 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
     return;
   }
 
+  await loadHighlightLanguages(content.text);
   const { html, toc: tocItems } = renderMarkdown(content.text);
   // Build off-DOM first so images and diagrams swap in without flicker.
   // <template> content is inert, so images don't start loading unresolved relative URLs.
   const staging = document.createElement('template');
   staging.innerHTML = html;
+  staging.content.prepend(printToc(tocItems));
   // Before the refs are resolved: per-item sizes are keyed by the image refs as written.
   prepareMediaSizes(staging.content);
   // Folder name + path, like the hidden folders: browsers give no absolute path.
   const media = loadMediaDoc(workspace.folder !== undefined ? `${workspace.folder}/${doc.path}` : doc.path);
   const assets = workspace.assetResolver(doc);
+  applyThemeImages(staging.content); // reads the "#gh-…-mode-only" markers before the refs change
   await resolveImages(staging.content, assets.resolve);
   await renderDiagrams(staging.content);
   await renderMath(staging.content);
@@ -130,6 +145,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
   releaseAssets = assets.release;
   if (currentDoc !== doc) {
     toc.reset();
+    toc.setDoc(`${recentRoot(workspace)}/${doc.path}`);
     sourceView.reset();
     jumpLine = null;
     if (recentHandle) void saveRecent({ handle: recentHandle, docPath: doc.path });
@@ -148,6 +164,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
     jumpToLine(contentEl, opts.line, searchTerms);
   } else highlightSearch(contentEl, searchTerms, jumpLine ?? undefined);
   fileTree.setActive(doc.path);
+  showBreadcrumb(workspace, doc);
   toc.update();
   // File name first: narrow tabs only show the start of the title.
   const slash = doc.path.lastIndexOf('/');
@@ -181,10 +198,9 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   // The list lives in the welcome screen, which is gone once a document has been shown.
   const recentEl = document.getElementById('recent');
   if (recentEl) recentEl.hidden = true;
-  const nameEl = $('workspace-name');
-  nameEl.textContent = next.label;
-  nameEl.title = next.label;
-  nameEl.hidden = false;
+  // Starred documents are remembered by the folder's name, like the hidden folders.
+  favorites = next.folder !== undefined ? await loadFavorites(next.folder) : [];
+  if (ws !== next) return; // another folder was opened meanwhile
   renderFileTree();
   await showDoc(startDoc(next, opts.docPath), { keepScroll: false });
   startPolling();
@@ -202,15 +218,37 @@ function startDoc(next: Workspace, docPath?: string): DocEntry {
 
 const filesSidebar = mountFilesSidebar(filesToggle, filesEl);
 
+/** The open folder's starred documents (favorites-store.ts); none for a single file or dropped files. */
+let favorites: string[] = [];
+
 function renderFileTree(): void {
-  // null: this workspace can't hide folders (single file, plain dropped files), so no hide buttons.
-  fileTree.render(ws?.docs.map((d) => d.path) ?? [], ws?.rescan ? (ws.hiddenDirs ?? []) : null);
+  // null: this workspace can't hide folders (single file, plain dropped files), so no hide buttons;
+  // the same workspaces have no folder name to remember favorites under.
+  fileTree.render(ws?.docs.map((d) => d.path) ?? [], ws?.rescan ? (ws.hiddenDirs ?? []) : null, ws?.folder !== undefined ? favorites : null);
   updateSidebar();
 }
 
+/** Stars a document, or removes its star: the sidebar shows it at once, the choice is saved. */
+async function setFavorite(path: string): Promise<void> {
+  const current = ws;
+  if (!current || current.folder === undefined) return;
+  favorites = toggleFavorite(favorites, path);
+  renderFileTree();
+  await saveFavorites(current.folder, favorites);
+}
+
 /** The sidebar is offered when there is more than one document, or hidden folders to show again. */
+function sidebarAvailable(w: Workspace | null): boolean {
+  return (w?.docs.length ?? 0) > 1 || (w?.hiddenDirs?.length ?? 0) > 0;
+}
+
 function updateSidebar(): void {
-  filesSidebar.setAvailable((ws?.docs.length ?? 0) > 1 || (ws?.hiddenDirs?.length ?? 0) > 0);
+  filesSidebar.setAvailable(sidebarAvailable(ws));
+}
+
+/** The label first (a single file is its own label: shown once), then the document's path. */
+function showBreadcrumb(w: Workspace, doc: DocEntry): void {
+  breadcrumb.set(w.label === doc.path ? null : w.label, doc.path, sidebarAvailable(w));
 }
 
 let hiddenQueue = Promise.resolve();
@@ -264,7 +302,10 @@ async function refreshFileList(): Promise<void> {
     ws = next;
     if (currentDoc) currentDoc = next.docs.find((d) => d.path === currentDoc!.path) ?? currentDoc;
     renderFileTree();
-    if (currentDoc) fileTree.setActive(currentDoc.path);
+    if (currentDoc) {
+      fileTree.setActive(currentDoc.path);
+      showBreadcrumb(next, currentDoc);
+    }
   } catch {
     // The folder is unreadable for now (permission, sync tool): keep the list; polling reports errors.
   }
@@ -554,7 +595,14 @@ if (import.meta.env.VITE_DEPLOY_ENV === 'dev') {
   }
   document.querySelector('.brand')?.after(badge);
 }
-mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, { onScanLimitChange: () => void rescanFolder() });
+mountFontSettings(document.querySelector<HTMLElement>('.toolbar')!, {
+  onScanLimitChange: () => void rescanFolder(),
+  exportTarget: () => {
+    if (!currentDoc) return null;
+    const name = currentDoc.path.slice(currentDoc.path.lastIndexOf('/') + 1);
+    return { root: contentEl, name, title: contentEl.querySelector('h1')?.textContent?.trim() || name };
+  },
+});
 mountTocPanel(document.querySelector<HTMLElement>('.toolbar')!, tocEl);
 /** A search hit: the document is opened (or kept) at that line with the query's matches highlighted. */
 function openHit(path: string, hit: SearchHit, query: string): void {
@@ -583,11 +631,15 @@ mountQuickSwitcher({
   paths: () => ws?.docs.map((d) => d.path) ?? [],
   current: () => currentDoc?.path ?? null,
   recent: () => (ws ? recentDocs(recentRoot(ws)) : []),
+  favorites: () => (ws?.folder !== undefined ? favorites : []),
   onOpen: openPath,
 });
 const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl).then(() => applyMediaSizes(contentEl)));
+// A changed library host: the PlantUML diagrams that failed for want of a library can draw now.
+onPlantUmlSettingsChange(() => void renderDiagrams(contentEl, { retryFailed: true }).then(() => applyMediaSizes(contentEl)));
+watchThemeImages(contentEl);
 enableImageZoom(contentEl);
 if (location.protocol === 'chrome-extension:') {
   void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
