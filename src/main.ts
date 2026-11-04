@@ -11,6 +11,7 @@ import { createFileTree } from './file-tree';
 import { mountFilesSidebar } from './core/files-sidebar';
 import { createBreadcrumb } from './core/breadcrumb';
 import { renderDiagrams } from './core/diagrams';
+import { onPlantUmlSettingsChange } from './core/plantuml';
 import { renderMath } from './core/math';
 import { onThemeChange } from './core/theme';
 import { addCopyButtons } from './core/code-copy';
@@ -636,6 +637,8 @@ mountQuickSwitcher({
 const sourceView = mountSourceView(document.querySelector<HTMLElement>('.toolbar')!, contentEl, tocEl, () => toc.update());
 // Diagrams carry their theme's colours, so redraw them when the theme changes.
 onThemeChange(() => void renderDiagrams(contentEl).then(() => applyMediaSizes(contentEl)));
+// A changed library host: the PlantUML diagrams that failed for want of a library can draw now.
+onPlantUmlSettingsChange(() => void renderDiagrams(contentEl, { retryFailed: true }).then(() => applyMediaSizes(contentEl)));
 watchThemeImages(contentEl);
 enableImageZoom(contentEl);
 if (location.protocol === 'chrome-extension:') {

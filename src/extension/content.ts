@@ -34,7 +34,7 @@ import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
 import { sha256Hex } from './read-self';
 import { type AssetKind, assetKind, isAssetPath } from './read-asset';
-import { setPlantUmlFileReader } from '../core/plantuml';
+import { onPlantUmlSettingsChange, setPlantUmlFileReader } from '../core/plantuml';
 import { folderOf, relativePath } from './dir-listing';
 import {
   MSG_LIST_SIBLINGS,
@@ -374,6 +374,8 @@ async function main(): Promise<void> {
   await render(current, false);
   // Diagrams carry their theme's colours, so redraw them when the theme changes.
   onThemeChange(() => void renderDiagrams(content).then(() => applyMediaSizes(content)));
+  // A changed library host: the PlantUML diagrams that failed for want of a library can draw now.
+  onPlantUmlSettingsChange(() => void renderDiagrams(content, { retryFailed: true }).then(() => applyMediaSizes(content)));
   watchThemeImages(content);
   enableImageZoom(content);
   const search = mountSearchPanel(document.querySelector<HTMLElement>('.toolbar')!, {
