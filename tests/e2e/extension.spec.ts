@@ -275,7 +275,7 @@ test('saves a Mermaid diagram as SVG and PNG from the file page (no downloads pe
 });
 
 /** Writes { relativePath: text } into a fresh temp folder. */
-async function makeFolder(files: Record<string, string>): Promise<string> {
+async function makeFolder(files: Record<string, string | Uint8Array>): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mdb-tree-'));
   for (const [rel, text] of Object.entries(files)) {
     await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
@@ -632,7 +632,7 @@ test('searches a folder of 500 files below the root, reporting how long the firs
   }
 });
 
-test('exports a file:// document as one HTML file, keeping local image paths', async ({ context, workdir }) => {
+test('exports a file:// document as one HTML file, embedding the images below the root', async ({ context, workdir }) => {
   const page = await context.newPage();
   await page.goto(fileUrl(workdir, 'README.md'));
   await expect(page.locator('img[alt="diagram"]')).toHaveJSProperty('naturalWidth', 240);
@@ -644,11 +644,37 @@ test('exports a file:// document as one HTML file, keeping local image paths', a
   expect(html).toMatch(/^<!doctype html>\n<html lang="ja" data-theme="light">/);
   expect(html).toContain('<main class="content markdown-body"><details class="front-matter">');
   expect(html).toMatch(/<h1 id="[^"]+">MD Browser サンプル<\/h1>/);
-  // A page can't read file:// images, so they keep their (now absolute) path instead of being embedded.
-  expect(html).toContain(`<img src="${fileUrl(workdir, 'img/diagram.svg')}"`);
+  // The page can't read file:// images itself: the service worker reads the ones below the tab's root.
+  const svg = await fs.readFile(path.join(workdir, 'img/diagram.svg'));
+  expect(html).toContain(`<img src="data:image/svg+xml;base64,${svg.toString('base64')}"`);
+  expect(html).not.toContain(fileUrl(workdir, 'img/diagram.svg'));
   expect(html).not.toContain('class="copy-button"');
   expect(html).not.toContain('data-line=');
   expect(html.match(/<svg/g)?.length ?? 0).toBeGreaterThanOrEqual(4); // 2 Mermaid + 2 PlantUML
+});
+
+test('leaves images outside the tab root, and non-image files, as file:// URLs in the export', async ({ context }) => {
+  // A 1×1 PNG; the service worker types it by its extension, not by sniffing.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  const dir = await makeFolder({
+    'out.png': png,
+    'sub/doc.md': '# Doc\n\n![in](in.png) ![out](../out.png) ![text](notes.txt)\n',
+    'sub/in.png': png,
+    'sub/notes.txt': 'not an image',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(fileUrl(dir, 'sub/doc.md')); // the tab's root is "sub/": "../out.png" is outside it
+    await expect(page.locator('img[alt="in"]')).toHaveJSProperty('naturalWidth', 1);
+    await page.locator('.font-settings-toggle').click();
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'HTML として保存' }).click()]);
+    const html = await fs.readFile((await download.path())!, 'utf8');
+    expect(html).toContain(`<img src="data:image/png;base64,${png.toString('base64')}" alt="in"`);
+    expect(html).toContain(`<img src="${fileUrl(dir, 'out.png')}" alt="out"`);
+    expect(html).toContain(`<img src="${fileUrl(dir, 'sub/notes.txt')}" alt="text"`);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('keeps TOC folds across auto-reload and when coming back to the document', async ({ context, workdir }) => {

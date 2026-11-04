@@ -1,7 +1,8 @@
 // Saves the rendered document as one self-contained .html: the page's stylesheet inline, the
 // current theme / size / width / font settings applied, the viewer's controls (copy, heading links,
 // size and save buttons) left out, and images embedded as data: URLs when they can be fetched
-// (blob: and http(s) URLs). file:// images can't be fetched from a page, so they keep their absolute
+// (blob: and http(s) URLs). file:// images can't be fetched from a page: the extension reads the
+// ones below the tab's root through its service worker (readLocal); the others keep their absolute
 // URL and still show when the file is opened on the same computer. Diagrams are inline SVG already.
 // Downloads use a blob: URL and <a download>, like diagram-export.ts: no extension permission.
 import css from '../style.css?inline';
@@ -20,6 +21,9 @@ const HEADINGS = 'h1, h2, h3, h4, h5, h6';
 
 /** "current": the theme the page shows; "light": the light theme whatever the page shows. */
 export type ExportTheme = 'current' | 'light';
+
+/** Reads a file:// image the page itself cannot fetch; resolves to its data: URL, or null. */
+export type LocalReader = (url: string) => Promise<string | null>;
 
 /** The export choices in the display settings, saved with the other settings. */
 export interface ExportSettings {
@@ -48,6 +52,8 @@ export interface ExportOptions {
   extraCss?: string;
   /** Replaces fetch() in tests. */
   fetchImpl?: typeof fetch;
+  /** Reads a file:// image as a data: URL, or null when it can't be read (the URL then stays). */
+  readLocal?: LocalReader;
   theme?: ExportTheme;
   toc?: boolean;
   /** The heading of the table of contents (translated by the caller). */
@@ -105,8 +111,14 @@ function firstSrc(srcset: string | null, base: string): string | undefined {
 /**
  * Removes the viewer's controls and embeds the images; returns the cleaned copy of `root`.
  * `theme` picks the diagrams and theme images: the page's own, or the light ones.
+ * `readLocal` reads the file:// images (where the page has a way to); without it they stay URLs.
  */
-export async function cleanedCopy(root: HTMLElement, fetchImpl: typeof fetch = fetch, theme: Theme = currentTheme()): Promise<HTMLElement> {
+export async function cleanedCopy(
+  root: HTMLElement,
+  fetchImpl: typeof fetch = fetch,
+  theme: Theme = currentTheme(),
+  readLocal?: LocalReader,
+): Promise<HTMLElement> {
   const copy = root.cloneNode(true) as HTMLElement;
   for (const el of copy.querySelectorAll(CONTROL_SELECTORS.join(','))) el.remove();
   for (const el of copy.querySelectorAll('[data-line]')) el.removeAttribute('data-line');
@@ -138,8 +150,8 @@ export async function cleanedCopy(root: HTMLElement, fetchImpl: typeof fetch = f
     Array.from(copy.querySelectorAll<HTMLImageElement>('img[src]')).map(async (img) => {
       const url = img.src; // absolute: a relative path would point nowhere from the saved file
       if (url.startsWith('data:')) return;
-      // A page can't fetch file: URLs; the absolute path still works when the file stays in place.
-      const data = url.startsWith('file:') ? null : await toDataUrl(url, fetchImpl);
+      // A page can't fetch file: URLs; without a reader the absolute path still works when the file stays in place.
+      const data = url.startsWith('file:') ? await (readLocal?.(url).catch(() => null) ?? null) : await toDataUrl(url, fetchImpl);
       img.setAttribute('src', data ?? url);
     }),
   );
@@ -225,7 +237,7 @@ export async function embedFontFaces(text: string, used: ReadonlySet<string>, fe
 /** The complete .html text for `root` (the rendered Markdown), as the page currently shows it. */
 export async function buildStandaloneHtml(root: HTMLElement, opts: ExportOptions): Promise<string> {
   const theme: Theme = opts.theme === 'light' ? 'light' : currentTheme();
-  const body = await cleanedCopy(root, opts.fetchImpl, theme);
+  const body = await cleanedCopy(root, opts.fetchImpl, theme, opts.readLocal);
   if (opts.toc) {
     const toc = exportToc(body, opts.tocTitle ?? 'Table of contents');
     if (toc) body.prepend(toc);

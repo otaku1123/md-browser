@@ -32,11 +32,16 @@ import { loadFavorites, saveFavorites, toggleFavorite } from '../core/favorites-
 import { faviconError, faviconUpdated, initFavicon } from '../core/favicon';
 import { lang, t } from '../i18n';
 import { sha256Hex } from './read-self';
+import { isAssetPath } from './read-asset';
+import { folderOf, relativePath } from './dir-listing';
 import {
   MSG_LIST_SIBLINGS,
+  MSG_READ_ASSET,
   MSG_READ_SELF,
   MSG_SET_HIDDEN_DIR,
   type ListSiblingsResponse,
+  type ReadAssetMessage,
+  type ReadAssetResponse,
   type ReadSelfMessage,
   type ReadSelfResponse,
   type SetHiddenDirMessage,
@@ -67,6 +72,23 @@ async function fetchSource(known?: string): Promise<{ text: string; hash: string
 
 function fileName(): string {
   return decodeURIComponent(location.pathname.split('/').pop() ?? 'document.md');
+}
+
+/** The tab's root folder URL: this file's folder until the listing says otherwise (showSiblings). */
+let rootHref = folderOf(location.href);
+
+/**
+ * Reads an image this document refers to, through the service worker, as a data: URL (the HTML
+ * export embeds it): only below the tab's root, by the root-relative path the background checks.
+ * Null for anything else (another folder, another kind of file, unreadable): the URL stays.
+ */
+async function readLocalAsset(url: string): Promise<string | null> {
+  if (!url.startsWith(rootHref)) return null;
+  const path = relativePath(rootHref, url);
+  if (!isAssetPath(path)) return null;
+  const msg: ReadAssetMessage = { type: MSG_READ_ASSET, path };
+  const res: ReadAssetResponse | undefined = await chrome.runtime.sendMessage(msg).catch(() => undefined);
+  return res?.ok && !res.unchanged && res.kind === 'image' ? res.data : null;
 }
 
 /** Full-text search over the tab's root, once its files are listed (showSiblings). */
@@ -106,6 +128,7 @@ async function showSiblings(
   if (!res?.ok) return;
   // The root may be a parent of this file's folder (opened from the sidebar): one "../" per level.
   const rootUrl = new URL('../'.repeat(res.current.split('/').length - 1) || './', location.href);
+  rootHref = rootUrl.href;
   const rootName = decodeURIComponent(rootUrl.pathname.split('/').filter(Boolean).pop() ?? '') || null;
   // Starred documents, remembered for the tab's root like the hidden folders (but read here: the
   // listing doesn't depend on them, so the background is not involved).
@@ -232,7 +255,7 @@ function buildShell(): {
   header.append(filesToggle, breadcrumb.el, status);
   mountFontSettings(header, {
     // `content` is created just below; the export runs on a click, long after.
-    exportTarget: () => ({ root: content, name: fileName(), title: document.title }),
+    exportTarget: () => ({ root: content, name: fileName(), title: document.title, readLocal: readLocalAsset }),
     editor: true,
   });
 

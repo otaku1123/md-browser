@@ -9,7 +9,18 @@ import { setGlobalMediaScale } from './media-sizes';
 import { feedbackLinks } from './feedback';
 import { QUICK_OPEN_KEYS, quickOpenKeyLabel, quickOpenKeyStore, type QuickOpenKey } from './quick-open-key';
 import { CUSTOM_EXAMPLE, EDITOR_DEFAULT, editorStore, isValidTemplate, normalizeEditorSettings, type Editor, type EditorSettings } from './editor-link';
-import { buildStandaloneHtml, DEFAULT_EXPORT, downloadHtml, exportFilename, type ExportSettings, type ExportTheme, exportSettingsStore, mathCss, normalizeExportSettings } from './export-html';
+import {
+  buildStandaloneHtml,
+  DEFAULT_EXPORT,
+  downloadHtml,
+  exportFilename,
+  type ExportSettings,
+  type ExportTheme,
+  exportSettingsStore,
+  type LocalReader,
+  mathCss,
+  normalizeExportSettings,
+} from './export-html';
 import { applyCustomCss, CUSTOM_CSS_MAX, customCssStore, type CustomCss, EMPTY_CUSTOM_CSS, normalizeCustomCss, scopedCustomCss } from './custom-css';
 import { applyPrintSettings, DEFAULT_PRINT, type Margin, normalizePrintSettings, type Orientation, type Paper, type PrintSettings, printSettingsStore } from './print-settings';
 import { normalizePlantUmlSettings, type PlantUmlSettings, plantUmlSettingsStore, setPlantUmlSettings } from './plantuml';
@@ -197,6 +208,8 @@ export interface ExportTarget {
   root: HTMLElement;
   name: string;
   title: string;
+  /** How the page reads its file:// images, when it has a way to (the extension's content script). */
+  readLocal?: LocalReader;
 }
 
 /**
@@ -464,6 +477,7 @@ function exportRow(id: string, target: () => ExportTarget | null, customCss: () 
     const text = await buildStandaloneHtml(doc.root, {
       title: doc.title,
       extraCss: extraCss || undefined,
+      readLocal: doc.readLocal,
       theme: current.theme,
       toc: current.toc,
       tocTitle: t('toc'),
