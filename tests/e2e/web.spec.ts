@@ -108,6 +108,21 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('.breadcrumb li')).toHaveText(['sample', 'README.md']);
 });
 
+test('folds every folder from the buttons above the list, and one with its subfolders on Alt+click', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  const docs = files.locator('details[data-dir="docs"]');
+  await expect(docs).toHaveJSProperty('open', false);
+  await files.getByRole('button', { name: 'Expand all folders' }).click();
+  await expect(docs).toHaveJSProperty('open', true);
+  await files.getByRole('button', { name: 'Collapse all folders' }).click();
+  await expect(docs).toHaveJSProperty('open', false);
+  await docs.locator(':scope > summary').click({ modifiers: ['Alt'] });
+  await expect(docs).toHaveJSProperty('open', true);
+  await docs.locator(':scope > summary').click({ modifiers: ['Alt'] });
+  await expect(docs).toHaveJSProperty('open', false);
+});
+
 test('shows the document path as a breadcrumb whose folders reveal themselves in the sidebar', async ({ page }) => {
   await openSampleFolder(page);
   await openFromSidebar(page, 'docs/other.md');

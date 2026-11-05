@@ -296,6 +296,21 @@ body {
 .file-tree-file:hover { color: var(--fg); background: var(--bg-soft); }
 .file-tree-file.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .files-note { margin: 12px 8px 0; font-size: 12px; color: var(--fg-muted); }
+/* "Expand all" / "Collapse all" (#190): a short row of icon buttons right above the tree. */
+.files-tools { display: flex; justify-content: flex-end; gap: 2px; margin: -8px 0 2px; }
+.files-fold-all {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.files-fold-all:hover { color: var(--fg); background: var(--bg-soft); }
 /* Hide button: a sibling of the folder's <details> (a button inside <summary> would be nested
    interactive content), laid over the right end of the summary row. Shown on hover / focus,
    always on touch screens where there is no hover. */

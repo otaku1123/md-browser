@@ -175,6 +175,49 @@ describe('createFileTree', () => {
     expect(dir('docs/api').open).toBe(true);
     expect(dir('src').open).toBe(false);
   });
+
+  it('offers "expand all" / "collapse all" right above the tree, only when it has folders', () => {
+    const { el } = setup();
+    const buttons = [...el.querySelectorAll<HTMLButtonElement>('.files-tools .files-fold-all')];
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Expand all folders', 'Collapse all folders']);
+    expect(el.querySelector('.files-tools')!.nextElementSibling).toBe(el.querySelector('.file-tree'));
+    const dirs = [...el.querySelectorAll<HTMLDetailsElement>('.file-tree details')];
+    buttons[0].click();
+    expect(dirs.map((d) => d.open)).toEqual([true, true]);
+    buttons[1].click();
+    expect(dirs.map((d) => d.open)).toEqual([false, false]);
+    const flat = document.createElement('nav');
+    createFileTree(flat, vi.fn()).render(['a.md', 'b.md']);
+    expect(flat.querySelector('.files-tools')).toBeNull();
+  });
+
+  it('leaves the favorites and hidden-folders sections as they are when folding all', () => {
+    const el = document.createElement('nav');
+    const tree = createFileTree(el, vi.fn(), { onHide: vi.fn(), onUnhide: vi.fn(), onToggleFavorite: vi.fn() });
+    tree.render(['a.md', 'docs/b.md'], ['old'], ['a.md']);
+    const favorites = el.querySelector<HTMLDetailsElement>('.files-favorites')!;
+    const hiddenSection = el.querySelector<HTMLDetailsElement>('.files-hidden')!;
+    el.querySelector<HTMLButtonElement>('[data-fold-all="false"]')!.click();
+    expect(favorites.open).toBe(true);
+    el.querySelector<HTMLButtonElement>('[data-fold-all="true"]')!.click();
+    expect(hiddenSection.open).toBe(false);
+    expect(el.querySelector<HTMLDetailsElement>('details[data-dir="docs"]')!.open).toBe(true);
+  });
+
+  it('Alt+click on a folder row opens or closes it together with its subfolders', () => {
+    const { el } = setup();
+    const docs = el.querySelector<HTMLDetailsElement>('details[data-dir="docs"]')!;
+    const api = el.querySelector<HTMLDetailsElement>('details[data-dir="docs/api"]')!;
+    const altClick = () => {
+      const e = new MouseEvent('click', { bubbles: true, cancelable: true, altKey: true });
+      docs.querySelector('summary')!.dispatchEvent(e);
+      return e;
+    };
+    expect(altClick().defaultPrevented).toBe(true);
+    expect([docs.open, api.open]).toEqual([true, true]);
+    altClick();
+    expect([docs.open, api.open]).toEqual([false, false]);
+  });
 });
 
 describe('keyboard navigation', () => {
@@ -245,6 +288,18 @@ describe('keyboard navigation', () => {
     expect(folder('docs').open).toBe(false);
     expect(press(docs, 'ArrowLeft').defaultPrevented).toBe(true); // top level: nowhere to go, still no scroll
     expect(focused()).toBe(docs);
+    el.remove();
+  });
+
+  it('opens or closes a folder with its subfolders on Alt+Right / Alt+Left', () => {
+    const { el, folder, file, press } = mount();
+    const docs = folder('docs').querySelector('summary')!;
+    expect(press(docs, 'ArrowRight', { altKey: true }).defaultPrevented).toBe(true);
+    expect([folder('docs').open, folder('api').open]).toEqual([true, true]);
+    expect(press(docs, 'ArrowLeft', { altKey: true }).defaultPrevented).toBe(true);
+    expect([folder('docs').open, folder('api').open]).toEqual([false, false]);
+    expect(press(docs, 'ArrowDown', { altKey: true }).defaultPrevented).toBe(false);
+    expect(press(file('a.md'), 'ArrowRight', { altKey: true }).defaultPrevented).toBe(false);
     el.remove();
   });
 
