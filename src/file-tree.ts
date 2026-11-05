@@ -54,6 +54,12 @@ const STAR_ICON =
 const STAR_FILL_ICON =
   '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>';
 
+// Chevrons pointing away from / towards a line: expand all / collapse all.
+const UNFOLD_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M4.5 5.5 8 2l3.5 3.5M4.5 10.5 8 14l3.5-3.5M3 8h10"/></svg>';
+const FOLD_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M4.5 2 8 5.5 11.5 2M4.5 14 8 10.5 11.5 14M3 8h10"/></svg>';
+
 // Eye with a slash (Octicons eye-closed).
 const HIDE_ICON =
   '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M.143 2.31a.75.75 0 0 1 1.047-.167l14.5 10.5a.75.75 0 1 1-.88 1.214l-2.248-1.628C11.346 13.19 9.792 14 8 14c-1.981 0-3.67-.992-4.933-2.078C1.797 10.832.88 9.577.43 8.9a1.619 1.619 0 0 1 0-1.797c.353-.533.995-1.42 1.868-2.305L.31 3.357A.75.75 0 0 1 .143 2.31Zm1.536 5.622A.12.12 0 0 0 1.657 8c0 .021.006.045.022.068.412.621 1.242 1.75 2.366 2.717C5.175 11.758 6.527 12.5 8 12.5c1.195 0 2.31-.488 3.29-1.191L9.063 9.695A2 2 0 0 1 6.058 7.52L3.529 5.688a14.207 14.207 0 0 0-1.85 2.244ZM8 3.5c-.516 0-1.017.09-1.499.251a.75.75 0 1 1-.473-1.423A6.207 6.207 0 0 1 8 2c1.981 0 3.67.992 4.933 2.078 1.27 1.091 2.187 2.345 2.637 3.023a1.62 1.62 0 0 1 0 1.798c-.11.166-.248.365-.41.587a.75.75 0 1 1-1.21-.887c.148-.201.272-.382.371-.53a.119.119 0 0 0 0-.137c-.412-.621-1.242-1.75-2.366-2.717C10.825 4.242 9.473 3.5 8 3.5Z"/></svg>';
@@ -132,6 +138,32 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
     return ul;
   }
 
+  /** Opens or closes a folder together with every folder inside it. */
+  function setOpenDeep(details: HTMLDetailsElement, open: boolean): void {
+    details.open = open;
+    for (const d of details.querySelectorAll('details')) d.open = open;
+  }
+
+  /** "Expand all" / "Collapse all" above the tree (#190); only offered when there is a folder to fold. */
+  function renderTools(): HTMLDivElement {
+    const tools = document.createElement('div');
+    tools.className = 'files-tools';
+    for (const [open, icon, label] of [
+      [true, UNFOLD_ICON, t('expandAllFolders')],
+      [false, FOLD_ICON, t('collapseAllFolders')],
+    ] as const) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'files-fold-all';
+      btn.innerHTML = icon;
+      btn.dataset.foldAll = String(open);
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+      tools.append(btn);
+    }
+    return tools;
+  }
+
   /** "Favorites (n)", open: the starred documents in the order they were starred, with their stars. */
   function renderFavorites(favorites: string[]): HTMLDetailsElement {
     const details = document.createElement('details');
@@ -177,6 +209,19 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
 
   el.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
+    const foldAll = target.closest<HTMLButtonElement>('button[data-fold-all]');
+    if (foldAll) {
+      for (const d of el.querySelectorAll<HTMLDetailsElement>('.file-tree details')) d.open = foldAll.dataset.foldAll === 'true';
+      return;
+    }
+    // Alt+click on a folder row opens or closes it with all its subfolders (the plain click is the
+    // browser's own toggle of the <details>, stopped here so it doesn't flip it back).
+    const summary = target.closest<HTMLElement>('.file-tree summary');
+    if (summary && e.altKey) {
+      e.preventDefault();
+      const details = summary.parentElement as HTMLDetailsElement;
+      return setOpenDeep(details, !details.open);
+    }
     const hide = target.closest<HTMLButtonElement>('button[data-hide-dir]');
     if (hide) return opts.onHide?.(hide.dataset.hideDir!);
     const show = target.closest<HTMLButtonElement>('button[data-unhide-dir]');
@@ -204,10 +249,16 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
 
   // Arrow keys move through the list like a tree view (#123). Enter and Space keep their native
   // meaning: a <summary> opens or closes its folder, a file button opens the document.
+  // Alt+Right / Alt+Left on a folder row open / close it with all its subfolders (#190).
   el.addEventListener('keydown', (e) => {
     const row = e.target as HTMLElement;
-    if (!row.matches?.(ROW) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (!row.matches?.(ROW) || e.ctrlKey || e.metaKey || e.shiftKey) return;
     const folder = row.tagName === 'SUMMARY' ? (row.parentElement as HTMLDetailsElement) : null;
+    if (e.altKey) {
+      if (!folder || !el.querySelector('.file-tree')?.contains(folder) || (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')) return;
+      e.preventDefault();
+      return setOpenDeep(folder, e.key === 'ArrowRight');
+    }
     const rows = visibleRows();
     const i = rows.indexOf(row);
     let next: HTMLElement | null | undefined;
@@ -284,9 +335,10 @@ export function createFileTree(el: HTMLElement, onOpen: (path: string) => void, 
       const list = renderDir(buildTree(paths), '');
       list.className = 'file-tree';
       for (const d of list.querySelectorAll<HTMLDetailsElement>('details')) if (expanded.has(d.dataset.dir)) d.open = true;
+      const tools = list.querySelector('details') ? [renderTools()] : [];
       const extra = hidden?.length && opts.onUnhide ? [renderHidden(hidden)] : [];
       // Keep the resize handle (files-sidebar.ts), which lives in the sidebar too.
-      el.replaceChildren(...first, list, ...extra, ...el.querySelectorAll(`:scope > .${PANEL_RESIZER_CLASS}`));
+      el.replaceChildren(...first, ...tools, list, ...extra, ...el.querySelectorAll(`:scope > .${PANEL_RESIZER_CLASS}`));
       // A re-render (e.g. after hiding a folder) keeps the open document marked.
       if (activePath !== null) setActive(activePath);
     },
