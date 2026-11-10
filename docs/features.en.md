@@ -7,6 +7,7 @@ The long version of the feature list in the [README](../README.en.md): how each 
 ## Rendering
 
 - GitHub Flavored Markdown (tables, task lists, syntax-highlighted code). About 35 common languages are bundled; some 80 more (Dockerfile, PowerShell, CMake, ARM / x86 / AVR / MIPS assembly, Verilog, VHDL, Protobuf, nginx, Dart, Scala, Haskell, Elixir, MATLAB, Groovy, …) are loaded when a document has a code block in them (the table in `src/core/highlight.ts`)
+- Emphasis next to CJK punctuation: `**原因。**が` or `**「注意」**です` is bold even though the `**` (or `*`, `~~`) touches a full stop or bracket, where CommonMark reads the markers as text and GitHub shows them literally. Follows the [CJK-friendly amendment](https://github.com/tats-u/markdown-cjk-friendly); text without CJK characters renders as before
 - GitHub alerts (`> [!NOTE]` etc.) and collapsible front matter (YAML / TOML)
 - Footnotes (`[^1]` and `[^1]: note`) with back links
 - Emoji shortcodes (`:smile:`, `:+1:`; like GitHub, not inside code and not emoticons such as `:)`)

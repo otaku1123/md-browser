@@ -80,6 +80,57 @@ md.linkify
     },
   });
 
+// Emphasis next to CJK punctuation (#194). CommonMark's flanking rules read "**原因。**が" as text: the
+// closing ** follows punctuation (。) and precedes a letter, the rule that keeps "**a.**b" literal in
+// English. Japanese and Chinese put no space after a sentence, so a bold sentence ending in 。、」）
+// (or starting with 「（) rarely worked. These are the rules of the CJK-friendly amendment to the
+// spec (github.com/tats-u/markdown-cjk-friendly): a CJK character next to the run never counts as
+// punctuation, and a CJK character on the other side of the run lifts the punctuation condition.
+// Text without CJK characters renders exactly as before (tests/unit/gfm-compat.test.ts); GitHub
+// itself still shows these as literal asterisks. The tilde rule below shares the scan.
+// CJK: the Han, Hangul, Hiragana, Katakana and Bopomofo scripts, plus the Common-script characters
+// of their blocks (。「」・ー々, voiced sound marks, enclosed and compatibility forms, full- and
+// half-width forms), i.e. the East Asian Width W / F / H characters that are not emoji.
+const CJK = /[\p{sc=Han}\p{sc=Hangul}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Bopomofo}　-〿゙-゜・ー㇀-㇯㈀-㏿︐-︟︰-﹏＀-￯]/u;
+const { isWhiteSpace, isPunctCharCode, isMdAsciiPunct } = md.utils;
+const isCjk = (code: number) => CJK.test(String.fromCodePoint(code));
+/** The code point ending at `end` (exclusive), or a space at the start; a lone surrogate is U+FFFD. */
+function codePointBefore(src: string, end: number): number {
+  if (end === 0) return 0x20;
+  const low = src.charCodeAt(end - 1);
+  if ((low & 0xfc00) === 0xdc00 && end >= 2 && (src.charCodeAt(end - 2) & 0xfc00) === 0xd800) return src.codePointAt(end - 2)!;
+  return (low & 0xf800) === 0xd800 ? 0xfffd : low;
+}
+function codePointAfter(src: string, pos: number, max: number): number {
+  if (pos >= max) return 0x20;
+  const code = src.codePointAt(pos)!;
+  return (code & 0xf800) === 0xd800 ? 0xfffd : code;
+}
+
+md.inline.State = class extends md.inline.State {
+  override scanDelims(start: number, canSplitWord: boolean) {
+    const { src, posMax } = this;
+    const marker = src.charCodeAt(start);
+    let pos = start;
+    while (pos < posMax && src.charCodeAt(pos) === marker) pos++;
+    const last = codePointBefore(src, start);
+    const next = codePointAfter(src, pos, posMax);
+    const lastCjk = isCjk(last);
+    const nextCjk = isCjk(next);
+    const lastPunct = !lastCjk && (isMdAsciiPunct(last) || isPunctCharCode(last));
+    const nextPunct = !nextCjk && (isMdAsciiPunct(next) || isPunctCharCode(next));
+    const lastSpace = isWhiteSpace(last);
+    const nextSpace = isWhiteSpace(next);
+    const leftFlanking = !nextSpace && (!nextPunct || lastSpace || lastPunct || lastCjk);
+    const rightFlanking = !lastSpace && (!lastPunct || nextSpace || nextPunct || nextCjk);
+    return {
+      can_open: leftFlanking && (canSplitWord || !rightFlanking || lastPunct),
+      can_close: rightFlanking && (canSplitWord || !leftFlanking || nextPunct),
+      length: pos - start,
+    };
+  }
+};
+
 // Strikethrough as in GFM (cmark-gfm's extension): a run of one or two tildes is a delimiter,
 // three or more are text, and only runs of the same length pair up. markdown-it's own rule only
 // knows "~~", and reads "~~~x~~~" as "~" + ~~x~~ + "~". A closer takes the nearest opener; when
