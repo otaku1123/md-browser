@@ -648,7 +648,7 @@ const columnWidth = (page: Page) =>
     return Math.round(el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
   });
 
-test('scales images and diagrams by the image setting, up to the text width', async ({ page }) => {
+test('scales images and diagrams by the image setting, scrolling them sideways beyond the text width', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await openSampleFolder(page);
   const img = page.locator('img[alt="diagram"]'); // 240px wide
@@ -656,8 +656,10 @@ test('scales images and diagrams by the image setting, up to the text width', as
   await expect.poll(() => widthOf(img)).toBe(240);
   const natural = await naturalWidth(chart);
   const column = await columnWidth(page);
+  // At 100% a wide diagram is fitted to the text, as a large image is.
   expect(await widthOf(chart)).toBe(Math.min(Math.round(natural), column));
   const images = page.locator('.font-settings-panel').getByRole('radiogroup', { name: 'Images & diagrams' });
+  const scrolls = (box: ReturnType<Page['locator']>) => box.evaluate((el) => el.scrollWidth > el.clientWidth);
 
   await page.locator('.font-settings-toggle').click();
   await images.getByRole('radio', { name: '50%', exact: true }).check();
@@ -665,13 +667,28 @@ test('scales images and diagrams by the image setting, up to the text width', as
   expect(Math.abs((await widthOf(chart)) - natural / 2)).toBeLessThanOrEqual(1);
   await images.getByRole('radio', { name: '150%', exact: true }).check();
   expect(await widthOf(img)).toBe(360);
-  expect(Math.abs((await widthOf(chart)) - Math.min(natural * 1.5, column))).toBeLessThanOrEqual(1);
-  // Twice the flowchart is wider than the text: it stops at the column.
+  expect(Math.abs((await widthOf(chart)) - natural * 1.5)).toBeLessThanOrEqual(1);
+  // Twice the flowchart is wider than the text (#197): it keeps that size and scrolls in its box,
+  // which stays within the column. The image still fits.
   await images.getByRole('radio', { name: '200%', exact: true }).check();
   expect(await widthOf(img)).toBe(480);
   expect(natural * 2).toBeGreaterThan(column);
-  expect(await widthOf(chart)).toBe(column);
+  expect(Math.abs((await widthOf(chart)) - natural * 2)).toBeLessThanOrEqual(1);
+  const chartBox = page.locator('.diagram-mermaid').first();
+  expect(await widthOf(chartBox)).toBeLessThanOrEqual(column);
+  expect(await scrolls(chartBox)).toBe(true);
+  const imgScroll = img.locator('xpath=ancestor::*[contains(concat(" ", @class, " "), " media-scroll ")][1]');
+  expect(await scrolls(imgScroll)).toBe(false);
   await page.locator('.font-settings-toggle').click();
+
+  // A narrower window: the enlarged image is wider than the text and scrolls in its frame too.
+  await page.setViewportSize({ width: 420, height: 800 });
+  await expect.poll(() => columnWidth(page)).toBeLessThan(480);
+  expect(await widthOf(img)).toBe(480);
+  expect(await widthOf(imgScroll)).toBeLessThanOrEqual(await columnWidth(page));
+  expect(await scrolls(imgScroll)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect.poll(() => scrolls(imgScroll)).toBe(false);
 
   // The zoom still shows the image at its natural size.
   await img.click();

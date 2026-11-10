@@ -508,8 +508,10 @@ body {
 .markdown-body > :first-child { margin-top: 0; }
 .markdown-body a { color: var(--accent); }
 .markdown-body img { max-width: 100%; }
-/* Display size (media-sizes.ts): --media-w is the natural width times the scale; never wider than the text. */
+/* Display size (media-sizes.ts): --media-w is the natural width times the scale. Up to 100% never wider
+   than the text; enlarged beyond it, the image may be (#197) and its scroller (.media-scroll) scrolls sideways. */
 .markdown-body img.media-scaled { width: var(--media-w); height: auto; }
+.markdown-body img.media-enlarged { max-width: none; }
 /* Click to see full size (image-zoom.ts); linked images stay links. */
 .markdown-body img:not(a img):not(.img-missing) { cursor: zoom-in; }
 .image-zoom {
@@ -910,10 +912,14 @@ body {
 .diagram-print { display: none; }
 /* Diagram svgs carry their own size (Mermaid: an inline max-width; PlantUML: an inline width). */
 .diagram.media-scaled svg { width: var(--media-w) !important; max-width: 100% !important; height: auto !important; }
+/* Enlarged beyond 100% (#197): wider than the text, scrolling sideways in the diagram's box. */
+.diagram.media-enlarged svg { max-width: none !important; }
 
 /* ---- display size buttons (media-sizes.ts), beside the image / diagram rather than inside it ---- */
 .media-frame { position: relative; }
 span.media-frame { display: inline-block; max-width: 100%; }
+/* Around an image: the enlarged image scrolls in here, so the buttons stay at the frame's corner. */
+.media-scroll { display: block; max-width: 100%; overflow-x: auto; }
 /* As wide as the diagram, so the buttons sit at its corner. */
 div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline: auto; }
 .media-size {
@@ -1158,7 +1164,11 @@ div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline
   .markdown-body pre { overflow: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
   .markdown-body table,
   .diagram,
+  .media-scroll,
   .math-display { overflow: visible; }
+  /* An image or diagram enlarged beyond the text (#197) is fitted to the paper instead. */
+  .markdown-body img.media-enlarged,
+  .diagram.media-enlarged svg { max-width: 100% !important; }
 
   /* Keep blocks whole where possible, and headings with the text that follows. */
   .markdown-body pre,
