@@ -345,6 +345,34 @@ test('follows relative links between documents', async ({ page }) => {
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
 });
 
+// #198: the documents shown are history entries, so the browser's back / forward moves between them.
+test('goes back and forward between the documents shown, restoring the scroll position', async ({ page }) => {
+  await openSampleFolder(page);
+  const current = page.locator('#files [aria-current="page"]');
+  const entries = await page.evaluate(() => history.length);
+  const left = await page.evaluate(() => {
+    window.scrollTo(0, 200);
+    return window.scrollY;
+  });
+  expect(left).toBe(200);
+  await page.getByRole('link', { name: '別のMDファイル' }).click();
+  await expect(current).toHaveAttribute('data-path', 'docs/other.md');
+  await openFromSidebar(page, 'docs/plantuml.md');
+  await expect(current).toHaveAttribute('data-path', 'docs/plantuml.md');
+
+  await page.goBack();
+  await expect(current).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page).toHaveTitle(/^other\.md/);
+  await page.goBack();
+  await expect(current).toHaveAttribute('data-path', 'README.md');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+  await page.goForward();
+  await expect(current).toHaveAttribute('data-path', 'docs/other.md');
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  // The first document took over the page's own entry: two more entries for the two shown after it.
+  expect(await page.evaluate(() => history.length)).toBe(entries + 2);
+});
+
 test('opens files from the sidebar and toggles it', async ({ page }) => {
   await openSampleFolder(page);
   await openFromSidebar(page, 'docs/other.md');
