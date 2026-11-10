@@ -679,6 +679,12 @@ test('scales images and diagrams by the image setting, scrolling them sideways b
   expect(await scrolls(chartBox)).toBe(true);
   const imgScroll = img.locator('xpath=ancestor::*[contains(concat(" ", @class, " "), " media-scroll ")][1]');
   expect(await scrolls(imgScroll)).toBe(false);
+  // The scroller is one only while enlarged: a scroll container would add a gap under every image.
+  const overflow = () => imgScroll.evaluate((el) => getComputedStyle(el).overflowX);
+  expect(await overflow()).toBe('auto');
+  await images.getByRole('radio', { name: '100%', exact: true }).check();
+  expect(await overflow()).toBe('visible');
+  await images.getByRole('radio', { name: '200%', exact: true }).check();
   await page.locator('.font-settings-toggle').click();
 
   // A narrower window: the enlarged image is wider than the text and scrolls in its frame too.

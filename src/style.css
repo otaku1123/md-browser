@@ -918,8 +918,11 @@ body {
 /* ---- display size buttons (media-sizes.ts), beside the image / diagram rather than inside it ---- */
 .media-frame { position: relative; }
 span.media-frame { display: inline-block; max-width: 100%; }
-/* Around an image: the enlarged image scrolls in here, so the buttons stay at the frame's corner. */
-.media-scroll { display: block; max-width: 100%; overflow-x: auto; }
+/* Around an image: the enlarged image scrolls in here, so the buttons stay at the frame's corner.
+   Only then: a scroll container has no baseline of its own, which would put the line's descender
+   gap below the frame instead of inside it and make every image a few pixels taller. */
+.media-scroll { display: block; max-width: 100%; }
+.media-scroll:has(> .media-enlarged, > :is(a, picture) > .media-enlarged) { overflow-x: auto; }
 /* As wide as the diagram, so the buttons sit at its corner. */
 div.media-frame.media-ready { width: fit-content; max-width: 100%; margin-inline: auto; }
 .media-size {
