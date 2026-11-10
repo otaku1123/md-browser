@@ -22,6 +22,8 @@ Markdown ファイルをブラウザでプレビューする静的 Web アプリ
 | `develop` | 開発版。PR をマージして dev 環境で動作確認する | `/dev/` |
 | `main` | リリース版。ある程度まとまったら `develop` → `main` の PR を作ってマージ | `/`（本番）＋ストア提出用の zip を作成 |
 
+`develop` 向けの PR は内容で自動判定し、低リスクなもの（Dependabot の minor/patch、ドキュメントのみ、テストのみ）は CI の `test` が通ると自動でマージされる（`.github/workflows/auto-merge.yml`、判定は `scripts/pr-merge-policy.mjs`）。`src/` や `extension/`、`scripts/`、ワークフロー、ストア文面（`docs/store/`）、スクリーンショットの基準画像に触れる PR は手動レビュー。判定理由は PR のコメントに出る。ラベル `merge:auto` / `merge:manual` で上書きできる。
+
 ## 機能
 
 詳しい説明（操作方法、ショートカット、設定の保存場所、制限）は [docs/features.md](docs/features.md) にある。

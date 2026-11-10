@@ -1,0 +1,159 @@
+name: Auto-merge
+
+# Merges low-risk pull requests to develop on their own once `test` passes (#199): Dependabot's
+# minor/patch groups, documentation-only and test-only changes. Everything else is left for a review
+# by hand. The decision is made by scripts/pr-merge-policy.mjs, run from the develop checkout (never
+# from the PR), and written to a comment on the PR; the labels `merge:auto` / `merge:manual` override it.
+#
+# Two triggers reach the same job: the PR events judge (and merge right away when `test` already
+# passed, e.g. after a label was added), and the completion of the Test workflow merges when the run
+# was for an open PR. The merge is done here with GITHUB_TOKEN rather than through GitHub's auto-merge
+# because a merge made by that token starts no `push` workflow: the dev site would not be deployed.
+# So the Pages and Test workflows are started explicitly after the merge (workflow_dispatch is the
+# one kind of event the token may trigger).
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+    branches: [develop]
+  workflow_run:
+    workflows: [Test]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+# One run per head commit at a time (queued, never cancelled: a merge must not be interrupted).
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
+
+jobs:
+  merge:
+    # A PR from a fork gets a read-only token (and the policy refuses forks anyway); a Test run that
+    # failed, or that was for a push rather than a PR, has nothing to merge.
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # The policy comes from develop, not from the PR under judgement.
+      - uses: actions/checkout@v7
+        with:
+          ref: develop
+          sparse-checkout: scripts
+          sparse-checkout-cone-mode: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Find the pull request
+        id: pr
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            number="$PR_NUMBER"
+          else
+            # The open PR to develop whose head is the commit the Test run checked.
+            number="$(gh api "repos/$GH_REPO/commits/$RUN_SHA/pulls" \
+              --jq '[.[] | select(.state == "open" and .base.ref == "develop")] | first | .number // empty')"
+            if [ -z "$number" ]; then
+              echo "::notice::no open pull request to develop has head $RUN_SHA; nothing to do"
+            fi
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Decide
+        if: steps.pr.outputs.number != ''
+        id: decide
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          decision="$(node scripts/pr-merge-policy.mjs "$PR")"
+          echo "$decision" | jq .
+          {
+            echo "auto=$(jq -r .auto <<<"$decision")"
+            echo "state=$(jq -r .pr.state <<<"$decision")"
+            echo "head=$(jq -r .pr.head <<<"$decision")"
+            echo "merge_state=$(jq -r .pr.mergeStateStatus <<<"$decision")"
+          } >> "$GITHUB_OUTPUT"
+          jq -r '.reasons[] | "- " + .' <<<"$decision" > reasons.md
+          if [ -n "$RUN_SHA" ] && [ "$RUN_SHA" != "$(jq -r .pr.head <<<"$decision")" ]; then
+            echo "::notice::the Test run was for $RUN_SHA but the PR head is now $(jq -r .pr.head <<<"$decision"); a later run will decide"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge
+        if: steps.pr.outputs.number != '' && steps.decide.outputs.auto == 'true' && steps.decide.outputs.state == 'OPEN' && steps.decide.outputs.stale != 'true'
+        id: merge
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+          HEAD: ${{ steps.decide.outputs.head }}
+          MERGE_STATE: ${{ steps.decide.outputs.merge_state }}
+        run: |
+          # Right after a push or a check GitHub may still be computing the state: give it a moment.
+          for _ in 1 2 3 4 5 6; do
+            case "$MERGE_STATE" in UNKNOWN) sleep 10 ;; *) break ;; esac
+            MERGE_STATE="$(gh pr view "$PR" --json mergeStateStatus --jq .mergeStateStatus)"
+          done
+          echo "merge state: $MERGE_STATE"
+          case "$MERGE_STATE" in
+            CLEAN)
+              # --match-head-commit: never merge a head other than the one that was judged.
+              gh pr merge "$PR" --merge --match-head-commit "$HEAD"
+              echo "result=merged" >> "$GITHUB_OUTPUT"
+              ;;
+            BLOCKED|UNKNOWN) echo "result=waiting" >> "$GITHUB_OUTPUT" ;;
+            DIRTY) echo "result=conflict" >> "$GITHUB_OUTPUT" ;;
+            *) echo "result=blocked:$MERGE_STATE" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # A merge made with GITHUB_TOKEN triggers no push workflow (see the header).
+      - name: Deploy and test develop
+        if: steps.merge.outputs.result == 'merged'
+        run: |
+          gh workflow run deploy-pages.yml --ref develop
+          gh workflow run test.yml --ref develop
+
+      - name: Comment the decision on the pull request
+        if: steps.pr.outputs.number != '' && steps.decide.outputs.state == 'OPEN' && steps.decide.outputs.stale != 'true'
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+          AUTO: ${{ steps.decide.outputs.auto }}
+          RESULT: ${{ steps.merge.outputs.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker='<!-- auto-merge-policy -->'
+          if [ "$AUTO" != true ]; then
+            title=':eyes: **Needs a review by hand** (no auto-merge).'
+          else
+            case "$RESULT" in
+              merged) title=':white_check_mark: **Merged automatically.** The dev site deploy and the tests on develop were started.' ;;
+              waiting) title=':robot: **Will be merged automatically** once `test` passes.' ;;
+              conflict) title=':warning: Eligible for auto-merge, but the branch **conflicts with develop**: resolve it and it will be merged.' ;;
+              *) title=":warning: Eligible for auto-merge, but the pull request is not mergeable (\`$RESULT\`)." ;;
+            esac
+          fi
+          {
+            echo "$marker"
+            echo "$title"
+            echo
+            cat reasons.md
+            echo
+            echo "<sub>Policy: \`scripts/pr-merge-policy.mjs\` (#199). Override with the \`merge:auto\` / \`merge:manual\` labels. [Run]($RUN_URL)</sub>"
+          } > comment.md
+          existing="$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.body | startswith(\"$marker\"))] | first | .id // empty")"
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$existing" -F body=@comment.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file comment.md
+          fi
