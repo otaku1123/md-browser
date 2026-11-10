@@ -7,6 +7,7 @@
 ## 表示
 
 - GFM 相当の Markdown 表示（表・タスクリスト・コードハイライト）。ハイライトは主要な約 35 言語を同梱し、Dockerfile・PowerShell・CMake・アセンブリ（ARM / x86 / AVR / MIPS）・Verilog・VHDL・Protobuf・nginx・Dart・Scala・Haskell・Elixir・MATLAB・Groovy など約 80 言語は、その言語のコードブロックがある文書を開いたときに読み込む（`src/core/highlight.ts` の表）
+- 日本語・中国語・韓国語の句読点に接する強調: `**原因。**が` や `**「注意」**です` のように、閉じ・開きの `**` `*` `~~` が句読点やかっこに接していても太字・斜体・取り消し線になる（CommonMark の規則では文字扱いになり、GitHub では `**` がそのまま表示される。[CJK-friendly の提案仕様](https://github.com/tats-u/markdown-cjk-friendly)に沿った動作。CJK 文字を含まない文の表示は変わらない）
 - GitHub のアラート記法（`> [!NOTE]` など）、Front matter（YAML / TOML）の折りたたみ表示
 - 脚注（`[^1]` と `[^1]: 注釈`）の表示、注釈から本文への戻りリンク
 - 絵文字ショートコード（`:smile:` `:+1:` など。GitHub 同様、コード内や `:)` のような顔文字は変換しない）

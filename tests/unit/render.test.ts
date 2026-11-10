@@ -319,4 +319,48 @@ describe('GFM autolinks and strikethrough (as on GitHub)', () => {
     const html = renderMarkdown('~/home or a~b, but ~ spaced ~ and ~/path\n').html;
     expect(html).toContain('<s>/home or a</s>b, but ~ spaced ~ and ~/path');
   });
+
+  describe('emphasis next to CJK punctuation (#194)', () => {
+    const inline = (src: string) => renderMarkdown(`${src}\n`).html.replace(/^<p[^>]*>|<\/p>\n?$/g, '');
+
+    it('closes bold and italics after a CJK full stop, comma or bracket', () => {
+      expect(inline('**原因。**が含まれる')).toBe('<strong>原因。</strong>が含まれる');
+      expect(inline('これは**原因。**です')).toBe('これは<strong>原因。</strong>です');
+      expect(inline('*斜体、*次')).toBe('<em>斜体、</em>次');
+      expect(inline('**（注）**本文')).toBe('<strong>（注）</strong>本文');
+      expect(inline('~~削除。~~次')).toBe('<s>削除。</s>次');
+    });
+
+    it('opens bold before a CJK bracket', () => {
+      expect(inline('**「注意」**です')).toBe('<strong>「注意」</strong>です');
+      expect(inline('前の文。**「注意」**です')).toBe('前の文。<strong>「注意」</strong>です');
+    });
+
+    it('lets a CJK character on the other side of the run lift the punctuation condition', () => {
+      expect(inline('**強調.**次')).toBe('<strong>強調.</strong>次'); // ASCII punctuation inside, CJK outside
+      expect(inline('太字**(注)**です')).toBe('太字<strong>(注)</strong>です');
+    });
+
+    it('keeps the CommonMark result for text without CJK characters', () => {
+      expect(inline('**a.**b')).toBe('**a.**b');
+      expect(inline('a**"foo"**')).toBe('a**"foo"**');
+      expect(inline('**foo bar **')).toBe('**foo bar **');
+      expect(inline('foo_bar_')).toBe('foo_bar_');
+      expect(inline('**a.** b')).toBe('<strong>a.</strong> b');
+    });
+
+    it('keeps underscores inside CJK words literal, like inside Latin words', () => {
+      expect(inline('日本語_強調_です')).toBe('日本語_強調_です');
+    });
+
+    it('does not count an emoji as CJK', () => {
+      expect(inline('**強調。**a')).toBe('<strong>強調。</strong>a');
+      expect(inline('**強調😀**a')).toBe('**強調😀**a'); // punctuation (a symbol) inside, a letter outside: CommonMark result
+    });
+
+    it('reads astral code points next to the run', () => {
+      expect(inline('**強調.**𠮷')).toBe('<strong>強調.</strong>𠮷'); // U+20BB7, Han
+      expect(inline('𠮷**強調**。')).toBe('𠮷<strong>強調</strong>。');
+    });
+  });
 });
