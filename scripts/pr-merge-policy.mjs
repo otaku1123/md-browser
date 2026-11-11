@@ -14,6 +14,8 @@ export const LABEL_AUTO = 'merge:auto';
 export const LABEL_MANUAL = 'merge:manual';
 
 export const DEPENDABOT = 'dependabot[bot]';
+/** True for the Dependabot app however the login is spelt: the API says `dependabot[bot]`, `gh pr view` says `app/dependabot`. */
+export const isDependabot = (login) => login === DEPENDABOT || login === 'app/dependabot';
 /** Dependabot groups (.github/dependabot.yml) that hold minor and patch updates only. */
 export const DEPENDABOT_AUTO_GROUPS = ['npm-minor-patch', 'actions-minor-patch'];
 
@@ -82,7 +84,7 @@ export function decide(pr) {
   if (labels.has(LABEL_MANUAL)) return { auto: false, reasons: [`label \`${LABEL_MANUAL}\``] };
   if (labels.has(LABEL_AUTO)) return { auto: true, reasons: [`label \`${LABEL_AUTO}\``] };
 
-  if (pr.author === DEPENDABOT) {
+  if (isDependabot(pr.author)) {
     const group = dependabotGroup(pr.headRef);
     if (group && DEPENDABOT_AUTO_GROUPS.includes(group)) {
       return { auto: true, reasons: [`Dependabot group \`${group}\` (minor and patch updates)`] };

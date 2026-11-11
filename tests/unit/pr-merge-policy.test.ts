@@ -68,12 +68,15 @@ describe('pr-merge-policy', () => {
   });
 
   it('merges Dependabot minor/patch groups only', () => {
-    const bot = (headRef: string) =>
-      decide({ author: DEPENDABOT, labels: ['dependencies'], files: ['package.json', 'package-lock.json'], headRef });
+    const bot = (headRef: string, author = DEPENDABOT) =>
+      decide({ author, labels: ['dependencies'], files: ['package.json', 'package-lock.json'], headRef });
     expect(bot('dependabot/npm_and_yarn/develop/npm-minor-patch-aa76e49b1b')).toEqual({
       auto: true,
       reasons: ['Dependabot group `npm-minor-patch` (minor and patch updates)'],
     });
+    // gh pr view spells the login this way (PR #204 was judged by hand because of it)
+    expect(bot('dependabot/npm_and_yarn/develop/npm-minor-patch-8de7d5eac7', 'app/dependabot').auto).toBe(true);
+    expect(bot('dependabot/npm_and_yarn/develop/npm-minor-patch-8de7d5eac7', 'otaku1123').auto).toBe(false);
     expect(bot('dependabot/github_actions/develop/actions-minor-patch-0123456789').auto).toBe(true);
     expect(bot('dependabot/github_actions/develop/actions-abcdef0123').auto).toBe(false);
     const single = bot('dependabot/npm_and_yarn/develop/vite-7.2.0');
