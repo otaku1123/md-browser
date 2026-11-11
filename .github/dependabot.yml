@@ -1,5 +1,6 @@
 # Version updates (security alerts are separate and always on).
 # Minor/patch bumps arrive as one grouped PR per ecosystem; majors get their own PR.
+# The grouped PRs are merged automatically once CI passes (.github/workflows/auto-merge.yml), majors by hand.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -28,5 +29,5 @@ updates:
       time: "09:00"
       timezone: Asia/Tokyo
     groups:
-      actions:
-        patterns: ["*"]
+      actions-minor-patch:
+        update-types: [minor, patch]
