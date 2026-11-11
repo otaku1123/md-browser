@@ -26,7 +26,7 @@
 
 | 項目 | 値 |
 |---|---|
-| アップロードするファイル | `release/md-browser-1.13.0.zip` |
+| アップロードするファイル | `release/md-browser-1.14.0.zip` |
 | バージョン | `extension/public/manifest.json` の `version`。更新するたびに上げる |
 
 ## 2. ストア掲載情報（Store listing）
@@ -52,10 +52,11 @@ Open any .md file from your computer (drag it into Chrome or open file:///…/RE
 FEATURES
 • GitHub-style rendering: tables, task lists, autolinks, strikethrough, and syntax-highlighted code blocks (less common languages such as Dockerfile or PowerShell load on demand)
 • Sidebar table of contents that follows your scroll position; fold its sections, hide it or drag to resize
-• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable, and folders you don't need can be hidden
+• Sidebar listing the other Markdown files in the same folder and its subfolders, one click to open; also resizable, folders you don't need can be hidden, and all folders expand or collapse at once (Alt+click for one folder with its subfolders)
 • Full-text search across the folder (Ctrl/⌘+Shift+F): matches grouped by file with the line, the heading and an excerpt; click one to jump there with the matches highlighted. Ignores case and character width; "This file" searches only the open document. No index, nothing stored
 • Quick file switcher (Ctrl/⌘+P): open any file of the folder by typing part of its name
 • The document's path from the folder root as a breadcrumb in the toolbar; click a folder to show it in the file sidebar
+• Back / forward: with a folder open, the browser's back and forward buttons move between the documents you have shown, each coming back scrolled to where you left it
 • Favorites: star the documents you open often to keep them at the top of the file sidebar and first in the quick switcher
 • Mermaid diagrams (flowcharts, sequence diagrams, and more): click to enlarge, zoom and pan with the wheel or a drag, save as SVG or PNG
 • PlantUML diagrams, drawn inside the browser (the diagram source is never sent to a PlantUML server; the standard library can be fetched from a host you name in the settings, off by default); !include of local .puml / .iuml files from the document's folder and below
@@ -100,10 +101,11 @@ MD Browser は、パソコン上の Markdown ファイルを Chrome で読みや
 主な機能
 • GitHub 風の表示：表・タスクリスト・自動リンク・打消し線・シンタックスハイライト付きコードブロック（Dockerfile や PowerShell などあまり使わない言語は必要なときに読み込み）
 • スクロール位置に連動する目次サイドバー（節の折りたたみ、表示の切り替え、ドラッグで幅を変更）
-• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能。不要なフォルダは非表示にできる）
+• 同じフォルダとサブフォルダにある他の Markdown ファイルをサイドバーに一覧表示し、クリックで開ける（幅も変更可能。不要なフォルダは非表示にでき、すべてのフォルダをまとめて展開 / 折りたたみできる。Alt+クリックで配下のサブフォルダごと）
 • フォルダ内の全文検索（Ctrl/⌘+Shift+F）：一致をファイルごとに行番号・見出し・抜粋付きで表示し、クリックでその場所へ移動（一致をハイライト）。大文字小文字と全角半角の違いは無視。「このファイル」で開いている文書だけを検索。索引は作らず、何も保存しない
 • クイック切り替え（Ctrl/⌘+P）：名前の一部を入力してフォルダ内のファイルを開く
 • ツールバーに、フォルダの起点からの文書のパスをパンくずで表示。フォルダをクリックするとファイル一覧でそのフォルダを表示
+• 戻る / 進む：フォルダを開いているとき、表示した文書はブラウザの履歴に残り、ブラウザの戻る / 進むボタンで前後の文書に移動できる（離れたときのスクロール位置で表示）
 • お気に入り：よく開く文書に ☆ を付けると、ファイル一覧の上部とクイック切り替えの先頭に表示
 • Mermaid 図（フローチャート、シーケンス図など）。クリックで拡大し、ホイールやドラッグで拡大・移動、SVG・PNG で保存
 • PlantUML 図（ブラウザ内で描画し、図のソースを PlantUML のサーバーに送信することはありません。標準ライブラリは設定で指定した取得先から取得できます。既定はオフ）。文書のフォルダ以下にあるローカルの .puml / .iuml ファイルの !include に対応
