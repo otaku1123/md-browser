@@ -108,6 +108,21 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('.breadcrumb li')).toHaveText(['sample', 'README.md']);
 });
 
+test('folds every folder from the buttons above the list, and one with its subfolders on Alt+click', async ({ page }) => {
+  await openSampleFolder(page);
+  const files = page.locator('#files');
+  const docs = files.locator('details[data-dir="docs"]');
+  await expect(docs).toHaveJSProperty('open', false);
+  await files.getByRole('button', { name: 'Expand all folders' }).click();
+  await expect(docs).toHaveJSProperty('open', true);
+  await files.getByRole('button', { name: 'Collapse all folders' }).click();
+  await expect(docs).toHaveJSProperty('open', false);
+  await docs.locator(':scope > summary').click({ modifiers: ['Alt'] });
+  await expect(docs).toHaveJSProperty('open', true);
+  await docs.locator(':scope > summary').click({ modifiers: ['Alt'] });
+  await expect(docs).toHaveJSProperty('open', false);
+});
+
 test('shows the document path as a breadcrumb whose folders reveal themselves in the sidebar', async ({ page }) => {
   await openSampleFolder(page);
   await openFromSidebar(page, 'docs/other.md');
@@ -328,6 +343,34 @@ test('follows relative links between documents', async ({ page }) => {
   await openSampleFolder(page);
   await page.getByRole('link', { name: '別のMDファイル' }).click();
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+});
+
+// #198: the documents shown are history entries, so the browser's back / forward moves between them.
+test('goes back and forward between the documents shown, restoring the scroll position', async ({ page }) => {
+  await openSampleFolder(page);
+  const current = page.locator('#files [aria-current="page"]');
+  const entries = await page.evaluate(() => history.length);
+  const left = await page.evaluate(() => {
+    window.scrollTo(0, 200);
+    return window.scrollY;
+  });
+  expect(left).toBe(200);
+  await page.getByRole('link', { name: '別のMDファイル' }).click();
+  await expect(current).toHaveAttribute('data-path', 'docs/other.md');
+  await openFromSidebar(page, 'docs/plantuml.md');
+  await expect(current).toHaveAttribute('data-path', 'docs/plantuml.md');
+
+  await page.goBack();
+  await expect(current).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page).toHaveTitle(/^other\.md/);
+  await page.goBack();
+  await expect(current).toHaveAttribute('data-path', 'README.md');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+  await page.goForward();
+  await expect(current).toHaveAttribute('data-path', 'docs/other.md');
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  // The first document took over the page's own entry: two more entries for the two shown after it.
+  expect(await page.evaluate(() => history.length)).toBe(entries + 2);
 });
 
 test('opens files from the sidebar and toggles it', async ({ page }) => {
@@ -633,7 +676,7 @@ const columnWidth = (page: Page) =>
     return Math.round(el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
   });
 
-test('scales images and diagrams by the image setting, up to the text width', async ({ page }) => {
+test('scales images and diagrams by the image setting, scrolling them sideways beyond the text width', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await openSampleFolder(page);
   const img = page.locator('img[alt="diagram"]'); // 240px wide
@@ -641,8 +684,10 @@ test('scales images and diagrams by the image setting, up to the text width', as
   await expect.poll(() => widthOf(img)).toBe(240);
   const natural = await naturalWidth(chart);
   const column = await columnWidth(page);
+  // At 100% a wide diagram is fitted to the text, as a large image is.
   expect(await widthOf(chart)).toBe(Math.min(Math.round(natural), column));
   const images = page.locator('.font-settings-panel').getByRole('radiogroup', { name: 'Images & diagrams' });
+  const scrolls = (box: ReturnType<Page['locator']>) => box.evaluate((el) => el.scrollWidth > el.clientWidth);
 
   await page.locator('.font-settings-toggle').click();
   await images.getByRole('radio', { name: '50%', exact: true }).check();
@@ -650,13 +695,34 @@ test('scales images and diagrams by the image setting, up to the text width', as
   expect(Math.abs((await widthOf(chart)) - natural / 2)).toBeLessThanOrEqual(1);
   await images.getByRole('radio', { name: '150%', exact: true }).check();
   expect(await widthOf(img)).toBe(360);
-  expect(Math.abs((await widthOf(chart)) - Math.min(natural * 1.5, column))).toBeLessThanOrEqual(1);
-  // Twice the flowchart is wider than the text: it stops at the column.
+  expect(Math.abs((await widthOf(chart)) - natural * 1.5)).toBeLessThanOrEqual(1);
+  // Twice the flowchart is wider than the text (#197): it keeps that size and scrolls in its box,
+  // which stays within the column. The image still fits.
   await images.getByRole('radio', { name: '200%', exact: true }).check();
   expect(await widthOf(img)).toBe(480);
   expect(natural * 2).toBeGreaterThan(column);
-  expect(await widthOf(chart)).toBe(column);
+  expect(Math.abs((await widthOf(chart)) - natural * 2)).toBeLessThanOrEqual(1);
+  const chartBox = page.locator('.diagram-mermaid').first();
+  expect(await widthOf(chartBox)).toBeLessThanOrEqual(column);
+  expect(await scrolls(chartBox)).toBe(true);
+  const imgScroll = img.locator('xpath=ancestor::*[contains(concat(" ", @class, " "), " media-scroll ")][1]');
+  expect(await scrolls(imgScroll)).toBe(false);
+  // The scroller is one only while enlarged: a scroll container would add a gap under every image.
+  const overflow = () => imgScroll.evaluate((el) => getComputedStyle(el).overflowX);
+  expect(await overflow()).toBe('auto');
+  await images.getByRole('radio', { name: '100%', exact: true }).check();
+  expect(await overflow()).toBe('visible');
+  await images.getByRole('radio', { name: '200%', exact: true }).check();
   await page.locator('.font-settings-toggle').click();
+
+  // A narrower window: the enlarged image is wider than the text and scrolls in its frame too.
+  await page.setViewportSize({ width: 420, height: 800 });
+  await expect.poll(() => columnWidth(page)).toBeLessThan(480);
+  expect(await widthOf(img)).toBe(480);
+  expect(await widthOf(imgScroll)).toBeLessThanOrEqual(await columnWidth(page));
+  expect(await scrolls(imgScroll)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect.poll(() => scrolls(imgScroll)).toBe(false);
 
   // The zoom still shows the image at its natural size.
   await img.click();

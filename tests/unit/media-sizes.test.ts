@@ -58,8 +58,10 @@ describe('prepareMediaSizes', () => {
     prepareMediaSizes(document.body);
     expect(keys()).toEqual(['img:a.png#1', `diagram:${hashText('A')}#1`]);
     const imgFrame = document.querySelector('p > .media-frame')!;
-    expect(imgFrame.firstElementChild!.tagName).toBe('A');
-    expect(imgFrame.querySelector('a .media-size')).toBeNull();
+    // The link (with its image) sits in the scroller; the buttons are outside both.
+    expect(imgFrame.firstElementChild!.className).toBe('media-scroll');
+    expect(imgFrame.querySelector(':scope > .media-scroll > a > img')).not.toBeNull();
+    expect(imgFrame.querySelector('a .media-size, .media-scroll .media-size')).toBeNull();
     const diagramFrame = document.querySelector('div.media-frame')!;
     expect(diagramFrame.querySelector('.diagram .media-size')).toBeNull();
     expect(diagramFrame.querySelectorAll(':scope > .media-size button')).toHaveLength(3);
@@ -113,6 +115,7 @@ describe('applying sizes', () => {
     showMediaSizes(document.body, await loadMediaDoc('doc'));
     expect(node.style.getPropertyValue('--media-w')).toBe('300px');
     expect(node.classList.contains('media-scaled')).toBe(true);
+    expect(node.classList.contains('media-enlarged')).toBe(false);
     setGlobalMediaScale(150);
     expect(node.style.getPropertyValue('--media-w')).toBe('450px');
     expect(img.style.getPropertyValue('--media-w')).toBe('300px');
@@ -125,6 +128,24 @@ describe('applying sizes', () => {
     expect(img.style.getPropertyValue('--media-w')).toBe('300px'); // others keep the global scale
     reset.click();
     expect(node.style.getPropertyValue('--media-w')).toBe('450px');
+  });
+
+  it('marks an item enlarged beyond 100%, which may then be wider than the text (#197)', async () => {
+    const node = drawn();
+    const img = document.querySelector('img')!;
+    showMediaSizes(document.body, await loadMediaDoc('doc'));
+    const enlarged = () => [node, img].map((el) => el.classList.contains('media-enlarged'));
+    expect(enlarged()).toEqual([false, false]);
+    setGlobalMediaScale(125);
+    expect(enlarged()).toEqual([true, true]);
+    const smaller = node.parentElement!.querySelector<HTMLButtonElement>('.media-size button')!;
+    smaller.click(); // this diagram back to 100%; the image keeps the global 125%
+    expect(enlarged()).toEqual([false, true]);
+    setGlobalMediaScale(75);
+    expect(enlarged()).toEqual([false, false]);
+    node.classList.add('diagram-error'); // no size, so never enlarged
+    setGlobalMediaScale(200);
+    expect(enlarged()).toEqual([false, true]);
   });
 
   it('saves per-item sizes for the document and restores them', async () => {

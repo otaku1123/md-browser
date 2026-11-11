@@ -26,6 +26,7 @@ import { parseQuery, type SearchHit } from './core/search';
 import { clearSearchHighlight, highlightSearch, jumpToLine } from './core/search-jump';
 import { noteRecentDoc, recentDocs } from './core/recent-docs';
 import { onReturn } from './core/on-return';
+import { mountDocHistory } from './core/doc-history';
 import { faviconError, faviconUpdated, initFavicon } from './core/favicon';
 import { scanLimitStore } from './core/scan-limit';
 import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
@@ -67,6 +68,12 @@ function openPath(path: string): void {
 /** Key for the documents opened recently in this tab: the folder name, like the hidden folders. */
 const recentRoot = (w: Workspace) => w.folder ?? '';
 
+// Back / forward (#198): an entry of another folder (opened earlier in this tab) is left alone.
+const docHistory = mountDocHistory((entry, scrollY) => {
+  const doc = ws && recentRoot(ws) === entry.root ? ws.docs.find((d) => d.path === entry.path) : undefined;
+  if (doc && doc.path !== currentDoc?.path) void showDoc(doc, { keepScroll: false, fromHistory: true, scrollY });
+});
+
 const fileTree = createFileTree(filesEl, openPath, {
   onHide: (dir) => queueSetHidden(dir, true),
   onUnhide: (dir) => queueSetHidden(dir, false),
@@ -100,7 +107,8 @@ let pollFailures = 0;
 
 // ---- rendering ------------------------------------------------------------
 
-async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number }): Promise<void> {
+/** `fromHistory`: shown by going back / forward, so no new history entry; `scrollY`: where it was left. */
+async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number; fromHistory?: boolean; scrollY?: number }): Promise<void> {
   if (!ws) return;
   const seq = ++renderSeq;
   const workspace = ws;
@@ -150,6 +158,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
     jumpLine = null;
     if (recentHandle) void saveRecent({ handle: recentHandle, docPath: doc.path });
     noteRecentDoc(recentRoot(workspace), doc.path);
+    if (!opts.fromHistory) docHistory.show({ root: recentRoot(workspace), path: doc.path }, scrollY);
   }
   currentDoc = doc;
   lastStamp = content.stamp;
@@ -157,7 +166,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
   corpus?.put(doc.path, content.text, content.stamp);
   sourceView.setSource(content.text);
   toc.render(tocItems);
-  window.scrollTo(0, opts.keepScroll ? scrollY : 0);
+  window.scrollTo(0, opts.keepScroll ? scrollY : (opts.scrollY ?? 0));
   // A search hit: scroll to its line once; the highlights are ranges, so a re-render renews them.
   if (opts.line !== undefined) {
     jumpLine = opts.line;

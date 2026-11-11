@@ -2,8 +2,10 @@ name: Release
 
 # Pushing a vX.Y.Z tag builds the extension zip, attaches it to a GitHub Release, then uploads it
 # to the Chrome Web Store and submits it for review (published automatically once approved).
-# Run it manually with an existing tag to (re)create the release for an older version; the store
-# upload then only runs when asked for.
+# When the store listing text (docs/store/listing.md) changed since the previous release, the zip
+# is only uploaded: the listing is updated by hand in the developer dashboard, then submitted there
+# (or with this workflow and submit=only). Run it manually with an existing tag to (re)create the
+# release for an older version; the store upload then only runs when asked for.
 on:
   push:
     tags: ['v*']
@@ -16,6 +18,11 @@ on:
         description: Also upload to the Chrome Web Store and submit for review
         type: boolean
         default: false
+      submit:
+        description: "Submit for review: auto = unless docs/store/listing.md changed since the previous release; no = upload only; only = submit the draft already uploaded"
+        type: choice
+        options: [auto, 'yes', 'no', only]
+        default: auto
 
 permissions:
   contents: write
@@ -82,9 +89,21 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          # Full history with tags: the listing is compared with the previous release.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      - name: Decide whether to submit for review
+        id: decide
+        env:
+          MODE: ${{ inputs.submit || 'auto' }}
+        run: |
+          if [ "$MODE" = auto ]; then
+            if [ "$(node scripts/store-text-changed.mjs "$TAG")" = true ]; then MODE=no; else MODE=yes; fi
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "store: $MODE"
       - id: auth
         uses: google-github-actions/auth@v3
         with:
@@ -97,6 +116,18 @@ jobs:
           CWS_TOKEN: ${{ steps.auth.outputs.access_token }}
           CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           CWS_ITEM_ID: ${{ vars.CWS_ITEM_ID }}
+          MODE: ${{ steps.decide.outputs.mode }}
         run: |
           gh release download "$TAG" -p '*.zip' -D release
-          node scripts/cws-publish.mjs "release/md-browser-${TAG#v}.zip" "${TAG#v}"
+          case "$MODE" in
+            yes) flags="" ;;
+            no) flags="--no-submit" ;;
+            only) flags="--submit-only" ;;
+            *) echo "::error::unknown submit mode $MODE"; exit 1 ;;
+          esac
+          node scripts/cws-publish.mjs "release/md-browser-${TAG#v}.zip" "${TAG#v}" $flags
+          if [ "$MODE" = no ]; then
+            msg="The store listing text changed in this release: the zip was uploaded but NOT submitted for review. Update the listing in the Chrome Web Store developer dashboard from docs/store/listing.md, then submit it there (or run this workflow with store=true and submit=only)."
+            echo "::notice::$msg"
+            printf '## Chrome Web Store\n\n%s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi

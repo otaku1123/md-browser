@@ -96,7 +96,14 @@ function addFrame(target: Element, item: HTMLElement, tag: 'span' | 'div'): void
     if (b) resize(item, Number(b.dataset.step));
   });
   target.replaceWith(frame);
-  frame.append(target, bar);
+  // An image goes in a scroller: made wider than the text (#197) it scrolls sideways while the
+  // buttons stay at the frame's corner. A diagram's own box scrolls already (.diagram).
+  if (tag === 'span') {
+    const scroll = document.createElement('span');
+    scroll.className = 'media-scroll';
+    scroll.append(target);
+    frame.append(scroll, bar);
+  } else frame.append(target, bar);
 }
 
 /**
@@ -142,6 +149,9 @@ function applySize(el: HTMLElement): void {
     el.style.removeProperty('--media-w');
     el.classList.remove('media-scaled');
   }
+  // Over 100% the item may be wider than the text and scrolls sideways (#197); up to 100% it is
+  // fitted to the text as before, so a large image at its natural size still shrinks to fit.
+  el.classList.toggle('media-enlarged', !!base && scale > 100);
   // Buttons only for something with a size: not for a missing image or a diagram that failed.
   frame.classList.toggle('media-ready', !!base);
   const [smaller, reset, larger] = frame.querySelectorAll<HTMLButtonElement>(':scope > .media-size > button');

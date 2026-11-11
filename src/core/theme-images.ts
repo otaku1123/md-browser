@@ -25,7 +25,9 @@ export function applyThemeImages(root: ParentNode, theme: Theme = currentTheme()
     if (only !== 'light' && only !== 'dark') continue;
     img.setAttribute(THEME_ONLY_ATTR, only);
     // The size buttons' frame (media-sizes.ts) goes with the image, or it would keep its space.
-    const target = img.parentElement?.classList.contains('media-frame') ? img.parentElement : img;
+    const parent = img.parentElement;
+    const wrap = parent?.classList.contains('media-scroll') ? parent.parentElement : parent;
+    const target = wrap?.classList.contains('media-frame') ? wrap : img;
     target.hidden = only !== theme;
   }
   for (const source of root.querySelectorAll<HTMLSourceElement>('picture > source[media]')) {
