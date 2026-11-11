@@ -77,6 +77,10 @@ jobs:
           PR: ${{ steps.pr.outputs.number }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
+          if [ ! -f scripts/pr-merge-policy.mjs ]; then
+            echo "::notice::develop has no scripts/pr-merge-policy.mjs yet (the PR that adds it is still open); nothing to decide"
+            exit 0
+          fi
           decision="$(node scripts/pr-merge-policy.mjs "$PR")"
           echo "$decision" | jq .
           {
