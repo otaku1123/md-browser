@@ -373,6 +373,21 @@ test('goes back and forward between the documents shown, restoring the scroll po
   expect(await page.evaluate(() => history.length)).toBe(entries + 2);
 });
 
+// #208: a table of contents link puts the heading in the URL; the entry must stay the document's.
+test('comes back to a document whose table of contents was used', async ({ page }) => {
+  await openSampleFolder(page);
+  const current = page.locator('#files [aria-current="page"]');
+  await page.getByRole('link', { name: '別のMDファイル' }).click();
+  await expect(current).toHaveAttribute('data-path', 'docs/other.md');
+  await page.locator('#toc a[data-target]').first().click();
+  await expect(page).toHaveURL(/#/);
+
+  await page.goBack();
+  await expect(current).toHaveAttribute('data-path', 'README.md');
+  await page.goForward();
+  await expect(current).toHaveAttribute('data-path', 'docs/other.md');
+});
+
 test('opens files from the sidebar and toggles it', async ({ page }) => {
   await openSampleFolder(page);
   await openFromSidebar(page, 'docs/other.md');
