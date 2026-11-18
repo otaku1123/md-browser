@@ -345,6 +345,22 @@ test('follows relative links between documents', async ({ page }) => {
   await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
 });
 
+// #210: the "#heading" of a link to another document is scrolled to, as on a file:// page.
+test('follows a relative link to a heading of another document', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.evaluate(async () => {
+    const w = window as unknown as { __appendToFile(rel: string, text: string): Promise<void> };
+    await w.__appendToFile('docs/other.md', `\n\n${'filler\n\n'.repeat(80)}## 追記 の見出し\n\n${'filler\n\n'.repeat(80)}`);
+    await w.__appendToFile('README.md', '\n\n[見出しへ](docs/other.md#追記-の見出し)\n');
+  });
+  await page.getByRole('link', { name: '見出しへ' }).click();
+  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  const heading = page.getByRole('heading', { name: '追記 の見出し' });
+  await expect(heading).toBeInViewport();
+  // Below the toolbar (html's scroll-padding-top), not merely somewhere on screen.
+  expect((await heading.boundingBox())!.y).toBeLessThan(150);
+});
+
 // #198: the documents shown are history entries, so the browser's back / forward moves between them.
 test('goes back and forward between the documents shown, restoring the scroll position', async ({ page }) => {
   await openSampleFolder(page);

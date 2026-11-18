@@ -32,7 +32,7 @@ import { scanLimitStore } from './core/scan-limit';
 import { addHiddenDir, removeHiddenDir } from './core/hidden-dirs';
 import { loadHiddenDirs, saveHiddenDirs } from './core/hidden-dirs-store';
 import { loadFavorites, saveFavorites, toggleFavorite } from './core/favorites-store';
-import { isRelativeRef, resolvePath, resolveImages } from './core/assets';
+import { findAnchor, isRelativeRef, refFragment, resolvePath, resolveImages } from './core/assets';
 import { applyThemeImages, watchThemeImages } from './core/theme-images';
 import {
   corpusSource,
@@ -107,8 +107,11 @@ let pollFailures = 0;
 
 // ---- rendering ------------------------------------------------------------
 
-/** `fromHistory`: shown by going back / forward, so no new history entry; `scrollY`: where it was left. */
-async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number; fromHistory?: boolean; scrollY?: number }): Promise<void> {
+/**
+ * `fromHistory`: shown by going back / forward, so no new history entry; `scrollY`: where it was left;
+ * `anchor`: the "#fragment" of the link followed, scrolled to once the document is shown.
+ */
+async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number; fromHistory?: boolean; scrollY?: number; anchor?: string }): Promise<void> {
   if (!ws) return;
   const seq = ++renderSeq;
   const workspace = ws;
@@ -167,6 +170,7 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
   sourceView.setSource(content.text);
   toc.render(tocItems);
   window.scrollTo(0, opts.keepScroll ? scrollY : (opts.scrollY ?? 0));
+  if (opts.anchor) findAnchor(contentEl, opts.anchor)?.scrollIntoView();
   // A search hit: scroll to its line once; the highlights are ranges, so a re-render renews them.
   if (opts.line !== undefined) {
     jumpLine = opts.line;
@@ -675,7 +679,7 @@ contentEl.addEventListener('click', (e) => {
   const path = resolvePath(currentDoc.path, href);
   const doc = path ? ws.docs.find((d) => d.path === path) : undefined;
   if (doc) {
-    void showDoc(doc, { keepScroll: false });
+    void showDoc(doc, { keepScroll: false, anchor: refFragment(href) });
   } else {
     setStatus(t('linkNotFound', { href }), 'error');
   }
