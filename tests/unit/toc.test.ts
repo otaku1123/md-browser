@@ -123,6 +123,19 @@ describe('createToc', () => {
     expect(document.activeElement).toBe(link('title'));
   });
 
+  it('puts the heading in the URL on click without dropping the history entry state', () => {
+    createToc(toc).render(ITEMS);
+    const state = { mdBrowserDoc: { id: 's:1', root: 'docs', path: 'a.md' } };
+    history.replaceState(state, '', location.pathname);
+    document.getElementById('images')!.scrollIntoView = () => {}; // jsdom has none
+
+    li('images').querySelector<HTMLAnchorElement>(':scope > a')!.click();
+
+    expect(location.hash).toBe('#images');
+    expect(history.state).toEqual(state); // doc-history finds the document again on back/forward
+    history.replaceState(null, '', location.pathname);
+  });
+
   it('renders an empty list as the empty state', () => {
     createToc(toc).render([]);
     expect(toc.classList.contains('empty')).toBe(true);
