@@ -2,7 +2,7 @@
 
 `v<version>` タグを push すると、Release ワークフロー（`.github/workflows/release.yml`）が次を自動で行う。
 
-1. 拡張機能の zip をビルドし、GitHub Release に添付する（`release` job）
+1. 単体テスト（`npm test`）が通ることを確かめてから、拡張機能の zip をビルドし、GitHub Release に添付する（`release` job）
 2. その zip を Chrome Web Store API でアップロードし、審査に提出する（`store` job）。承認されると自動で公開される（`publishType: DEFAULT_PUBLISH`）
 
 `store` job は、下記のリポジトリ変数が設定されるまではスキップされる。認証には Workload Identity Federation（WIF）を使うため、GitHub に秘密情報（鍵やトークン）は置かない。

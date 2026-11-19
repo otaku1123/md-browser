@@ -61,6 +61,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # workflow_dispatch can release any tag and nothing else gates this workflow, so the unit
+      # tests must pass on the tagged commit before anything is released or sent to the store.
+      - name: Unit tests
+        run: npm test
       - run: npm run pack:ext
       - name: Publish release
         run: |
