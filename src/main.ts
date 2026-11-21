@@ -52,12 +52,12 @@ const HIDDEN_POLL_EVERY = 5;
 const FAIL_LIMIT = 3;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const contentEl = $<HTMLElement>('content');
-const tocEl = $<HTMLElement>('toc');
-const statusEl = $<HTMLElement>('status');
-const filesEl = $<HTMLElement>('files');
-const filesToggle = $<HTMLButtonElement>('toggle-files');
-const overlay = $<HTMLElement>('drop-overlay');
+const contentEl = $<HTMLElement>('mdb-content');
+const tocEl = $<HTMLElement>('mdb-toc');
+const statusEl = $<HTMLElement>('mdb-status');
+const filesEl = $<HTMLElement>('mdb-files');
+const filesToggle = $<HTMLButtonElement>('mdb-toggle-files');
+const overlay = $<HTMLElement>('mdb-drop-overlay');
 const toc = createToc(tocEl);
 /** Opens a document of the workspace by path (sidebar, quick switcher). */
 function openPath(path: string): void {
@@ -226,7 +226,7 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
   // The history stays, but a reload must not bring back an older item over one that can't be remembered.
   if (!recentHandle) void skipResume();
   // The list lives in the welcome screen, which is gone once a document has been shown.
-  const recentEl = document.getElementById('recent');
+  const recentEl = document.getElementById('mdb-recent');
   if (recentEl) recentEl.hidden = true;
   // Starred documents are remembered by the folder's name, like the hidden folders.
   favorites = next.folder !== undefined ? await loadFavorites(next.folder) : [];
@@ -531,7 +531,7 @@ async function openRecent(entry: RecentEntry): Promise<void> {
 }
 
 function renderRecent(entries: RecentEntry[]): void {
-  const el = $<HTMLElement>('recent');
+  const el = $<HTMLElement>('mdb-recent');
   if (ws || entries.length === 0) {
     el.hidden = true;
     return;
@@ -672,11 +672,11 @@ onPlantUmlSettingsChange(() => void renderDiagrams(contentEl, { retryFailed: tru
 watchThemeImages(contentEl);
 enableImageZoom(contentEl);
 if (location.protocol === 'chrome-extension:') {
-  void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('setup-banner-slot')));
+  void import('./extension/setup-banner').then((m) => m.mountSetupBanner($('mdb-setup-banner-slot')));
 }
 
-$('open-file').addEventListener('click', pickFile);
-$('open-dir').addEventListener('click', pickDirectory);
+$('mdb-open-file').addEventListener('click', pickFile);
+$('mdb-open-dir').addEventListener('click', pickDirectory);
 
 void restoreRecent();
 

@@ -284,7 +284,7 @@ function buildShell(): {
   // Same structure as index.html, so the viewer's sidebar styles apply; hidden until files are listed.
   const filesEl = document.createElement('nav');
   filesEl.className = 'files';
-  filesEl.id = 'md-files';
+  filesEl.id = 'mdb-files';
   filesEl.setAttribute('aria-label', t('files'));
   filesEl.hidden = true;
   const filesToggle = createFilesToggle(filesEl);

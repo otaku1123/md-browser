@@ -14,7 +14,7 @@ export interface FolderCssSettings {
 
 export const FOLDER_CSS_KEY = 'md-browser:folder-css';
 export const FOLDER_CSS_FILE = '.md-browser.css';
-export const STYLE_ID = 'md-folder-css';
+export const STYLE_ID = 'mdb-folder-css';
 export const DEFAULT_FOLDER_CSS: FolderCssSettings = { enabled: false };
 
 /** Off unless explicitly switched on: a missing or damaged value never applies a folder's CSS. */

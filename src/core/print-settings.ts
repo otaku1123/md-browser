@@ -28,7 +28,7 @@ export interface PrintSettings {
 }
 
 export const PRINT_KEY = 'md-browser:print';
-export const STYLE_ID = 'md-print-css';
+export const STYLE_ID = 'mdb-print-css';
 /** Set on <html> while the TOC option is on: the print stylesheet shows .print-toc for it. */
 export const TOC_ATTR = 'data-print-toc';
 

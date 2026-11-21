@@ -16,7 +16,7 @@ export interface CustomCss {
 export const CUSTOM_CSS_KEY = 'md-browser:custom-css';
 /** Plenty for a hand-written stylesheet; bounds a corrupted or hostile stored value. */
 export const CUSTOM_CSS_MAX = 100_000;
-export const STYLE_ID = 'md-custom-css';
+export const STYLE_ID = 'mdb-custom-css';
 /** The rendered Markdown's root in every page (content.ts, index.html, export-html.ts). */
 const SCOPE = '.content';
 
