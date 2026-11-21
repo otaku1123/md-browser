@@ -217,6 +217,9 @@ async function openWorkspace(next: Workspace, opts: { handle?: RecentHandle; doc
     return;
   }
   ws = next;
+  // The open document belongs to the previous folder: until one of this folder is shown, there is
+  // nothing to watch (a failed first render would otherwise leave poll() on the old document).
+  currentDoc = null;
   corpus = createSearchCorpus({
     paths: () => ws?.docs.map((d) => d.path) ?? [],
     read: (path, known) => (ws ? corpusSource(ws).read(path, known) : Promise.reject(new Error('no folder'))),

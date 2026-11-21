@@ -525,7 +525,9 @@ test('ignores <style> elements and pinned positions in a document (#217)', async
   await page.evaluate(() =>
     (window as unknown as { __appendToFile(r: string, t: string): Promise<void> }).__appendToFile(
       'README.md',
-      '\n\n<style>.toolbar { visibility: hidden; }</style>\n\n<div class="pin" style="position: fixed; inset: 0; color: rgb(200, 0, 0)">cover</div>\n',
+      '\n\n<style>.toolbar { visibility: hidden; }</style>\n\n<div class="pin" style="position: fixed; inset: 0; color: rgb(200, 0, 0)">cover</div>\n\n' +
+        // An escaped property name and a custom property must not get past the filter either.
+        '<div class="pin2" style="posit\\69 on: fixed; inset: 0">escaped</div>\n\n<div class="pin3" style="--p: fixed; position: var(--p); inset: 0">var</div>\n',
     ),
   );
   const pin = page.locator('.markdown-body .pin');
@@ -538,6 +540,8 @@ test('ignores <style> elements and pinned positions in a document (#217)', async
   // The colour stays; only the position goes.
   await expect(pin).toHaveCSS('color', 'rgb(200, 0, 0)');
   await expect(pin).toHaveCSS('position', 'static');
+  await expect(page.locator('.markdown-body .pin2')).toHaveCSS('position', 'static');
+  await expect(page.locator('.markdown-body .pin3')).toHaveCSS('position', 'static');
 });
 
 test('remembers font settings across reloads', async ({ page }) => {

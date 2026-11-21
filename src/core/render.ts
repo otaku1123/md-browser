@@ -296,15 +296,20 @@ function keepHeadingId(node: Element, data: UponSanitizeAttributeHookEvent): voi
 /** Off-DOM element whose style declaration parses style attributes (escapes, comments, !important). */
 let styleProbe: HTMLElement | null = null;
 
+/** position values a document may keep: none of them pins content to the viewport. */
+const KEPT_POSITIONS = new Set(['', 'static', 'relative', 'absolute']);
+
 /**
  * style attributes stay (documents colour text with them), but position: fixed / sticky would let
  * a document pin its own content over the toolbar, sidebar and TOC, so that one property goes.
+ * The attribute is always parsed (an escaped name like "posit\69 on" never matches a text
+ * search), and anything but a plain kept value goes, var(…) included: it could resolve to fixed.
  */
 function dropPinnedPosition(_node: Element, data: UponSanitizeAttributeHookEvent): void {
-  if (data.attrName !== 'style' || !/position/i.test(data.attrValue)) return;
+  if (data.attrName !== 'style' || !data.attrValue.trim()) return;
   styleProbe ??= document.createElement('div');
   styleProbe.setAttribute('style', data.attrValue);
-  if (!/fixed|sticky/i.test(styleProbe.style.position)) return;
+  if (KEPT_POSITIONS.has(styleProbe.style.position.trim().toLowerCase())) return;
   styleProbe.style.removeProperty('position');
   data.attrValue = styleProbe.getAttribute('style') ?? '';
   if (!data.attrValue.trim()) data.keepAttr = false;

@@ -106,6 +106,8 @@ describe('sanitizing', () => {
     expect(pinned.getAttribute('style')).not.toMatch(/position/i);
     expect(html('<div style="position: sticky">x</div>').hasAttribute('style')).toBe(false);
     expect(html('<div style="position: relative">x</div>').getAttribute('style')).toBe('position: relative');
+    // A custom property could resolve to fixed: only plain kept values stay.
+    expect(html('<div style="--p: fixed; position: var(--p)">x</div>').getAttribute('style')).not.toMatch(/position/i);
   });
 });
 

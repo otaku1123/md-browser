@@ -335,8 +335,8 @@ async function main(): Promise<void> {
   let current = initial;
   let seq = 0;
 
-  /** False after a render failed (shown in the status line) until one succeeds. */
-  let rendered = true;
+  /** The status text of a render that failed, until one succeeds (null: the last one worked). */
+  let renderError: string | null = null;
 
   async function render(src: string, keepScroll: boolean): Promise<void> {
     const mine = ++seq;
@@ -366,15 +366,15 @@ async function main(): Promise<void> {
       // E.g. a lazy chunk (KaTeX, a highlight language) that failed to load: the page keeps what it
       // showed, and the next change to the file tries again (the loaders don't keep a failed load).
       if (mine === seq) {
-        rendered = false;
-        status.textContent = t('renderFailed', { path: fileName(), error: err instanceof Error ? err.message : String(err) });
+        renderError = t('renderFailed', { path: fileName(), error: err instanceof Error ? err.message : String(err) });
+        status.textContent = renderError;
         status.classList.add('error');
         faviconError(true);
       }
       return;
     }
     if (mine !== seq) return;
-    rendered = true;
+    renderError = null;
     const y = window.scrollY;
     content.replaceChildren(staging.content);
     showMediaSizes(content, mediaDoc);
@@ -438,7 +438,7 @@ async function main(): Promise<void> {
     faviconError(true);
     return;
   }
-  if (rendered) status.textContent = t('autoReloadOn');
+  if (renderError === null) status.textContent = t('autoReloadOn');
   // The search reads this file through the service worker too; the version it has skips that.
   const noteShown = () => currentPath !== null && searchCorpus?.put(currentPath, current, hash);
   noteShown();
@@ -457,17 +457,18 @@ async function main(): Promise<void> {
         hash = next.hash;
         noteShown();
         await render(next.text, true);
-        if (rendered) {
+        if (renderError === null) {
           status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
           status.classList.remove('error');
           faviconUpdated();
         }
-      } else if (failures >= FAIL_LIMIT && rendered) {
-        status.textContent = t('autoReloadOn');
-        status.classList.remove('error');
+      } else if (failures >= FAIL_LIMIT) {
+        // Readable again: back to the normal status, or to the render error still standing.
+        status.textContent = renderError ?? t('autoReloadOn');
+        status.classList.toggle('error', renderError !== null);
       }
       failures = 0;
-      if (rendered) faviconError(false);
+      if (renderError === null) faviconError(false);
     } catch {
       if (++failures < FAIL_LIMIT) return;
       status.textContent = t('fileUnreadable');
