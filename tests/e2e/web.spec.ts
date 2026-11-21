@@ -487,6 +487,26 @@ test('does not execute scripts embedded in Markdown', async ({ page }) => {
   for (const v of violations) expect(v).toMatch(/^script-src-attr inline /);
 });
 
+test('ignores <style> elements and pinned positions in a document (#217)', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile(r: string, t: string): Promise<void> }).__appendToFile(
+      'README.md',
+      '\n\n<style>.toolbar { visibility: hidden; }</style>\n\n<div class="pin" style="position: fixed; inset: 0; color: rgb(200, 0, 0)">cover</div>\n',
+    ),
+  );
+  const pin = page.locator('.markdown-body .pin');
+  await expect(pin).toHaveText('cover');
+  // (Diagrams keep the <style> inside their own SVG.)
+  const docStyles = () =>
+    page.evaluate(() => [...document.querySelectorAll('.markdown-body style')].filter((s) => s.textContent!.includes('.toolbar')).length);
+  expect(await docStyles()).toBe(0);
+  await expect(page.locator('header.toolbar')).toBeVisible();
+  // The colour stays; only the position goes.
+  await expect(pin).toHaveCSS('color', 'rgb(200, 0, 0)');
+  await expect(pin).toHaveCSS('position', 'static');
+});
+
 test('remembers font settings across reloads', async ({ page }) => {
   await page.goto('/');
   await page.locator('.font-settings-toggle').click();

@@ -91,6 +91,22 @@ describe('sanitizing', () => {
     expect(root.querySelector('form')).toBeNull();
     expect(root.textContent).toContain('inside');
   });
+
+  it('drops <style> elements: their rules would reach the toolbar and sidebar (#217)', () => {
+    const root = dom(renderMarkdown('<style>.toolbar { display: none; }</style>\n\n<div><style>p { color: red; }</style>text</div>').html);
+    expect(root.querySelector('style')).toBeNull();
+    expect(root.textContent).toContain('text');
+  });
+
+  it('keeps style attributes but drops position: fixed / sticky from them (#217)', () => {
+    const html = (src: string) => dom(renderMarkdown(src).html).querySelector('span, div')!;
+    expect(html('<span style="color: red">red</span>').getAttribute('style')).toBe('color: red');
+    const pinned = html('<div style="color: red; POSITION : fixed !important; top: 0">x</div>');
+    expect(pinned.getAttribute('style')).toMatch(/color: red/);
+    expect(pinned.getAttribute('style')).not.toMatch(/position/i);
+    expect(html('<div style="position: sticky">x</div>').hasAttribute('style')).toBe(false);
+    expect(html('<div style="position: relative">x</div>').getAttribute('style')).toBe('position: relative');
+  });
 });
 
 describe('ChatGPT export markers', () => {
