@@ -91,6 +91,19 @@ test('typesets inline and display math with KaTeX', async ({ page }) => {
   await expect(page.locator('.math .katex-error')).toHaveCount(0);
 });
 
+test('shows a failed math load in the status line and tries again when the document is opened again (#211)', async ({ page }) => {
+  let blocked = 0;
+  await page.route('**/assets/katex-*.js', (route) => (blocked++ === 0 ? route.abort() : route.continue()));
+  await openSampleFolder(page).catch(() => {}); // the first render fails, so the heading never shows
+  await expect(page.locator('#status')).toHaveText(/^Failed to display: README\.md/);
+  await expect(page.locator('#status')).toHaveClass(/error/);
+
+  await page.locator('#files').getByRole('button', { name: 'README.md', exact: true }).click();
+  await expect(page.locator('.math-inline .katex')).toHaveCount(1);
+  await expect(page.locator('#status')).not.toHaveClass(/error/);
+  expect(blocked).toBe(2);
+});
+
 test('renders a folder: TOC, diagrams and relative images', async ({ page }) => {
   await openSampleFolder(page);
   await expect(page.locator('.toc a')).toHaveCount(11);

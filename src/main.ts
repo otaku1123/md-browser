@@ -124,26 +124,43 @@ async function showDoc(doc: DocEntry, opts: { keepScroll: boolean; line?: number
     return;
   }
 
-  await loadHighlightLanguages(content.text);
-  const { html, toc: tocItems } = renderMarkdown(content.text);
-  // Build off-DOM first so images and diagrams swap in without flicker.
-  // <template> content is inert, so images don't start loading unresolved relative URLs.
-  const staging = document.createElement('template');
-  staging.innerHTML = html;
-  staging.content.prepend(printToc(tocItems));
-  // Before the refs are resolved: per-item sizes are keyed by the image refs as written.
-  prepareMediaSizes(staging.content);
-  // Folder name + path, like the hidden folders: browsers give no absolute path.
-  const media = loadMediaDoc(workspace.folder !== undefined ? `${workspace.folder}/${doc.path}` : doc.path);
   const assets = workspace.assetResolver(doc);
-  applyThemeImages(staging.content); // reads the "#gh-…-mode-only" markers before the refs change
-  await resolveImages(staging.content, assets.resolve);
-  await renderDiagrams(staging.content);
-  await renderMath(staging.content);
-  addCopyButtons(staging.content);
-  prepareImageZoom(staging.content);
-  addHeadingLinks(staging.content, false);
-  const mediaDoc = await media;
+  let staging: HTMLTemplateElement;
+  let tocItems: ReturnType<typeof renderMarkdown>['toc'];
+  let mediaDoc: Awaited<ReturnType<typeof loadMediaDoc>>;
+  try {
+    await loadHighlightLanguages(content.text);
+    const rendered = renderMarkdown(content.text);
+    tocItems = rendered.toc;
+    // Build off-DOM first so images and diagrams swap in without flicker.
+    // <template> content is inert, so images don't start loading unresolved relative URLs.
+    staging = document.createElement('template');
+    staging.innerHTML = rendered.html;
+    staging.content.prepend(printToc(tocItems));
+    // Before the refs are resolved: per-item sizes are keyed by the image refs as written.
+    prepareMediaSizes(staging.content);
+    // Folder name + path, like the hidden folders: browsers give no absolute path.
+    const media = loadMediaDoc(workspace.folder !== undefined ? `${workspace.folder}/${doc.path}` : doc.path);
+    applyThemeImages(staging.content); // reads the "#gh-…-mode-only" markers before the refs change
+    await resolveImages(staging.content, assets.resolve);
+    await renderDiagrams(staging.content);
+    await renderMath(staging.content);
+    addCopyButtons(staging.content);
+    prepareImageZoom(staging.content);
+    addHeadingLinks(staging.content, false);
+    mediaDoc = await media;
+  } catch (err) {
+    // E.g. a lazy chunk (KaTeX, a highlight language) that failed to load. The page keeps what it
+    // showed; the next change to the file, or opening the document again, tries again (the
+    // loaders don't keep a failed load). Not counted as an unreadable file by poll().
+    assets.release();
+    if (seq === renderSeq) {
+      if (doc === currentDoc) lastStamp = content.stamp;
+      setStatus(t('renderFailed', { path: doc.path, error: errMsg(err) }), 'error');
+      faviconError(true);
+    }
+    return;
+  }
   if (seq !== renderSeq) {
     assets.release();
     return; // a newer render started meanwhile
