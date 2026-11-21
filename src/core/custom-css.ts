@@ -53,9 +53,17 @@ export function scopedCustomCss(s: CustomCss): string {
   return s.enabled ? scopeToContent(s.css) : '';
 }
 
+/**
+ * The page's <style> with this id, looked up in <head> only: a document heading can get the same id
+ * from its text (render.ts slugify), and getElementById would return that heading instead.
+ */
+export function headStyle(doc: Document, id: string): HTMLStyleElement | null {
+  return doc.head.querySelector<HTMLStyleElement>(`style#${CSS.escape(id)}`);
+}
+
 /** Puts the stylesheet in the page (at the end of <head>, after the app's own styles). */
 export function applyCustomCss(s: CustomCss, doc: Document = document): void {
-  let style = doc.getElementById(STYLE_ID);
+  let style = headStyle(doc, STYLE_ID);
   if (!style) {
     style = doc.createElement('style');
     style.id = STYLE_ID;

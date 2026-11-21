@@ -67,6 +67,30 @@ describe('applyFolderCss', () => {
     expect(document.getElementById(STYLE_ID)).toBeNull();
     applyFolderCss(null); // nothing to remove
   });
+
+  it('leaves alone a document heading that got the same id from its text', () => {
+    // "# MDB folder CSS" / "# MDB custom CSS" are slugified to the style ids.
+    const headings = [STYLE_ID, CUSTOM_CSS_STYLE_ID].map((id) => {
+      const h = document.createElement('h1');
+      h.id = id;
+      h.textContent = 'heading';
+      document.body.append(h);
+      return h;
+    });
+    applyFolderCss(null);
+    applyCustomCss({ css: 'h1 { color: blue; }', enabled: true, exported: true });
+    applyFolderCss('h1 { color: red; }');
+    for (const h of headings) {
+      expect(h.isConnected).toBe(true);
+      expect(h.textContent).toBe('heading');
+    }
+    expect(document.head.querySelector(`style#${STYLE_ID}`)!.nextElementSibling).toBe(document.head.querySelector(`style#${CUSTOM_CSS_STYLE_ID}`));
+    applyFolderCss(null);
+    expect(headings[0].isConnected).toBe(true);
+    expect(document.head.querySelector(`style#${STYLE_ID}`)).toBeNull();
+    document.head.querySelector(`style#${CUSTOM_CSS_STYLE_ID}`)!.remove();
+    headings.forEach((h) => h.remove());
+  });
 });
 
 describe('folderCssUrls', () => {

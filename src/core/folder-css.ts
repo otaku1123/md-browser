@@ -5,7 +5,7 @@
 // url(https://…) in it makes the browser fetch that address. Wrapped in @scope (.content) like the
 // reader's own custom CSS (custom-css.ts) and placed before it, so the reader's stylesheet wins
 // where the two clash. The choice is synced like the other display settings.
-import { STYLE_ID as CUSTOM_CSS_STYLE_ID, scopeToContent } from './custom-css';
+import { headStyle, STYLE_ID as CUSTOM_CSS_STYLE_ID, scopeToContent } from './custom-css';
 import { createSettingsStore, type SettingsStore } from './settings-store';
 
 export interface FolderCssSettings {
@@ -35,7 +35,7 @@ export function scopedFolderCss(css: string): string {
  */
 export function applyFolderCss(css: string | null, doc: Document = document): void {
   const text = css === null ? '' : scopedFolderCss(css);
-  let style = doc.getElementById(STYLE_ID);
+  let style = headStyle(doc, STYLE_ID);
   if (!text) {
     style?.remove();
     return;
@@ -43,7 +43,7 @@ export function applyFolderCss(css: string | null, doc: Document = document): vo
   if (!style) {
     style = doc.createElement('style');
     style.id = STYLE_ID;
-    doc.head.insertBefore(style, doc.getElementById(CUSTOM_CSS_STYLE_ID));
+    doc.head.insertBefore(style, headStyle(doc, CUSTOM_CSS_STYLE_ID));
   }
   if (style.textContent !== text) style.textContent = text;
 }
