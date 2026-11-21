@@ -41,10 +41,17 @@ function cacheMarkup(key: string, markup: string): void {
 
 // mermaid is ~1MB, so load it only when a document actually contains a diagram.
 function loadMermaid(): Promise<MermaidApi> {
-  mermaidPromise ??= import('mermaid').then(({ default: mermaid }) => {
-    mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
-    return mermaid;
-  });
+  mermaidPromise ??= import('mermaid').then(
+    ({ default: mermaid }) => {
+      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+      return mermaid;
+    },
+    (err: unknown) => {
+      // Not kept: the next diagram tries again (e.g. after a network blip).
+      mermaidPromise = null;
+      throw err;
+    },
+  );
   return mermaidPromise;
 }
 

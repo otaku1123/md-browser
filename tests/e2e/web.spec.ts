@@ -40,7 +40,7 @@ async function openSampleFolder(page: Page): Promise<void> {
 
 /** Clicks a document in the sidebar. Folders start collapsed (#122), so its folders are opened first. */
 async function openFromSidebar(page: Page, path: string): Promise<void> {
-  const files = page.locator('#files');
+  const files = page.locator('#mdb-files');
   const segs = path.split('/');
   for (let i = 1; i < segs.length; i++) {
     const details = files.locator(`details[data-dir="${segs.slice(0, i).join('/')}"]`);
@@ -91,6 +91,19 @@ test('typesets inline and display math with KaTeX', async ({ page }) => {
   await expect(page.locator('.math .katex-error')).toHaveCount(0);
 });
 
+test('shows a failed math load in the status line and tries again when the document is opened again (#211)', async ({ page }) => {
+  let blocked = 0;
+  await page.route('**/assets/katex-*.js', (route) => (blocked++ === 0 ? route.abort() : route.continue()));
+  await openSampleFolder(page).catch(() => {}); // the first render fails, so the heading never shows
+  await expect(page.locator('#mdb-status')).toHaveText(/^Failed to display: README\.md/);
+  await expect(page.locator('#mdb-status')).toHaveClass(/error/);
+
+  await page.locator('#mdb-files').getByRole('button', { name: 'README.md', exact: true }).click();
+  await expect(page.locator('.math-inline .katex')).toHaveCount(1);
+  await expect(page.locator('#mdb-status')).not.toHaveClass(/error/);
+  expect(blocked).toBe(2);
+});
+
 test('renders a folder: TOC, diagrams and relative images', async ({ page }) => {
   await openSampleFolder(page);
   await expect(page.locator('.toc a')).toHaveCount(11);
@@ -101,16 +114,16 @@ test('renders a folder: TOC, diagrams and relative images', async ({ page }) => 
   await expect(page.locator('.markdown-alert-note .markdown-alert-title')).toHaveText('Note');
   await expect(page.locator('img[alt="diagram"]')).toHaveAttribute('src', /^blob:/);
   await expect(page.locator('img.img-missing')).toHaveCount(1);
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
-  await expect(page.locator('#files summary')).toHaveText(['docs']);
-  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', false); // folders start collapsed (#122)
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(page.locator('#mdb-files .file-tree-file')).toHaveCount(4);
+  await expect(page.locator('#mdb-files summary')).toHaveText(['docs']);
+  await expect(page.locator('#mdb-files details[data-dir="docs"]')).toHaveJSProperty('open', false); // folders start collapsed (#122)
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
   await expect(page.locator('.breadcrumb li')).toHaveText(['sample', 'README.md']);
 });
 
 test('folds every folder from the buttons above the list, and one with its subfolders on Alt+click', async ({ page }) => {
   await openSampleFolder(page);
-  const files = page.locator('#files');
+  const files = page.locator('#mdb-files');
   const docs = files.locator('details[data-dir="docs"]');
   await expect(docs).toHaveJSProperty('open', false);
   await files.getByRole('button', { name: 'Expand all folders' }).click();
@@ -130,15 +143,15 @@ test('shows the document path as a breadcrumb whose folders reveal themselves in
   await expect(crumbs).toHaveText(['sample', 'docs', 'other.md']);
   await expect(page.locator('.breadcrumb [aria-current="page"]')).toHaveText('other.md');
   // Close the sidebar and collapse the folder, then the crumb brings both back and focuses the folder.
-  await page.locator('#files details[data-dir="docs"] > summary').click();
-  await page.locator('#toggle-files').click();
-  await expect(page.locator('#files')).toBeHidden();
+  await page.locator('#mdb-files details[data-dir="docs"] > summary').click();
+  await page.locator('#mdb-toggle-files').click();
+  await expect(page.locator('#mdb-files')).toBeHidden();
   const crumb = page.locator('.breadcrumb button[data-dir="docs"]');
   await expect(crumb).toHaveAttribute('title', 'Show "docs" in the file list');
   await crumb.click();
-  await expect(page.locator('#files')).toBeVisible();
-  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', true);
-  await expect(page.locator('#files details[data-dir="docs"] > summary')).toBeFocused();
+  await expect(page.locator('#mdb-files')).toBeVisible();
+  await expect(page.locator('#mdb-files details[data-dir="docs"]')).toHaveJSProperty('open', true);
+  await expect(page.locator('#mdb-files details[data-dir="docs"] > summary')).toBeFocused();
   // Narrow window: only the file name.
   await page.setViewportSize({ width: 600, height: 700 });
   await expect(crumbs.filter({ visible: true })).toHaveText(['other.md']);
@@ -167,29 +180,29 @@ test('opens another folder in the same tab', async ({ page }) => {
   });
   await page.getByRole('button', { name: 'Open folder' }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Notes');
-  await expect(page.locator('#status')).toHaveText(/^notes\.md · /);
+  await expect(page.locator('#mdb-status')).toHaveText(/^notes\.md · /);
   await expect(page.locator('.breadcrumb-root')).toHaveText('other');
   await page.waitForTimeout(1500); // a poll of the previous folder's document would report an error
-  await expect(page.locator('#status')).not.toHaveClass(/error/);
+  await expect(page.locator('#mdb-status')).not.toHaveClass(/error/);
 });
 
 test('reopens the last folder and document after a reload', async ({ page }) => {
   await openSampleFolder(page);
   await openFromSidebar(page, 'docs/other.md');
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   await page.waitForTimeout(300); // the remembered document is saved asynchronously
   await page.reload();
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page.locator('#mdb-files .file-tree-file')).toHaveCount(4);
   // The open document's folder is expanded, so the marked file is in view.
-  await expect(page.locator('#files details[data-dir="docs"]')).toHaveJSProperty('open', true);
-  await expect(page.locator('#files [data-path="docs/other.md"]')).toBeVisible();
+  await expect(page.locator('#mdb-files details[data-dir="docs"]')).toHaveJSProperty('open', true);
+  await expect(page.locator('#mdb-files [data-path="docs/other.md"]')).toBeVisible();
   await expect(page.locator('.welcome')).toHaveCount(0);
 });
 
 test('hides a folder from the sidebar, remembers it, and shows it again', async ({ page }) => {
   await openSampleFolder(page);
-  const files = page.locator('#files');
+  const files = page.locator('#mdb-files');
   await openFromSidebar(page, 'docs/other.md');
   await expect(page.locator('.markdown-body h1')).toHaveText('別ファイル');
   // Hiding the open document's folder falls back to the README.
@@ -267,7 +280,7 @@ test('lists recent folders, most recent first, and removes them', async ({ page 
   await page.reload();
   await expect(page.locator('.recent-open')).toHaveCount(1);
   await page.getByRole('button', { name: 'Clear' }).click();
-  await expect(page.locator('#recent')).toBeHidden();
+  await expect(page.locator('#mdb-recent')).toBeHidden();
 });
 
 test('opens a document with the quick switcher, recent ones first, with the shortcut from the settings', async ({ page }) => {
@@ -281,13 +294,13 @@ test('opens a document with the quick switcher, recent ones first, with the shor
   await expect(switcher.getByRole('option')).toHaveText(['other.mddocs']);
   await page.keyboard.press('Enter');
   await expect(switcher).toHaveCount(0);
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
 
   // Empty query: the previous document first, so Enter goes back.
   await page.keyboard.press('ControlOrMeta+P');
   await expect(switcher.getByRole('option').first()).toHaveAttribute('data-path', 'README.md');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
 
   // Another shortcut from the display settings, shared with the other tabs through storage.
   await page.locator('.font-settings-toggle').click();
@@ -302,7 +315,7 @@ test('opens a document with the quick switcher, recent ones first, with the shor
 // #159: starred documents sit above the tree and first in the quick switcher; remembered per folder name.
 test('stars documents as favorites, lists them first, and remembers them', async ({ page }) => {
   await openSampleFolder(page);
-  const files = page.locator('#files');
+  const files = page.locator('#mdb-files');
   await expect(files.locator('.files-favorites')).toHaveCount(0);
   await openFromSidebar(page, 'docs/other.md');
   const star = files.locator('.file-tree').getByRole('button', { name: 'Add "docs/other.md" to favorites' });
@@ -342,7 +355,7 @@ test('stars documents as favorites, lists them first, and remembers them', async
 test('follows relative links between documents', async ({ page }) => {
   await openSampleFolder(page);
   await page.getByRole('link', { name: '別のMDファイル' }).click();
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
 });
 
 // #210: the "#heading" of a link to another document is scrolled to, as on a file:// page.
@@ -354,7 +367,7 @@ test('follows a relative link to a heading of another document', async ({ page }
     await w.__appendToFile('README.md', '\n\n[見出しへ](docs/other.md#追記-の見出し)\n');
   });
   await page.getByRole('link', { name: '見出しへ' }).click();
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   const heading = page.getByRole('heading', { name: '追記 の見出し' });
   await expect(heading).toBeInViewport();
   // Below the toolbar (html's scroll-padding-top), not merely somewhere on screen.
@@ -364,7 +377,7 @@ test('follows a relative link to a heading of another document', async ({ page }
 // #198: the documents shown are history entries, so the browser's back / forward moves between them.
 test('goes back and forward between the documents shown, restoring the scroll position', async ({ page }) => {
   await openSampleFolder(page);
-  const current = page.locator('#files [aria-current="page"]');
+  const current = page.locator('#mdb-files [aria-current="page"]');
   const entries = await page.evaluate(() => history.length);
   const left = await page.evaluate(() => {
     window.scrollTo(0, 200);
@@ -389,13 +402,33 @@ test('goes back and forward between the documents shown, restoring the scroll po
   expect(await page.evaluate(() => history.length)).toBe(entries + 2);
 });
 
+test('moves to headings named like parts of the viewer (Content, Status, Files, TOC, Recent) (#209)', async ({ page }) => {
+  await openSampleFolder(page);
+  const names = ['Content', 'Status', 'Files', 'TOC', 'Recent'];
+  await page.evaluate(
+    (md) => (window as unknown as { __appendToFile(r: string, t: string): Promise<void> }).__appendToFile('README.md', md),
+    `\n\n[to content](#content)\n\n${names.map((n) => `## ${n}\n\n${'filler\n\n'.repeat(60)}`).join('')}`,
+  );
+  for (const name of names) {
+    const heading = page.locator(`.markdown-body h2#${name.toLowerCase()}`);
+    await expect(heading).toHaveCount(1);
+    await page.locator('.toc a', { hasText: new RegExp(`^${name}$`) }).click();
+    await expect(heading).toBeInViewport();
+    await expect.poll(() => heading.evaluate((h) => Math.abs(h.getBoundingClientRect().top) < 200)).toBe(true);
+  }
+  // A link in the document goes to its own heading, not the viewer's element.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole('link', { name: 'to content', exact: true }).click();
+  await expect(page.locator('.markdown-body h2#content')).toBeInViewport();
+});
+
 // #208: a table of contents link puts the heading in the URL; the entry must stay the document's.
 test('comes back to a document whose table of contents was used', async ({ page }) => {
   await openSampleFolder(page);
-  const current = page.locator('#files [aria-current="page"]');
+  const current = page.locator('#mdb-files [aria-current="page"]');
   await page.getByRole('link', { name: '別のMDファイル' }).click();
   await expect(current).toHaveAttribute('data-path', 'docs/other.md');
-  await page.locator('#toc a[data-target]').first().click();
+  await page.locator('#mdb-toc a[data-target]').first().click();
   await expect(page).toHaveURL(/#/);
 
   await page.goBack();
@@ -407,23 +440,23 @@ test('comes back to a document whose table of contents was used', async ({ page 
 test('opens files from the sidebar and toggles it', async ({ page }) => {
   await openSampleFolder(page);
   await openFromSidebar(page, 'docs/other.md');
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'docs/other.md');
   const toggle = page.getByRole('button', { name: 'Files' });
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await toggle.click();
-  await expect(page.locator('#files')).toBeHidden();
+  await expect(page.locator('#mdb-files')).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
-  await expect(page.locator('#files')).toBeVisible();
+  await expect(page.locator('#mdb-files')).toBeVisible();
 });
 
 // #123: the arrow keys move through the sidebar like a tree view.
 test('moves through the file sidebar with the keyboard', async ({ page }) => {
   await openSampleFolder(page);
-  const files = page.locator('#files');
+  const files = page.locator('#mdb-files');
   const docs = files.locator('.file-tree summary', { hasText: 'docs' });
   const docsFolder = docs.locator('..');
-  await page.evaluate(() => document.querySelectorAll<HTMLDetailsElement>('#files details').forEach((d) => (d.open = false)));
+  await page.evaluate(() => document.querySelectorAll<HTMLDetailsElement>('#mdb-files details').forEach((d) => (d.open = false)));
   await docs.focus();
   await page.keyboard.press('ArrowDown'); // the closed folder's files are skipped
   await expect(files.locator('[data-path="README.md"]')).toBeFocused();
@@ -455,16 +488,16 @@ test('moves through the file sidebar with the keyboard', async ({ page }) => {
 // #109: files added outside show up when the user comes back to the tab, on the same document.
 test('lists the folder again when the user comes back to the tab', async ({ page }) => {
   await openSampleFolder(page);
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(4);
-  await page.locator('#files details[data-dir="docs"] summary').click(); // expanded by the user: stays so after the re-render
+  await expect(page.locator('#mdb-files .file-tree-file')).toHaveCount(4);
+  await page.locator('#mdb-files details[data-dir="docs"] summary').click(); // expanded by the user: stays so after the re-render
   await page.evaluate(async () => {
     await (window as unknown as { __writeFile(rel: string, text: string): Promise<void> }).__writeFile('docs/added.md', '# Added');
     window.dispatchEvent(new Event('focus'));
   });
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(5);
-  await expect(page.locator('#files [data-path="docs/added.md"]')).toBeVisible();
-  await expect(page.locator('#files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
-  await page.locator('#files').getByRole('button', { name: 'added.md', exact: true }).click();
+  await expect(page.locator('#mdb-files .file-tree-file')).toHaveCount(5);
+  await expect(page.locator('#mdb-files [data-path="docs/added.md"]')).toBeVisible();
+  await expect(page.locator('#mdb-files [aria-current="page"]')).toHaveAttribute('data-path', 'README.md');
+  await page.locator('#mdb-files').getByRole('button', { name: 'added.md', exact: true }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Added');
 });
 
@@ -476,7 +509,7 @@ test('re-renders when the file changes', async ({ page }) => {
 
 test('does not execute scripts embedded in Markdown', async ({ page }) => {
   await openSampleFolder(page);
-  await page.locator('#files').getByRole('button', { name: 'xss.md', exact: true }).click();
+  await page.locator('#mdb-files').getByRole('button', { name: 'xss.md', exact: true }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('XSS');
   await expect(page.locator('a[href^="javascript:" i]')).toHaveCount(0);
   await page.waitForTimeout(500);
@@ -485,6 +518,30 @@ test('does not execute scripts embedded in Markdown', async ({ page }) => {
   // onerror / onload attributes there before DOMPurify strips them. Nothing else may be blocked.
   const violations = await page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations.splice(0));
   for (const v of violations) expect(v).toMatch(/^script-src-attr inline /);
+});
+
+test('ignores <style> elements and pinned positions in a document (#217)', async ({ page }) => {
+  await openSampleFolder(page);
+  await page.evaluate(() =>
+    (window as unknown as { __appendToFile(r: string, t: string): Promise<void> }).__appendToFile(
+      'README.md',
+      '\n\n<style>.toolbar { visibility: hidden; }</style>\n\n<div class="pin" style="position: fixed; inset: 0; color: rgb(200, 0, 0)">cover</div>\n\n' +
+        // An escaped property name and a custom property must not get past the filter either.
+        '<div class="pin2" style="posit\\69 on: fixed; inset: 0">escaped</div>\n\n<div class="pin3" style="--p: fixed; position: var(--p); inset: 0">var</div>\n',
+    ),
+  );
+  const pin = page.locator('.markdown-body .pin');
+  await expect(pin).toHaveText('cover');
+  // (Diagrams keep the <style> inside their own SVG.)
+  const docStyles = () =>
+    page.evaluate(() => [...document.querySelectorAll('.markdown-body style')].filter((s) => s.textContent!.includes('.toolbar')).length);
+  expect(await docStyles()).toBe(0);
+  await expect(page.locator('header.toolbar')).toBeVisible();
+  // The colour stays; only the position goes.
+  await expect(pin).toHaveCSS('color', 'rgb(200, 0, 0)');
+  await expect(pin).toHaveCSS('position', 'static');
+  await expect(page.locator('.markdown-body .pin2')).toHaveCSS('position', 'static');
+  await expect(page.locator('.markdown-body .pin3')).toHaveCSS('position', 'static');
 });
 
 test('remembers font settings across reloads', async ({ page }) => {
@@ -501,7 +558,7 @@ test('sets the text size and content width, and resets them', async ({ page }) =
   await page.setViewportSize({ width: 1600, height: 900 });
   await openSampleFolder(page);
   const doc = () =>
-    page.locator('#content').evaluate((el) => ({ font: getComputedStyle(el).fontSize, max: getComputedStyle(el).maxWidth }));
+    page.locator('#mdb-content').evaluate((el) => ({ font: getComputedStyle(el).fontSize, max: getComputedStyle(el).maxWidth }));
   expect(await doc()).toEqual({ font: '16px', max: '980px' });
 
   await page.locator('.font-settings-toggle').click();
@@ -510,7 +567,7 @@ test('sets the text size and content width, and resets them', async ({ page }) =
   await panel.getByRole('radiogroup', { name: 'Width' }).getByRole('radio', { name: 'Full', exact: true }).check();
   expect(await doc()).toEqual({ font: '18px', max: 'none' });
   // The toolbar keeps its size.
-  expect(await page.locator('#open-file').evaluate((el) => getComputedStyle(el).fontSize)).toBe('13px');
+  expect(await page.locator('#mdb-open-file').evaluate((el) => getComputedStyle(el).fontSize)).toBe('13px');
 
   await page.waitForTimeout(600); // saves are debounced
   await page.reload();
@@ -526,25 +583,30 @@ test('sets the text size and content width, and resets them', async ({ page }) =
 test('applies custom CSS to the document only and remembers it', async ({ page }) => {
   await openSampleFolder(page);
   const color = (selector: string) => page.locator(selector).first().evaluate((el) => getComputedStyle(el).color);
-  const before = await color('#open-file');
+  const before = await color('#mdb-open-file');
 
   await page.locator('.font-settings-toggle').click();
   const panel = page.locator('.font-settings-panel');
   const css = panel.getByRole('textbox', { name: 'Custom CSS' });
   await css.fill('h1 { color: rgb(200, 0, 0); } button { color: rgb(0, 200, 0); }');
-  await expect.poll(() => color('#content h1')).toBe('rgb(200, 0, 0)');
+  await expect.poll(() => color('#mdb-content h1')).toBe('rgb(200, 0, 0)');
   // Scoped to the document: the toolbar's buttons keep their colour.
-  expect(await color('#open-file')).toBe(before);
+  expect(await color('#mdb-open-file')).toBe(before);
   await expect(panel.locator('.custom-css-status')).toHaveText(/characters · saved/);
+  // An extra "}" cannot close the scope and let the rest reach the toolbar (#218).
+  await css.fill('h1 { color: rgb(200, 0, 0); } } .toolbar { visibility: hidden; }');
+  await expect(panel.locator('.custom-css-status')).toHaveText(/characters · saved/);
+  await expect.poll(() => color('#mdb-content h1')).toBe('rgb(200, 0, 0)');
+  await expect(page.locator('header.toolbar')).toBeVisible();
 
   await page.reload();
-  await expect.poll(() => color('#content h1')).toBe('rgb(200, 0, 0)');
+  await expect.poll(() => color('#mdb-content h1')).toBe('rgb(200, 0, 0)');
   await page.locator('.font-settings-toggle').click();
   await expect(css).toHaveValue(/rgb\(200, 0, 0\)/);
 
   // Off keeps the text; clear removes it.
   await panel.getByRole('checkbox', { name: 'Apply' }).uncheck();
-  await expect.poll(() => color('#content h1')).not.toBe('rgb(200, 0, 0)');
+  await expect.poll(() => color('#mdb-content h1')).not.toBe('rgb(200, 0, 0)');
   await expect(css).toHaveValue(/rgb\(200, 0, 0\)/);
   await panel.getByRole('button', { name: 'Clear' }).click();
   await expect(css).toHaveValue('');
@@ -684,13 +746,13 @@ test('applies the folder scan limit from the settings', async ({ page }) => {
   });
   await page.getByRole('button', { name: 'Open folder' }).click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Big');
-  await expect(page.locator('#status')).toHaveText(/^⚠ Folder too large: scanned only 100 entries/);
+  await expect(page.locator('#mdb-status')).toHaveText(/^⚠ Folder too large: scanned only 100 entries/);
 
   // Raising the limit rescans the open folder right away, staying on the same document.
   await page.locator('.font-settings-toggle').click();
   await limit.fill('1000');
   await limit.press('Enter');
-  await expect(page.locator('#status')).toHaveText(/^README\.md · /);
+  await expect(page.locator('#mdb-status')).toHaveText(/^README\.md · /);
   await expect(page.locator('.markdown-body h1')).toHaveText('Big');
 });
 
@@ -702,7 +764,7 @@ const naturalWidth = (svg: ReturnType<Page['locator']>) => svg.evaluate((el) => 
 const widthOf = (locator: ReturnType<Page['locator']>) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().width));
 /** Width of the text column, the most an image or diagram may take. */
 const columnWidth = (page: Page) =>
-  page.locator('#content').evaluate((el) => {
+  page.locator('#mdb-content').evaluate((el) => {
     const style = getComputedStyle(el);
     return Math.round(el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
   });
@@ -991,12 +1053,12 @@ test('prints only the document, on white, even in dark mode', async ({ page }) =
   await expect(page.locator('.diagram-mermaid .diagram-screen svg')).toHaveCount(2);
   await expect(page.locator('.diagram-print').first()).toBeHidden();
   await page.emulateMedia({ media: 'print', colorScheme: 'dark' });
-  for (const sel of ['.toolbar', '#files', '.toc', '.diagram-screen']) await expect(page.locator(sel).first()).toBeHidden();
+  for (const sel of ['.toolbar', '#mdb-files', '.toc', '.diagram-screen']) await expect(page.locator(sel).first()).toBeHidden();
   await expect(page.locator('.diagram-print svg')).toHaveCount(4); // 2 Mermaid + 2 PlantUML
   await expect(page.locator('.diagram-print').first()).toBeVisible();
   const style = await page.evaluate(() => {
     const body = getComputedStyle(document.body);
-    const content = document.getElementById('content')!.getBoundingClientRect();
+    const content = document.getElementById('mdb-content')!.getBoundingClientRect();
     return {
       bg: body.backgroundColor,
       fg: body.color,
@@ -1015,12 +1077,12 @@ test('toggles the TOC and keeps the choice across reloads', async ({ page }) => 
   const toggle = page.getByRole('button', { name: 'Table of contents' });
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.toc')).toBeVisible();
-  const before = (await page.locator('#content').boundingBox())!.width;
+  const before = (await page.locator('#mdb-content').boundingBox())!.width;
   await toggle.click();
   await expect(page.locator('.toc')).toBeHidden();
   await expect(page.locator('.toc-resizer')).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  expect((await page.locator('#content').boundingBox())!.width).toBeGreaterThan(before);
+  expect((await page.locator('#mdb-content').boundingBox())!.width).toBeGreaterThan(before);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Table of contents' })).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('button', { name: 'Table of contents' }).click();
@@ -1085,7 +1147,7 @@ test('resizes the TOC by dragging, with the keyboard, and resets on double-click
 test('resizes the file list, keeps the handle across documents, and resets on double-click', async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 900 });
   await openSampleFolder(page);
-  const files = page.locator('#files');
+  const files = page.locator('#mdb-files');
   const handle = page.getByRole('separator', { name: 'Resize file list' });
   const width = async () => Math.round((await files.boundingBox())!.width);
   expect(await width()).toBe(240);
@@ -1217,7 +1279,7 @@ test('switches to the Markdown source and back, and starts each document in the 
   await page.keyboard.press('ControlOrMeta+Shift+M');
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(source).toBeVisible();
-  await expect(page.locator('#content')).toBeHidden();
+  await expect(page.locator('#mdb-content')).toBeHidden();
   await expect(page.locator('.toc')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Table of contents' })).toBeHidden();
   await expect(source.locator('.source-line')).toHaveCount(122);
@@ -1246,7 +1308,7 @@ test('switches to the Markdown source and back, and starts each document in the 
   // Playwright scrolls before clicking, so the preview's position is set by the shortcut and checked after a click.
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.locator('#content')).toBeVisible();
+  await expect(page.locator('#mdb-content')).toBeVisible();
   await expect(page.locator('.toc')).toBeVisible();
   await expect(source).toBeHidden();
   expect(await page.evaluate(() => window.scrollY)).toBe(previewY);
@@ -1305,7 +1367,7 @@ test('passes the axe accessibility checks on the welcome screen and a document',
   await expect(page.locator('.math-display .katex-display')).toHaveCount(1);
   await expectAccessible(page);
   // The folder rows' hide buttons, shown on focus.
-  await page.locator('#files .file-tree-hide').first().focus();
+  await page.locator('#mdb-files .file-tree-hide').first().focus();
   await expectAccessible(page);
 });
 
@@ -1540,7 +1602,7 @@ async function openGeneratedFolder(page: Page, count: number): Promise<void> {
 // #137: a folder of 500 documents (~1 MB): the first search reads them all; the time is reported.
 test('searches a folder of 500 files, reporting how long the first search takes', async ({ page }) => {
   await openGeneratedFolder(page, 500);
-  await expect(page.locator('#files .file-tree-file')).toHaveCount(501);
+  await expect(page.locator('#mdb-files .file-tree-file')).toHaveCount(501);
   const panel = page.getByRole('search', { name: 'Search in folder' });
   const started = Date.now();
   await page.keyboard.press('ControlOrMeta+Shift+F');
@@ -1689,7 +1751,7 @@ test('folds TOC sections and remembers them per document', async ({ page }) => {
   await expect(toc.locator('a:visible')).toHaveCount(9);
   await expect(toc.locator('a', { hasText: '深い見出し' }).first()).toBeHidden();
   // Inside the folded section, the section itself is the current entry; it is not unfolded.
-  await page.locator('#content h4').evaluate((el) => el.scrollIntoView());
+  await page.locator('#mdb-content h4').evaluate((el) => el.scrollIntoView());
   await expect(toc.locator('a.active')).toHaveText('画像');
   await expect(toc.locator('a:visible')).toHaveCount(9);
   await expectAccessible(page);

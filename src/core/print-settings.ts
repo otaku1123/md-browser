@@ -6,6 +6,7 @@
 import { t } from '../i18n';
 import type { TocItem } from './render';
 import { createSettingsStore, type SettingsStore } from './settings-store';
+import { headStyle } from './custom-css';
 
 export const PAPERS = { a4: 'A4', letter: 'letter' } as const;
 export const ORIENTATIONS = ['portrait', 'landscape'] as const;
@@ -28,7 +29,7 @@ export interface PrintSettings {
 }
 
 export const PRINT_KEY = 'md-browser:print';
-export const STYLE_ID = 'md-print-css';
+export const STYLE_ID = 'mdb-print-css';
 /** Set on <html> while the TOC option is on: the print stylesheet shows .print-toc for it. */
 export const TOC_ATTR = 'data-print-toc';
 
@@ -61,7 +62,7 @@ export function printCss(s: PrintSettings): string {
 
 /** Writes the rules to the page and flags the TOC option on <html>. */
 export function applyPrintSettings(s: PrintSettings, doc: Document = document): void {
-  let style = doc.getElementById(STYLE_ID);
+  let style = headStyle(doc, STYLE_ID);
   if (!style) {
     style = doc.createElement('style');
     style.id = STYLE_ID;

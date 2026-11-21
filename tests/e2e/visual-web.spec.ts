@@ -33,7 +33,7 @@ async function openVisualFolder(page: Page, colorScheme: 'light' | 'dark' = 'lig
 }
 
 async function openDiagrams(page: Page): Promise<void> {
-  await page.locator('#files [data-path="diagrams.md"]').click();
+  await page.locator('#mdb-files [data-path="diagrams.md"]').click();
   await expect(page.locator('.markdown-body h1')).toHaveText('Diagrams and math');
   await settle(page);
 }
@@ -80,7 +80,7 @@ test('shows the quick switcher with matches marked', async ({ page }) => {
 
 test('shows the file list and the TOC', async ({ page }) => {
   await openVisualFolder(page);
-  await expect(page.locator('#files')).toHaveScreenshot('files-sidebar.png');
+  await expect(page.locator('#mdb-files')).toHaveScreenshot('files-sidebar.png');
   await expect(page.locator('.toc')).toHaveScreenshot('toc-sidebar.png');
 });
 

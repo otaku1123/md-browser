@@ -114,7 +114,11 @@ function loadEngine(): Promise<Engine> {
     const g = globalThis as { PLANTUML_STDLIB_LOADER?: Loader; PLANTUML_FILE_LOADER?: FileLoader };
     g.PLANTUML_STDLIB_LOADER = loader;
     g.PLANTUML_FILE_LOADER = plantUmlFileLoader;
-    return import('@plantuml/core');
+    return import('@plantuml/core').catch((err: unknown) => {
+      // Not kept: the next diagram tries again (e.g. after a network blip).
+      enginePromise = null;
+      throw err;
+    });
   })();
   return enginePromise;
 }

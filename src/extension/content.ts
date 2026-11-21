@@ -284,7 +284,7 @@ function buildShell(): {
   // Same structure as index.html, so the viewer's sidebar styles apply; hidden until files are listed.
   const filesEl = document.createElement('nav');
   filesEl.className = 'files';
-  filesEl.id = 'md-files';
+  filesEl.id = 'mdb-files';
   filesEl.setAttribute('aria-label', t('files'));
   filesEl.hidden = true;
   const filesToggle = createFilesToggle(filesEl);
@@ -335,26 +335,46 @@ async function main(): Promise<void> {
   let current = initial;
   let seq = 0;
 
+  /** The status text of a render that failed, until one succeeds (null: the last one worked). */
+  let renderError: string | null = null;
+
   async function render(src: string, keepScroll: boolean): Promise<void> {
     const mine = ++seq;
-    await loadHighlightLanguages(src);
-    const { html, toc: items } = renderMarkdown(src);
-    // <template> content is inert: nothing loads until it is attached.
-    const staging = document.createElement('template');
-    staging.innerHTML = html;
-    staging.content.prepend(printToc(items));
-    prepareMediaSizes(staging.content);
-    // Per-item sizes are remembered by the file's URL (without the heading in the hash).
-    const media = loadMediaDoc(location.href.split('#')[0]);
-    // Relative images/links resolve natively against the file:// URL.
-    applyThemeImages(staging.content);
-    await renderDiagrams(staging.content);
-    await renderMath(staging.content);
-    addCopyButtons(staging.content);
-    prepareImageZoom(staging.content);
-    addHeadingLinks(staging.content, true);
-    const mediaDoc = await media;
+    let staging: HTMLTemplateElement;
+    let items: ReturnType<typeof renderMarkdown>['toc'];
+    let mediaDoc: Awaited<ReturnType<typeof loadMediaDoc>>;
+    try {
+      await loadHighlightLanguages(src);
+      const out = renderMarkdown(src);
+      items = out.toc;
+      // <template> content is inert: nothing loads until it is attached.
+      staging = document.createElement('template');
+      staging.innerHTML = out.html;
+      staging.content.prepend(printToc(items));
+      prepareMediaSizes(staging.content);
+      // Per-item sizes are remembered by the file's URL (without the heading in the hash).
+      const media = loadMediaDoc(location.href.split('#')[0]);
+      // Relative images/links resolve natively against the file:// URL.
+      applyThemeImages(staging.content);
+      await renderDiagrams(staging.content);
+      await renderMath(staging.content);
+      addCopyButtons(staging.content);
+      prepareImageZoom(staging.content);
+      addHeadingLinks(staging.content, true);
+      mediaDoc = await media;
+    } catch (err) {
+      // E.g. a lazy chunk (KaTeX, a highlight language) that failed to load: the page keeps what it
+      // showed, and the next change to the file tries again (the loaders don't keep a failed load).
+      if (mine === seq) {
+        renderError = t('renderFailed', { path: fileName(), error: err instanceof Error ? err.message : String(err) });
+        status.textContent = renderError;
+        status.classList.add('error');
+        faviconError(true);
+      }
+      return;
+    }
     if (mine !== seq) return;
+    renderError = null;
     const y = window.scrollY;
     content.replaceChildren(staging.content);
     showMediaSizes(content, mediaDoc);
@@ -418,7 +438,7 @@ async function main(): Promise<void> {
     faviconError(true);
     return;
   }
-  status.textContent = t('autoReloadOn');
+  if (renderError === null) status.textContent = t('autoReloadOn');
   // The search reads this file through the service worker too; the version it has skips that.
   const noteShown = () => currentPath !== null && searchCorpus?.put(currentPath, current, hash);
   noteShown();
@@ -437,15 +457,18 @@ async function main(): Promise<void> {
         hash = next.hash;
         noteShown();
         await render(next.text, true);
-        status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
-        status.classList.remove('error');
-        faviconUpdated();
+        if (renderError === null) {
+          status.textContent = `${t('autoReloadOn')} · ${t('updatedAt', { time: new Date().toLocaleTimeString() })}`;
+          status.classList.remove('error');
+          faviconUpdated();
+        }
       } else if (failures >= FAIL_LIMIT) {
-        status.textContent = t('autoReloadOn');
-        status.classList.remove('error');
+        // Readable again: back to the normal status, or to the render error still standing.
+        status.textContent = renderError ?? t('autoReloadOn');
+        status.classList.toggle('error', renderError !== null);
       }
       failures = 0;
-      faviconError(false);
+      if (renderError === null) faviconError(false);
     } catch {
       if (++failures < FAIL_LIMIT) return;
       status.textContent = t('fileUnreadable');
