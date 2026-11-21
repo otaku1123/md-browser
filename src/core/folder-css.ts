@@ -5,7 +5,7 @@
 // url(https://…) in it makes the browser fetch that address. Wrapped in @scope (.content) like the
 // reader's own custom CSS (custom-css.ts) and placed before it, so the reader's stylesheet wins
 // where the two clash. The choice is synced like the other display settings.
-import { STYLE_ID as CUSTOM_CSS_STYLE_ID } from './custom-css';
+import { STYLE_ID as CUSTOM_CSS_STYLE_ID, scopeToContent } from './custom-css';
 import { createSettingsStore, type SettingsStore } from './settings-store';
 
 export interface FolderCssSettings {
@@ -15,9 +15,6 @@ export interface FolderCssSettings {
 export const FOLDER_CSS_KEY = 'md-browser:folder-css';
 export const FOLDER_CSS_FILE = '.md-browser.css';
 export const STYLE_ID = 'md-folder-css';
-/** The rendered Markdown's root (the same scope as the custom CSS). */
-const SCOPE = '.content';
-
 export const DEFAULT_FOLDER_CSS: FolderCssSettings = { enabled: false };
 
 /** Off unless explicitly switched on: a missing or damaged value never applies a folder's CSS. */
@@ -26,10 +23,9 @@ export function normalizeFolderCssSettings(raw: unknown): FolderCssSettings {
   return { enabled: o.enabled === true };
 }
 
-/** The stylesheet as applied: limited to the document ("</" escaped as in custom-css.ts). Empty when blank. */
+/** The stylesheet as applied: limited to the document like the custom CSS (scopeToContent). Empty when blank. */
 export function scopedFolderCss(css: string): string {
-  if (!css.trim()) return '';
-  return `@scope (${SCOPE}) {\n${css.replace(/<\//g, '<\\/')}\n}`;
+  return scopeToContent(css);
 }
 
 /**

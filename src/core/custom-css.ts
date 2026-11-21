@@ -33,13 +33,24 @@ export function normalizeCustomCss(raw: unknown): CustomCss {
 }
 
 /**
- * The stylesheet as applied: limited to the document. Empty when there is nothing to apply.
- * "</" is escaped so the text can also sit inside a <style> element in HTML (the export): CSS
- * reads "<\/" as "</", HTML does not.
+ * A stylesheet limited to the document, for this file and folder-css.ts. The text goes through the
+ * browser's CSS parser first and only the rules it accepted are put back, so a stray "}" in it
+ * cannot close the @scope block and reach the toolbar or the settings panel. Empty when nothing is
+ * left. "</" is escaped so the text can also sit inside a <style> element in HTML (the export):
+ * CSS reads "<\/" as "</", HTML does not.
  */
+export function scopeToContent(css: string): string {
+  if (!css.trim() || typeof CSSStyleSheet !== 'function') return '';
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(css);
+  const rules = Array.from(sheet.cssRules, (r) => r.cssText).join('\n');
+  if (!rules) return '';
+  return `@scope (${SCOPE}) {\n${rules.replace(/<\//g, '<\\/')}\n}`;
+}
+
+/** The stylesheet as applied (see scopeToContent). Empty when there is nothing to apply. */
 export function scopedCustomCss(s: CustomCss): string {
-  if (!s.enabled || !s.css.trim()) return '';
-  return `@scope (${SCOPE}) {\n${s.css.replace(/<\//g, '<\\/')}\n}`;
+  return s.enabled ? scopeToContent(s.css) : '';
 }
 
 /** Puts the stylesheet in the page (at the end of <head>, after the app's own styles). */

@@ -805,7 +805,8 @@ test('opens the file in the chosen editor at the line shown, from a toolbar link
 test("applies a folder's .md-browser.css only when switched on, the nearest folder first", async ({ context }) => {
   const dir = await makeFolder({
     'README.md': '# Top',
-    '.md-browser.css': 'h1 { color: rgb(255, 0, 0); }',
+    // The extra "}" must not let the rule after it reach the toolbar (#218).
+    '.md-browser.css': 'h1 { color: rgb(255, 0, 0); } } .toolbar { visibility: hidden; }',
     'sub/doc.md': '# Deep',
     'sub/.md-browser.css': 'h1 { color: rgb(0, 0, 255); }',
     'other/doc.md': '# Other',
@@ -826,6 +827,7 @@ test("applies a folder's .md-browser.css only when switched on, the nearest fold
     await expect(toggle).not.toBeChecked();
     await toggle.check();
     await expect(h1).toHaveCSS('color', 'rgb(255, 0, 0)');
+    await expect(page.locator('header.toolbar')).toBeVisible();
     // Before the reader's own CSS, so that one wins where they clash.
     expect(
       await page.evaluate(() => {

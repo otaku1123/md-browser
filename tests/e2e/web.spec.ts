@@ -536,6 +536,11 @@ test('applies custom CSS to the document only and remembers it', async ({ page }
   // Scoped to the document: the toolbar's buttons keep their colour.
   expect(await color('#open-file')).toBe(before);
   await expect(panel.locator('.custom-css-status')).toHaveText(/characters · saved/);
+  // An extra "}" cannot close the scope and let the rest reach the toolbar (#218).
+  await css.fill('h1 { color: rgb(200, 0, 0); } } .toolbar { visibility: hidden; }');
+  await expect(panel.locator('.custom-css-status')).toHaveText(/characters · saved/);
+  await expect.poll(() => color('#content h1')).toBe('rgb(200, 0, 0)');
+  await expect(page.locator('header.toolbar')).toBeVisible();
 
   await page.reload();
   await expect.poll(() => color('#content h1')).toBe('rgb(200, 0, 0)');

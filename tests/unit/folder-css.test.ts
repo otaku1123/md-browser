@@ -25,6 +25,10 @@ describe('scopedFolderCss', () => {
     expect(scopedFolderCss(' \n ')).toBe('');
   });
 
+  it('keeps a stray "}" from closing the scope', () => {
+    expect(scopedFolderCss('h1 { color: red; } } .toolbar { display: none; }')).toBe('@scope (.content) {\nh1 { color: red; }\n}');
+  });
+
   it('cannot close a <style> element it is written into', () => {
     expect(scopedFolderCss('p::after { content: "</style>"; }')).toContain('<\\/style>');
   });
