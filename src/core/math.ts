@@ -7,7 +7,14 @@ let katexPromise: Promise<KatexApi> | null = null;
 // KaTeX and its fonts are large, so load them only when a document actually contains math.
 // The stylesheet comes from the same lazy chunk; its font URLs resolve against the chunk.
 function loadKatex(): Promise<KatexApi> {
-  katexPromise ??= Promise.all([import('katex'), import('katex/dist/katex.min.css')]).then(([m]) => m.default);
+  katexPromise ??= Promise.all([import('katex'), import('katex/dist/katex.min.css')]).then(
+    ([m]) => m.default,
+    (err: unknown) => {
+      // Not kept: the next document with math tries again (e.g. after a network blip).
+      katexPromise = null;
+      throw err;
+    },
+  );
   return katexPromise;
 }
 

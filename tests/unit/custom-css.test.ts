@@ -28,6 +28,12 @@ describe('scopedCustomCss', () => {
     expect(scopedCustomCss({ css: ' \n ', enabled: true, exported: true })).toBe('');
   });
 
+  it('keeps a stray "}" from closing the scope: only the rules the parser accepted are wrapped', () => {
+    const out = scopedCustomCss({ css: 'h1 { color: red; } } .toolbar { display: none; }\n} body { color: blue; }', enabled: true, exported: true });
+    expect(out).toBe('@scope (.content) {\nh1 { color: red; }\n}');
+    expect(scopedCustomCss({ css: '}}}', enabled: true, exported: true })).toBe('');
+  });
+
   it('cannot close a <style> element it is written into', () => {
     const out = scopedCustomCss({ css: 'p::after { content: "</style><script>1</script>"; }', enabled: true, exported: true });
     expect(out).not.toContain('</');

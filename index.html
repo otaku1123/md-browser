@@ -7,22 +7,22 @@
   </head>
   <body>
     <header class="toolbar">
-      <button id="toggle-files" class="icon-button" type="button" aria-controls="files" aria-expanded="true" aria-label="Files" title="Files" data-i18n-aria="files" data-i18n-title="files" hidden>
+      <button id="mdb-toggle-files" class="icon-button" type="button" aria-controls="mdb-files" aria-expanded="true" aria-label="Files" title="Files" data-i18n-aria="files" data-i18n-title="files" hidden>
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M1 3.75A.75.75 0 0 1 1.75 3h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 3.75Zm0 4.25a.75.75 0 0 1 .75-.75h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 8Zm.75 3.5h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
       </button>
       <strong class="brand">MD Browser</strong>
-      <button id="open-file" type="button" data-i18n="openFile">Open file</button>
-      <button id="open-dir" type="button" data-i18n="openFolder">Open folder</button>
-      <span id="status" class="status" role="status"></span>
+      <button id="mdb-open-file" type="button" data-i18n="openFile">Open file</button>
+      <button id="mdb-open-dir" type="button" data-i18n="openFolder">Open folder</button>
+      <span id="mdb-status" class="status" role="status"></span>
     </header>
     <div class="layout">
-      <nav id="files" class="files" data-i18n-aria="files" hidden></nav>
-      <nav id="toc" class="toc empty" data-i18n-aria="toc"></nav>
-      <main id="content" class="content markdown-body">
+      <nav id="mdb-files" class="files" data-i18n-aria="files" hidden></nav>
+      <nav id="mdb-toc" class="toc empty" data-i18n-aria="toc"></nav>
+      <main id="mdb-content" class="content markdown-body">
         <section class="welcome">
           <h1>MD Browser</h1>
-          <div id="setup-banner-slot"></div>
-          <div id="recent" class="recent" hidden></div>
+          <div id="mdb-setup-banner-slot"></div>
+          <div id="mdb-recent" class="recent" hidden></div>
           <p data-i18n="welcomeLead"></p>
           <ul>
             <li data-i18n="welcomeAutoReload"></li>
@@ -32,7 +32,7 @@
         </section>
       </main>
     </div>
-    <div id="drop-overlay" class="drop-overlay" data-i18n="dropHere" hidden></div>
+    <div id="mdb-drop-overlay" class="drop-overlay" data-i18n="dropHere" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

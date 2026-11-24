@@ -16,7 +16,7 @@ export interface CustomCss {
 export const CUSTOM_CSS_KEY = 'md-browser:custom-css';
 /** Plenty for a hand-written stylesheet; bounds a corrupted or hostile stored value. */
 export const CUSTOM_CSS_MAX = 100_000;
-export const STYLE_ID = 'md-custom-css';
+export const STYLE_ID = 'mdb-custom-css';
 /** The rendered Markdown's root in every page (content.ts, index.html, export-html.ts). */
 const SCOPE = '.content';
 
@@ -33,18 +33,37 @@ export function normalizeCustomCss(raw: unknown): CustomCss {
 }
 
 /**
- * The stylesheet as applied: limited to the document. Empty when there is nothing to apply.
- * "</" is escaped so the text can also sit inside a <style> element in HTML (the export): CSS
- * reads "<\/" as "</", HTML does not.
+ * A stylesheet limited to the document, for this file and folder-css.ts. The text goes through the
+ * browser's CSS parser first and only the rules it accepted are put back, so a stray "}" in it
+ * cannot close the @scope block and reach the toolbar or the settings panel. Empty when nothing is
+ * left. "</" is escaped so the text can also sit inside a <style> element in HTML (the export):
+ * CSS reads "<\/" as "</", HTML does not.
  */
+export function scopeToContent(css: string): string {
+  if (!css.trim() || typeof CSSStyleSheet !== 'function') return '';
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(css);
+  const rules = Array.from(sheet.cssRules, (r) => r.cssText).join('\n');
+  if (!rules) return '';
+  return `@scope (${SCOPE}) {\n${rules.replace(/<\//g, '<\\/')}\n}`;
+}
+
+/** The stylesheet as applied (see scopeToContent). Empty when there is nothing to apply. */
 export function scopedCustomCss(s: CustomCss): string {
-  if (!s.enabled || !s.css.trim()) return '';
-  return `@scope (${SCOPE}) {\n${s.css.replace(/<\//g, '<\\/')}\n}`;
+  return s.enabled ? scopeToContent(s.css) : '';
+}
+
+/**
+ * The page's <style> with this id, looked up in <head> only: a document heading can get the same id
+ * from its text (render.ts slugify), and getElementById would return that heading instead.
+ */
+export function headStyle(doc: Document, id: string): HTMLStyleElement | null {
+  return doc.head.querySelector<HTMLStyleElement>(`style#${CSS.escape(id)}`);
 }
 
 /** Puts the stylesheet in the page (at the end of <head>, after the app's own styles). */
 export function applyCustomCss(s: CustomCss, doc: Document = document): void {
-  let style = doc.getElementById(STYLE_ID);
+  let style = headStyle(doc, STYLE_ID);
   if (!style) {
     style = doc.createElement('style');
     style.id = STYLE_ID;

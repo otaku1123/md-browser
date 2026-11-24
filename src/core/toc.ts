@@ -162,7 +162,8 @@ export function createToc(tocEl: HTMLElement): TocController {
     e.preventDefault();
     pinnedTarget = a.dataset.target!;
     document.getElementById(a.dataset.target!)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    history.replaceState(null, '', `#${a.dataset.target}`);
+    // Keep the entry's state: doc-history marks the entry with the document it shows.
+    history.replaceState(history.state, '', `#${a.dataset.target}`);
   });
 
   // ← folds the entry (or moves to its section), → unfolds it (or moves into it).

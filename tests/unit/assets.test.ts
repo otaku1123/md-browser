@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRelativeRef, resolvePath, resolveImages, resolveSrcset } from '../../src/core/assets';
+import { findAnchor, isRelativeRef, refFragment, resolvePath, resolveImages, resolveSrcset } from '../../src/core/assets';
 
 describe('isRelativeRef', () => {
   it.each(['img/a.png', './a.png', '../a.png', 'a b.png'])('treats %s as relative', (ref) => {
@@ -32,6 +32,32 @@ describe('resolvePath', () => {
     expect(resolvePath('README.md', '../secret.txt')).toBeNull();
     expect(resolvePath('docs/a.md', '../../etc/passwd')).toBeNull();
     expect(resolvePath('docs/a.md', '%2e%2e/%2e%2e/x')).toBeNull();
+  });
+});
+
+describe('refFragment', () => {
+  it('returns the part after the "#", or nothing', () => {
+    expect(refFragment('guide.md#install')).toBe('install');
+    expect(refFragment('guide.md?v=1#%E6%89%8B%E9%A0%86')).toBe('%E6%89%8B%E9%A0%86');
+    expect(refFragment('guide.md')).toBe('');
+    expect(refFragment('guide.md#')).toBe('');
+  });
+});
+
+describe('findAnchor', () => {
+  const root = document.createElement('div');
+  root.innerHTML = '<h2 id="install">Install</h2><h2 id="%E6%89%8B%E9%A0%86">手順</h2>';
+
+  it('finds a heading by its id, written encoded or not', () => {
+    expect(findAnchor(root, 'install')?.textContent).toBe('Install');
+    expect(findAnchor(root, '%E6%89%8B%E9%A0%86')?.textContent).toBe('手順');
+    expect(findAnchor(root, '手順')?.textContent).toBe('手順');
+  });
+
+  it('finds nothing for an unknown, empty or malformed fragment', () => {
+    expect(findAnchor(root, 'missing')).toBeNull();
+    expect(findAnchor(root, '')).toBeNull();
+    expect(findAnchor(root, '100%')).toBeNull();
   });
 });
 

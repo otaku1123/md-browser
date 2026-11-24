@@ -805,7 +805,8 @@ test('opens the file in the chosen editor at the line shown, from a toolbar link
 test("applies a folder's .md-browser.css only when switched on, the nearest folder first", async ({ context }) => {
   const dir = await makeFolder({
     'README.md': '# Top',
-    '.md-browser.css': 'h1 { color: rgb(255, 0, 0); }',
+    // The extra "}" must not let the rule after it reach the toolbar (#218).
+    '.md-browser.css': 'h1 { color: rgb(255, 0, 0); } } .toolbar { visibility: hidden; }',
     'sub/doc.md': '# Deep',
     'sub/.md-browser.css': 'h1 { color: rgb(0, 0, 255); }',
     'other/doc.md': '# Other',
@@ -815,9 +816,9 @@ test("applies a folder's .md-browser.css only when switched on, the nearest fold
     await page.goto(fileUrl(dir, 'README.md'));
     const h1 = page.locator('.markdown-body h1');
     await expect(h1).toHaveText('Top');
-    await expect(page.locator('#md-files')).toBeVisible(); // listed: the folder CSS has been looked for
+    await expect(page.locator('#mdb-files')).toBeVisible(); // listed: the folder CSS has been looked for
     // Off by default: the folder's author wrote that file, not the reader.
-    await expect(page.locator('#md-folder-css')).toHaveCount(0);
+    await expect(page.locator('#mdb-folder-css')).toHaveCount(0);
     await expect(h1).not.toHaveCSS('color', 'rgb(255, 0, 0)');
 
     await page.locator('.font-settings-toggle').click();
@@ -826,24 +827,25 @@ test("applies a folder's .md-browser.css only when switched on, the nearest fold
     await expect(toggle).not.toBeChecked();
     await toggle.check();
     await expect(h1).toHaveCSS('color', 'rgb(255, 0, 0)');
+    await expect(page.locator('header.toolbar')).toBeVisible();
     // Before the reader's own CSS, so that one wins where they clash.
     expect(
       await page.evaluate(() => {
-        const folder = document.getElementById('md-folder-css')!;
-        const custom = document.getElementById('md-custom-css')!;
+        const folder = document.getElementById('mdb-folder-css')!;
+        const custom = document.getElementById('mdb-custom-css')!;
         return folder.compareDocumentPosition(custom) & Node.DOCUMENT_POSITION_FOLLOWING;
       }),
     ).toBeTruthy();
     await page.keyboard.press('Escape');
 
     // Opened from the sidebar, the root stays: the subfolder's CSS beats the root's.
-    await page.locator('#md-files details[data-dir="sub"] > summary').click();
-    await page.locator('#md-files [data-path="sub/doc.md"]').click();
+    await page.locator('#mdb-files details[data-dir="sub"] > summary').click();
+    await page.locator('#mdb-files [data-path="sub/doc.md"]').click();
     await expect(h1).toHaveText('Deep');
     await expect(h1).toHaveCSS('color', 'rgb(0, 0, 255)');
     // A folder without one falls back to the root's.
-    await page.locator('#md-files details[data-dir="other"] > summary').click();
-    await page.locator('#md-files [data-path="other/doc.md"]').click();
+    await page.locator('#mdb-files details[data-dir="other"] > summary').click();
+    await page.locator('#mdb-files [data-path="other/doc.md"]').click();
     await expect(h1).toHaveText('Other');
     await expect(h1).toHaveCSS('color', 'rgb(255, 0, 0)');
 
@@ -853,9 +855,9 @@ test("applies a folder's .md-browser.css only when switched on, the nearest fold
     await expect(other.locator('.markdown-body h1')).toHaveCSS('color', 'rgb(255, 0, 0)');
     await page.locator('.font-settings-toggle').click();
     await toggle.uncheck();
-    await expect(page.locator('#md-folder-css')).toHaveCount(0);
+    await expect(page.locator('#mdb-folder-css')).toHaveCount(0);
     await expect(h1).not.toHaveCSS('color', 'rgb(255, 0, 0)');
-    await expect(other.locator('#md-folder-css')).toHaveCount(0);
+    await expect(other.locator('#mdb-folder-css')).toHaveCount(0);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
@@ -869,19 +871,19 @@ test('shows the path from the listed root as a breadcrumb on a file:// page', as
     const crumbs = page.locator('.breadcrumb li');
     await expect(crumbs).toHaveText([path.basename(dir), 'README.md']); // the tab's root is this file's folder
     // Opened from the sidebar, the root stays: the path is shown from it.
-    await page.locator('#md-files details[data-dir="sub dir"] > summary').click();
-    await page.locator('#md-files [data-path="sub dir/deep #1.md"]').click();
+    await page.locator('#mdb-files details[data-dir="sub dir"] > summary').click();
+    await page.locator('#mdb-files [data-path="sub dir/deep #1.md"]').click();
     await expect(page.locator('.markdown-body h1')).toHaveText('Deep');
     await expect(crumbs).toHaveText([path.basename(dir), 'sub dir', 'deep #1.md']);
-    await page.locator('#md-files details[data-dir="sub dir"] > summary').click(); // collapse it
-    await page.locator('.toolbar button[aria-controls="md-files"]').click(); // the skip link targets it too
-    await expect(page.locator('#md-files')).toBeHidden();
+    await page.locator('#mdb-files details[data-dir="sub dir"] > summary').click(); // collapse it
+    await page.locator('.toolbar button[aria-controls="mdb-files"]').click(); // the skip link targets it too
+    await expect(page.locator('#mdb-files')).toBeHidden();
     const crumb = page.locator('.breadcrumb button[data-dir="sub dir"]');
     await expect(crumb).toHaveAttribute('title', 'ファイル一覧で「sub dir」を表示');
     await crumb.click();
-    await expect(page.locator('#md-files')).toBeVisible();
-    await expect(page.locator('#md-files details[data-dir="sub dir"]')).toHaveJSProperty('open', true);
-    await expect(page.locator('#md-files details[data-dir="sub dir"] > summary')).toBeFocused();
+    await expect(page.locator('#mdb-files')).toBeVisible();
+    await expect(page.locator('#mdb-files details[data-dir="sub dir"]')).toHaveJSProperty('open', true);
+    await expect(page.locator('#mdb-files details[data-dir="sub dir"] > summary')).toBeFocused();
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

@@ -31,6 +31,28 @@ export function resolvePath(docPath: string, ref: string): string | null {
   return parts.join('/');
 }
 
+/** The "#fragment" of a link, without the "#" ('' when the link has none). */
+export function refFragment(ref: string): string {
+  const hash = ref.indexOf('#');
+  return hash < 0 ? '' : ref.slice(hash + 1);
+}
+
+/**
+ * The element of `root` a link's fragment names. Heading ids are percent-encoded slugs (render.ts),
+ * and a link may be written either way ("#手順" or "#%E6%89%8B%E9%A0%86"), so both forms are tried.
+ */
+export function findAnchor(root: ParentNode, fragment: string): HTMLElement | null {
+  if (!fragment) return null;
+  let decoded = fragment;
+  try {
+    decoded = decodeURIComponent(fragment);
+  } catch {
+    /* keep as-is when the fragment is not valid percent-encoding */
+  }
+  const ids = new Set([fragment, decoded, encodeURIComponent(decoded)]);
+  return Array.from(root.querySelectorAll<HTMLElement>('[id]')).find((el) => ids.has(el.id)) ?? null;
+}
+
 /** srcset candidates: "url", or "url descriptor" (1x, 2x, 100w …), comma-separated. */
 const SRCSET_CANDIDATE = /\s*([^\s,]+)(\s+[^,]+)?\s*(?:,|$)/g;
 

@@ -141,16 +141,16 @@ def run_locale(p, loc):
         return top;
       };
     }''', files)
-    folder.click('#open-dir')
-    folder.wait_for_selector('#files .file-tree-file')
-    folder.click('#files button[data-path="release-plan.md"]')
-    folder.wait_for_selector('#files [aria-current="page"][data-path="release-plan.md"]')
+    folder.click('#mdb-open-dir')
+    folder.wait_for_selector('#mdb-files .file-tree-file')
+    folder.click('#mdb-files button[data-path="release-plan.md"]')
+    folder.wait_for_selector('#mdb-files [aria-current="page"][data-path="release-plan.md"]')
     folder.wait_for_selector('.diagram-mermaid svg', timeout=10000)
     time.sleep(1)
     tree = folder.evaluate('''() => ({
-      files: document.querySelectorAll('#files .file-tree-file').length,
-      folders: [...document.querySelectorAll('#files summary')].map((s) => s.textContent),
-      visible: !document.getElementById('files').hidden,
+      files: document.querySelectorAll('#mdb-files .file-tree-file').length,
+      folders: [...document.querySelectorAll('#mdb-files summary')].map((s) => s.textContent),
+      visible: !document.getElementById('mdb-files').hidden,
     })''')
     check(tree == {'files': len(files), 'folders': ['docs', 'api', 'notes'], 'visible': True},
           f'file tree lists the folder {tree}')
